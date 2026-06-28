@@ -15,22 +15,10 @@ from .permissions import Permissions
 from .prompts import build_system_prompt
 from .provider import get_provider
 from .tools import Tools
+from .ui import TerminalUI
 
 console = Console()
-
-HELP = """
-Commands:
-  /help                 show this help
-  /provider <name> [model]  switch model provider (clears the chat)
-  /model <id>           switch to a different model on the same provider
-  /providers            list available providers
-  /kb                   list knowledge-base notes
-  /memory               show recent long-term memory
-  /skills               list learned skills
-  /reset                forget this chat (memory + kb are kept)
-  /exit                 quit
-Anything else is sent to the agent as a request.
-"""
+ui = TerminalUI(console)
 
 
 def _scaffold(config: Config, kb: KnowledgeBase) -> None:
@@ -43,8 +31,32 @@ def _scaffold(config: Config, kb: KnowledgeBase) -> None:
 def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
     perm = Permissions(auto_approve=config.auto_approve)
     tools = Tools(config, memory, kb, perm)
-    system = build_system_prompt(kb.read_all(), memory.list_skills(), memory.recent())
-    return Agent(system, get_provider(config), tools)
+    agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
+    system = build_system_prompt(kb.read_all(), memory.list_skills(), memory.recent(), agent_md)
+    return Agent(
+        system,
+        get_provider(config),
+        tools,
+        compact_threshold=config.compact_threshold,
+        ui=ui,
+    )
+
+
+def _list_models(config: Config) -> None:
+    """Fetch and print the model ids the current provider/key can use."""
+    with ui.working("fetching available models…"):
+        try:
+            models = sorted(get_provider(config).list_models())
+        except Exception as exc:  # noqa: BLE001
+            ui.notice(f"Couldn't fetch models: {exc}", style="yellow")
+            return
+    if not models:
+        ui.notice("No models reported by this provider.", style="yellow")
+        return
+    current = config.model
+    lines = [(f"  {'●' if m == current else ' '} {m}") for m in models]
+    ui.print("\n".join(lines))
+    ui.notice("switch with  /model <id>")
 
 
 def _require_key(config: Config) -> bool:
@@ -57,10 +69,6 @@ def _require_key(config: Config) -> bool:
         "See .env.example for every provider's setting."
     )
     return False
-
-
-def _status_line(config: Config) -> str:
-    return f"[dim]provider:[/dim] [bold]{config.provider}[/bold]  [dim]model:[/dim] [bold]{config.model}[/bold]"
 
 
 def _read(prompt: str) -> str:
@@ -165,71 +173,82 @@ def _model_wizard(config: Config) -> int:
 
 def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
     agent = _build_agent(config, kb, memory)
-    console.print("[bold]kbcode[/bold] — your local AI coding agent  [dim](/help, /exit)[/dim]")
-    console.print(_status_line(config))
+    ui.banner(config.provider, config.model, config.project_dir)
 
     while True:
         try:
-            user = _read("\n[bold green]you ›[/bold green] ")
+            user = _read(ui.prompt())
         except (EOFError, KeyboardInterrupt):
-            console.print("\nbye 👋")
+            ui.print("\nbye 👋")
             return
         if not user:
             continue
 
         if user in ("/exit", "/quit"):
-            console.print("bye 👋")
+            ui.print("bye 👋")
             return
         if user == "/help":
-            console.print(HELP)
+            ui.help()
             continue
-        if user == "/providers":
-            console.print("\n".join(f"- {n}" for n in PRESETS))
+        if user == "/status":
+            ui.status_line(config.provider, config.model, agent.context_tokens())
+            continue
+        if user in ("/provider", "/providers"):
+            ui.print("\n".join(f"  {'●' if n == config.provider else ' '} {n}" for n in PRESETS))
+            ui.notice("switch with  /provider <name> [model]")
             continue
         if user.startswith("/provider"):
             parts = user.split()
-            if len(parts) < 2:
-                console.print("usage: /provider <name> [model]")
-                continue
             try:
                 config.use_provider(parts[1], parts[2] if len(parts) > 2 else None)
             except ValueError as exc:
-                console.print(f"[red]{exc}[/red]")
+                ui.error(str(exc))
                 continue
             if not _require_key(config):
                 continue
             agent = _build_agent(config, kb, memory)  # new provider -> fresh chat
-            console.print(f"[green]switched.[/green] {_status_line(config)}")
+            ui.notice(f"switched → {config.provider} / {config.model}", style="green")
+            continue
+        if user in ("/model", "/models"):
+            _list_models(config)
             continue
         if user.startswith("/model"):
-            parts = user.split(maxsplit=1)
-            if len(parts) < 2:
-                console.print("usage: /model <id>")
-                continue
-            config.model = parts[1].strip()
-            console.print(f"[green]model set.[/green] {_status_line(config)}")
+            config.model = user.split(maxsplit=1)[1].strip()
+            agent.provider = get_provider(config)  # same chat, new model
+            ui.notice(f"model → {config.model}", style="green")
             continue
         if user == "/kb":
             notes = kb.list_notes()
-            console.print("\n".join(f"- kb/{n}" for n in notes) or "(knowledge base is empty)")
+            ui.print("\n".join(f"- kb/{n}" for n in notes) or "(knowledge base is empty)")
             continue
         if user == "/memory":
             rows = memory.recent()
-            console.print("\n".join(f"- {r['content']}" for r in rows) or "(memory is empty)")
+            ui.print("\n".join(f"- {r['content']}" for r in rows) or "(memory is empty)")
             continue
         if user == "/skills":
             rows = memory.list_skills()
-            console.print("\n".join(f"- {r['name']}: {r['description']}" for r in rows) or "(no skills yet)")
+            ui.print("\n".join(f"- {r['name']}: {r['description']}" for r in rows) or "(no skills yet)")
+            continue
+        if user == "/compact":
+            agent.compact_now()
+            continue
+        if user == "/kb-check":
+            problems = kb.check_pointers(config.project_dir)
+            if problems:
+                ui.notice("Pointer problems:", style="yellow")
+                ui.print("\n".join(f"- {p}" for p in problems))
+            else:
+                ui.notice("All kb/ pointers resolve.", style="green")
             continue
         if user == "/reset":
             agent.reset()
-            console.print("[dim]chat cleared[/dim]")
+            ui.notice("chat cleared")
             continue
 
         try:
             agent.run(user)
         except Exception as exc:  # noqa: BLE001 - keep the REPL alive
-            console.print(f"[red]Error:[/red] {exc}")
+            ui.error(str(exc))
 
 
 def main(argv: list[str] | None = None) -> int:

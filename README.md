@@ -50,13 +50,34 @@ Add `-y` to auto-approve file writes and commands (skip the y/N prompts):
 python -m kbcode -y "fix the failing test in tests/test_auth.py"
 ```
 
+### The terminal
+
+kbcode runs as a chat terminal in the style of Claude Code / Hermes: a header
+banner with your provider and model, answers rendered as markdown, tool calls
+shown live as `⏺ tool(args)` with a `↳` result preview, and a `/status` line
+showing how much context you've used.
+
 ### Chat commands
 
+- `/help` — show the command table
+- `/status` — show provider, model and context size
+- `/provider [name] [model]` — switch provider (no name = list them)
+- `/model [id]` — switch model (no id = list this provider's models)
 - `/kb` — list knowledge-base notes
+- `/kb-check` — check that `path:line` pointers in `kb/` still resolve
 - `/memory` — show recent long-term memory
 - `/skills` — list learned skills
+- `/compact` — summarize earlier chat to free up context
 - `/reset` — clear the current chat (memory and kb are kept)
 - `/exit` — quit
+
+### Long sessions stay cheap (auto-compaction)
+
+When a chat grows long, kbcode automatically summarizes the older middle of the
+conversation into a short recap and keeps going — so it doesn't slow down, get
+expensive, or overflow the model's context window. (This is the Hermes idea.)
+Tune it with `KBCODE_COMPACT_TOKENS` in `.env` (`0` turns it off), or run
+`/compact` yourself any time.
 
 ## How it works
 
@@ -89,11 +110,13 @@ Risky actions (writing files, running commands) ask for your approval first.
 kbcode/
   cli.py            entry point + chat loop
   agent.py          the agent loop
-  provider.py       talks to Claude (swappable seam for other providers)
+  ui.py             terminal look-and-feel (banner, markdown, tool lines)
+  compaction.py     summarize long chats to stay within context (Hermes idea)
+  provider.py       talks to Claude / any OpenAI-compatible model
   tools.py          the agent's tools
   prompts.py        the system prompt
   memory.py         persistent memory + skills (SQLite)
-  knowledge_base.py kb/ notes management
+  knowledge_base.py kb/ notes + path:line pointer checker (claude-kb idea)
   permissions.py    y/N approval for risky actions
   config.py         paths + settings
 ```

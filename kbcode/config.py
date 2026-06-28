@@ -16,6 +16,9 @@ except Exception:  # pragma: no cover - dotenv is optional at runtime
 
 DEFAULT_MAX_TOKENS = 16000
 DEFAULT_EFFORT = "high"
+# Auto-compact the chat once its history crosses this rough token estimate.
+# 0 disables it. Override with KBCODE_COMPACT_TOKENS.
+DEFAULT_COMPACT_TOKENS = 12000
 
 # Built-in providers. "anthropic" uses the Anthropic SDK; every other entry is
 # an OpenAI-compatible endpoint (so OpenAI, Gemini, DeepSeek, OpenRouter, etc.
@@ -83,6 +86,7 @@ class Config:
     key_env: str = "ANTHROPIC_API_KEY"
     max_tokens: int = DEFAULT_MAX_TOKENS
     effort: str = DEFAULT_EFFORT
+    compact_threshold: int = DEFAULT_COMPACT_TOKENS
     auto_approve: bool = False
 
     # --- derived paths -------------------------------------------------
@@ -171,6 +175,7 @@ def load_config(project_dir: Path | None = None) -> Config:
         project_dir=project_dir,
         max_tokens=_int("KBCODE_MAX_TOKENS", DEFAULT_MAX_TOKENS),
         effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
+        compact_threshold=_int("KBCODE_COMPACT_TOKENS", DEFAULT_COMPACT_TOKENS),
     )
     config.use_provider(provider, model=model, base_url=base_url)
     return config

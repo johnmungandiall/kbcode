@@ -4,6 +4,9 @@
 # kbcode local state (per-machine memory db, caches)
 .kbcode/
 
+# cloned repos we study but don't ship
+references/
+
 # python
 __pycache__/
 *.pyc

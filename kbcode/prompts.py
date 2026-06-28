@@ -16,11 +16,21 @@ Working rules:
 - Risky actions (writing files, running commands) require user approval — that's expected; just proceed and let the user decide.
 - Report outcomes honestly. If a command fails, say so with the output. Don't claim something works unless you verified it.
 - Keep your messages short and concrete. Lead with what you did or found.
+- kb/ notes follow rules: ≤50 lines, `path:line` code refs, `[[cross-link]]`, one fact per place. Record user preferences in kb/about-you.md.
+- A long chat may be auto-compacted: earlier turns can appear as a short "[Recap ...]". Trust it as the record of what happened so far.
 """
 
 
-def build_system_prompt(kb_text: str, skills: list[dict], memories: list[dict]) -> str:
+def build_system_prompt(
+    kb_text: str,
+    skills: list[dict],
+    memories: list[dict],
+    agent_md: str = "",
+) -> str:
     parts = [BASE_SYSTEM]
+
+    if agent_md.strip():
+        parts.append("## Project guide (AGENT.md)\n" + agent_md.strip())
 
     if kb_text.strip():
         parts.append("## Project knowledge base (kb/)\n" + kb_text)
