@@ -45,6 +45,86 @@ def suggest(
     return [(name, name, "") for name in options if name.startswith(word)]
 
 
+def select(options: list[str], header: str | None = None) -> tuple[bool, int | None]:
+    """An arrow-key selectable menu (Claude Code style), built on prompt_toolkit.
+
+    Returns ``(available, index)``:
+      - ``(False, None)`` → can't show a menu here (no TTY / lib missing); the
+        caller should fall back to a typed prompt.
+      - ``(True, i)``     → the user chose option ``i``.
+      - ``(True, None)``  → the user cancelled (Esc / Ctrl-C).
+
+    Move with ↑/↓ (or j/k), pick with Enter, or press the option's number.
+    The menu renders inline and erases itself on exit, leaving only the result.
+    """
+    if not sys.stdin.isatty() or not sys.stdout.isatty() or not options:
+        return False, None
+    try:
+        from prompt_toolkit.application import Application
+        from prompt_toolkit.key_binding import KeyBindings
+        from prompt_toolkit.layout import Layout
+        from prompt_toolkit.layout.containers import HSplit, Window
+        from prompt_toolkit.layout.controls import FormattedTextControl
+        from prompt_toolkit.styles import Style
+    except Exception:  # noqa: BLE001 - prompt_toolkit missing or broken
+        return False, None
+
+    state = {"i": 0}
+    n = len(options)
+
+    def fragments():
+        out: list[tuple[str, str]] = []
+        if header:
+            out.append(("class:hdr", header + "\n"))
+        for i, label in enumerate(options):
+            if i == state["i"]:
+                out.append(("class:sel", f" ❯ {i + 1}. {label}\n"))
+            else:
+                out.append(("class:opt", f"   {i + 1}. {label}\n"))
+        return out
+
+    kb = KeyBindings()
+
+    @kb.add("up")
+    @kb.add("k")
+    @kb.add("c-p")
+    def _up(_e):
+        state["i"] = (state["i"] - 1) % n
+
+    @kb.add("down")
+    @kb.add("j")
+    @kb.add("c-n")
+    def _down(_e):
+        state["i"] = (state["i"] + 1) % n
+
+    @kb.add("enter")
+    def _pick(e):
+        e.app.exit(result=state["i"])
+
+    @kb.add("c-c")
+    @kb.add("escape")
+    def _cancel(e):
+        e.app.exit(result=None)
+
+    for num in range(1, min(n, 9) + 1):
+        @kb.add(str(num))
+        def _num(e, num=num):
+            e.app.exit(result=num - 1)
+
+    style = Style.from_dict({"sel": "bold cyan", "opt": "", "hdr": "#888888"})
+    try:
+        app = Application(
+            layout=Layout(HSplit([Window(FormattedTextControl(fragments), always_hide_cursor=True)])),
+            key_bindings=kb,
+            style=style,
+            full_screen=False,
+            mouse_support=False,
+        )
+        return True, app.run()
+    except Exception:  # noqa: BLE001 - any terminal/console issue → let caller fall back
+        return False, None
+
+
 def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]] | None = None):
     """Return an input object with a ``.read(prompt_html)`` method, or None."""
     if not sys.stdin.isatty():

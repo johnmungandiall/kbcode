@@ -19,6 +19,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from .prompt_input import select
+
 _TOOL_ICON = "⏺"
 _ARROW = "›"
 
@@ -155,7 +157,11 @@ class TerminalUI:
         self.console.print("[dim]Anything else you type is sent to the agent as a request.[/dim]")
 
     def permission(self, tool: str, detail: str) -> str:
-        """Render an approval prompt and read the answer. Returns 'y' / 'n' / 'a'."""
+        """Ask for approval via a selectable menu (Claude Code style).
+
+        Returns 'y' (allow once) / 'a' (allow for the session) / 'n' (deny).
+        Falls back to a typed y/N/a prompt when no interactive menu is available.
+        """
         body = Text()
         body.append(f"{tool}\n", style="bold yellow")
         for line in (detail.splitlines() or [detail]):
@@ -163,6 +169,20 @@ class TerminalUI:
         self.console.print(
             Panel(body, title="⚠  permission needed", border_style="yellow", padding=(0, 1))
         )
+
+        labels = ["Yes", f"Yes, and don't ask again for {tool} this session", "No"]
+        codes = ["y", "a", "n"]
+        available, idx = select(labels, header="  ↑/↓ then Enter (or press 1/2/3):")
+        if not available:
+            return self._permission_typed()
+        if idx is None:  # Esc / Ctrl-C
+            self.console.print("  ✗ No", style="red")
+            return "n"
+        chosen = codes[idx]
+        self.console.print(f"  → {labels[idx]}", style="green" if chosen != "n" else "red")
+        return chosen
+
+    def _permission_typed(self) -> str:
         try:
             ans = self.console.input(
                 "  allow?  [green]y[/green]es / [red]N[/red]o / [cyan]a[/cyan]lways  › "

@@ -1,14 +1,18 @@
 # kbcode
 
-A small AI coding agent you run in your terminal. It blends three ideas:
+A small AI coding agent you run in your terminal. It blends five ideas, each
+borrowed from a well-known agent:
 
 | Idea | From | What it gives you |
 |------|------|-------------------|
 | **Hands** — reads/writes files, runs commands | Claude Code | The agent actually does the work, not just talks. |
 | **Memory + skills** — remembers across sessions | Hermes agent | It recalls past decisions and reuses how-tos it learned. |
 | **Knowledge base** — short `kb/` notes | claude-kb | It understands your project cheaply, without re-scanning every file. |
+| **Modes** — code / architect / ask / debug | Kilo Code | One agent with focused personalities and the right guardrails. |
+| **Tool-call repair** — fixes malformed calls | openclaw | Weaker models self-correct instead of hard-failing. |
 
-It uses your own AI API key (Anthropic / Claude).
+It uses your own AI API key — Claude by default, or any OpenAI-compatible model
+(see [Use other models](#use-other-models)).
 
 ## Setup
 
@@ -50,17 +54,38 @@ Add `-y` to auto-approve file writes and commands (skip the y/N prompts):
 python -m kbcode -y "fix the failing test in tests/test_auth.py"
 ```
 
+### Work on another project
+
+By default kbcode works on the folder you launch it in. To point it at a
+different project without `cd`-ing there, use `-C` (also `--dir` / `--project`):
+
+```
+python -m kbcode -C "C:\path\to\other-project" init   # one-time setup
+python -m kbcode -C "C:\path\to\other-project"         # start chatting on it
+```
+
+Already in a chat? Switch live with **`/open "C:\path\to\other-project"`** — it
+re-roots the session, sets the folder up if needed, and keeps your model + key.
+(Tip: if you type `init <path>` in the chat by mistake, kbcode notices and shows
+you the right command.)
+
 ### The terminal
 
 kbcode runs as a chat terminal in the style of Claude Code / Hermes: a header
-banner with your provider and model, answers rendered as markdown, tool calls
-shown live as `⏺ tool(args)` with a `↳` result preview, and a `/status` line
-showing how much context you've used.
+banner with your provider and model, and answers rendered as markdown. Tool
+calls show live as a readable verb + target — `⏺ Read kbcode/agent.py`,
+`⏺ Run $ pytest`, `⏺ Delegate → code-explorer` — each with an indented `↳`
+result preview (or a red `✗` on error). After every turn a dim footer reports
+`3 actions · ~1.5k tokens · 4.5s`, and `/status` shows a context-fullness bar
+versus the auto-compact threshold. Approval prompts for risky actions are a
+**selectable Yes / Always / No menu** (↑/↓ + Enter, or press 1/2/3) — Claude Code
+style — falling back to a typed `y/N/a` prompt where no interactive menu is available.
 
 Type `/` and a **popup menu of commands** appears and filters as you type
-(arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names.
-This needs `prompt_toolkit` (in `requirements.txt`); without it, commands still
-work by typing them in full.
+(arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names,
+after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
+`prompt_toolkit` (in `requirements.txt`); without it, commands still work by
+typing them in full.
 
 ### Modes (the Kilo Code idea)
 
@@ -82,18 +107,52 @@ plus a body of instructions; the filename becomes the mode name.
 
 ### Chat commands
 
-- `/help` — show the command table
-- `/mode [name]` — switch mode: code / architect / ask / debug (no name = list)
-- `/status` — show provider, model, mode and context size
-- `/provider [name] [model]` — switch provider (no name = list them)
-- `/model [id]` — switch model (no id = list this provider's models)
-- `/kb` — list knowledge-base notes
-- `/kb-check` — check that `path:line` pointers in `kb/` still resolve
-- `/memory` — show recent long-term memory
-- `/skills` — list learned skills
+Session:
+- `/help` — show the command table (grouped)
+- `/status` — provider, model, mode, and a context-fullness bar
+- `/open <folder>` — switch to working on another project folder
+- `/insights` — tokens used and estimated cost this session
 - `/compact` — summarize earlier chat to free up context
 - `/reset` — clear the current chat (memory and kb are kept)
 - `/exit` — quit
+
+Knowledge & memory:
+- `/kb` — list knowledge-base notes
+- `/kb-check [--fix]` — check `path:line` pointers in `kb/` (with `--fix`, relocate drifted ones by symbol)
+- `/memory` — show recent long-term memory
+- `/skills` — list learned skills
+- `/learn [topic]` — save what we just did as a reusable skill
+
+Planning & agents:
+- `/todo` — show the agent's current task checklist
+- `/agents` — list available subagents (`.kbcode/agents/`)
+
+Models & modes:
+- `/mode [name]` — switch mode: code / architect / ask / debug (no name = list)
+- `/provider [name] [model]` — switch provider (no name = list them)
+- `/model [id]` — switch model (no id = list this provider's models)
+
+### Planning, subagents, and what it learns
+
+- **Todos** — for a multi-step job the agent keeps a checklist (the `manage_todos`
+  tool); see it any time with `/todo`. ✓ done · ◐ in progress · ○ pending.
+- **Subagents** — heavy exploration can be delegated to a specialist that runs in
+  its **own** context window and returns just a summary, so the main chat stays
+  lean. They live as markdown files in `.kbcode/agents/*.md` (a read-only
+  `code-explorer` is created for you); list them with `/agents`. Same frontmatter
+  as modes (`description:`, `tools:`) plus a body of instructions.
+- **Insights** — `/insights` reports requests, input/output tokens, and an
+  estimated USD cost for this session (cost is approximate; unknown models show
+  tokens only).
+- **Learn** — `/learn` (optionally `/learn <topic>`) turns what you just did into a
+  reusable skill, saved to memory and listed by `/skills`.
+
+### Standing orders (always-on instructions)
+
+Anything you write in `.kbcode/standing-orders.md` is added to the agent's
+instructions at the **start of every session** — e.g. "always run the tests
+after changing code" or "reply in plain language." `init` creates a commented
+template; leave it untouched (or empty) to disable.
 
 ### Long sessions stay cheap (auto-compaction)
 
@@ -116,6 +175,8 @@ your request
      │   read_file / write_file / edit_file / list_dir / search_code / run_command
      │   kb_read / kb_write          (knowledge base — claude-kb idea)
      │   remember / recall / save_skill   (memory + skills — Hermes idea)
+     │   manage_todos                (task checklist — Kilo Code idea)
+     │   run_subagent                (delegate to a specialist — Claude Code idea)
      ▼
   files in your project      kb/ notes        .kbcode/memory.db
 ```
@@ -124,6 +185,9 @@ your request
   session so the agent doesn't re-read everything.
 - **`.kbcode/memory.db`** — a tiny SQLite database of long-term memories and
   skills, kept between sessions. (Git-ignored; it's per-machine.)
+- **`.kbcode/standing-orders.md`** — always-on instructions added to every session.
+- **`.kbcode/agents/`** — your subagent definitions (`*.md`).
+- **`.kbcode/modes/`** — your custom modes (`*.md`), if any.
 - **`AGENT.md`** — a short pointer file telling the agent how to work here.
 
 Risky actions (writing files, running commands) ask for your approval first.
@@ -132,18 +196,20 @@ Risky actions (writing files, running commands) ask for your approval first.
 
 ```
 kbcode/
-  cli.py            entry point + chat loop
-  agent.py          the agent loop
+  cli.py            entry point + chat loop, slash commands, -C / init / /open
+  agent.py          the agent loop, subagent delegation, /insights usage tally
   modes.py          code/architect/ask/debug modes (Kilo Code idea)
-  ui.py             terminal look-and-feel (banner, markdown, tool lines)
-  prompt_input.py   "/" command autocomplete popup (prompt_toolkit)
+  subagents.py      .kbcode/agents/*.md loader — delegated specialists (Claude Code idea)
+  ui.py             terminal look-and-feel (banner, tool lines, menus, summaries)
+  prompt_input.py   "/" command autocomplete + the selectable menu (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
-  provider.py       talks to Claude / any OpenAI-compatible model
+  provider.py       talks to Claude / any OpenAI-compatible model (+ token usage)
   tools.py          the agent's tools (+ tool-call repair, openclaw idea)
-  prompts.py        the system prompt
+  pricing.py        rough per-model USD pricing for /insights (Hermes idea)
+  prompts.py        the system prompt (+ standing orders)
   memory.py         persistent memory + skills (SQLite)
-  knowledge_base.py kb/ notes + path:line pointer checker (claude-kb idea)
-  permissions.py    y/N approval for risky actions
+  knowledge_base.py kb/ notes + path:line checker & auto-fix (claude-kb idea)
+  permissions.py    approval menu for risky actions
   config.py         paths + settings
 ```
 
