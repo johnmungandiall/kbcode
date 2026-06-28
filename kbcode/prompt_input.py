@@ -13,12 +13,19 @@ from __future__ import annotations
 import sys
 
 
-def suggest(text: str, commands: list[tuple[str, str]], providers: list[str]) -> list[tuple[str, str, str]]:
+def suggest(
+    text: str,
+    commands: list[tuple[str, str]],
+    arg_options: dict[str, list[str]] | None = None,
+) -> list[tuple[str, str, str]]:
     """Pure matching logic (no prompt_toolkit) — easy to test.
 
     Returns a list of ``(insert, display, meta)`` for the current input ``text``.
     Empty list means "no popup" (e.g. the user is typing a normal request).
+    ``arg_options`` maps a command (e.g. ``/provider``) to the values to suggest
+    for its first argument.
     """
+    arg_options = arg_options or {}
     if not text.startswith("/"):
         return []
 
@@ -31,15 +38,14 @@ def suggest(text: str, commands: list[tuple[str, str]], providers: list[str]) ->
                 out.append((name, cmd, desc))
         return out
 
-    # Past the command word → argument completion (only /provider has any).
+    # Past the command word → argument completion for commands that have options.
     head, _, _ = text.partition(" ")
     word = text.split(" ")[-1]
-    if head == "/provider":
-        return [(name, name, "") for name in providers if name.startswith(word)]
-    return []
+    options = arg_options.get(head, [])
+    return [(name, name, "") for name in options if name.startswith(word)]
 
 
-def make_input(commands: list[tuple[str, str]], providers: list[str]):
+def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]] | None = None):
     """Return an input object with a ``.read(prompt_html)`` method, or None."""
     if not sys.stdin.isatty():
         return None  # piped / non-interactive: let the caller use plain input
@@ -55,7 +61,7 @@ def make_input(commands: list[tuple[str, str]], providers: list[str]):
             text = document.text_before_cursor
             # Replace whatever the user has typed of the current word.
             word = text if " " not in text else text.split(" ")[-1]
-            for insert, display, meta in suggest(text, commands, providers):
+            for insert, display, meta in suggest(text, commands, arg_options):
                 yield Completion(
                     insert,
                     start_position=-len(word),

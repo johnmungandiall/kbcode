@@ -26,9 +26,10 @@ _ARROW = "›"
 # "/" autocomplete popup (see prompt_input.py).
 COMMANDS = [
     ("/help", "show this help"),
+    ("/mode [name]", "switch mode: code / architect / ask / debug (no name = list)"),
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
-    ("/status", "show provider, model and context size"),
+    ("/status", "show provider, model, mode and context size"),
     ("/kb", "list knowledge-base notes"),
     ("/kb-check", "check kb/ path:line pointers still resolve"),
     ("/memory", "show recent long-term memory"),
@@ -51,12 +52,13 @@ class TerminalUI:
         self.console = console or Console()
 
     # -- chrome ---------------------------------------------------------
-    def banner(self, provider: str, model: str, cwd: Path) -> None:
+    def banner(self, provider: str, model: str, cwd: Path, mode: str = "code") -> None:
         info = Table.grid(padding=(0, 2))
         info.add_column(justify="right", style="dim")
         info.add_column(style="bold")
         info.add_row("provider", provider)
         info.add_row("model", model)
+        info.add_row("mode", mode)
         info.add_row("folder", str(cwd))
 
         body = Table.grid(padding=(0, 0))
@@ -70,8 +72,13 @@ class TerminalUI:
             Panel(body, title="[bold cyan]kbcode[/bold cyan]", border_style="cyan", padding=(1, 2))
         )
 
-    def prompt(self) -> str:
-        return f"\n[bold green]you {_ARROW}[/bold green] "
+    def prompt(self, mode: str = "code") -> str:
+        tag = "" if mode == "code" else f"[cyan]({mode})[/cyan] "
+        return f"\n{tag}[bold green]you {_ARROW}[/bold green] "
+
+    def prompt_html(self, mode: str = "code") -> str:
+        tag = "" if mode == "code" else f"<ansicyan>({mode})</ansicyan> "
+        return f"\n{tag}<ansigreen><b>you ›</b></ansigreen> "
 
     def help(self) -> None:
         table = Table(show_header=False, box=None, padding=(0, 2))
@@ -82,11 +89,12 @@ class TerminalUI:
         self.console.print(Panel(table, title="commands", border_style="dim", padding=(1, 1)))
         self.console.print("[dim]Anything else is sent to the agent as a request.[/dim]")
 
-    def status_line(self, provider: str, model: str, tokens: int) -> None:
+    def status_line(self, provider: str, model: str, mode: str, tokens: int) -> None:
         self.console.print(
             Text.assemble(
                 ("provider ", "dim"), (provider, "bold"),
                 ("   model ", "dim"), (model, "bold"),
+                ("   mode ", "dim"), (mode, "bold"),
                 ("   context ", "dim"), (f"~{tokens:,} tokens", "bold"),
             )
         )

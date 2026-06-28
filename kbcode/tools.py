@@ -8,6 +8,7 @@ method named ``_tool_<name>`` that runs it. ``execute`` returns
 
 from __future__ import annotations
 
+import difflib
 import os
 import re
 import subprocess
@@ -153,15 +154,41 @@ class Tools:
 
     # --- dispatch ------------------------------------------------------
     def execute(self, name: str, inp: dict) -> tuple[str, bool]:
+        # Tool-call repair (the openclaw idea): instead of failing hard on a
+        # malformed call, hand the model a precise correction so it can retry.
+        guidance = self._repair(name, inp)
+        if guidance is not None:
+            return guidance, True
+
         method = getattr(self, f"_tool_{name}", None)
-        if method is None:
-            return f"Unknown tool: {name}", True
         try:
             return method(inp), False
         except PermissionError as exc:
             return str(exc), True
         except Exception as exc:  # noqa: BLE001 - surface error back to the model
             return f"Error: {exc}", True
+
+    def _schema_for(self, name: str) -> dict | None:
+        return next((s for s in self.schemas if s["name"] == name), None)
+
+    def _repair(self, name: str, inp: dict) -> str | None:
+        """Return a correction message if the call is unusable, else None."""
+        names = [s["name"] for s in self.schemas]
+
+        if name not in names:
+            close = difflib.get_close_matches(name, names, n=1, cutoff=0.6)
+            hint = f" Did you mean '{close[0]}'?" if close else ""
+            return f"Unknown tool '{name}'.{hint} Available tools: {', '.join(names)}."
+
+        schema = self._schema_for(name) or {}
+        required = schema.get("input_schema", {}).get("required", [])
+        missing = [r for r in required if r not in inp or inp[r] in (None, "")]
+        if missing:
+            return (
+                f"Tool '{name}' is missing required argument(s): {', '.join(missing)}. "
+                f"It requires: {', '.join(required)}. Call it again with those filled in."
+            )
+        return None
 
     # --- helpers -------------------------------------------------------
     def _resolve(self, path: str) -> Path:

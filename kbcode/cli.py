@@ -11,6 +11,7 @@ from .agent import Agent
 from .config import PRESETS, Config, load_config, save_settings
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
 from .memory import Memory
+from .modes import load_modes
 from .permissions import Permissions
 from .prompt_input import make_input
 from .prompts import build_system_prompt
@@ -40,6 +41,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
         tools,
         compact_threshold=config.compact_threshold,
         ui=ui,
+        modes=load_modes(config.kbcode_dir / "modes"),
     )
 
 
@@ -174,18 +176,19 @@ def _model_wizard(config: Config) -> int:
 
 def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
     agent = _build_agent(config, kb, memory)
-    ui.banner(config.provider, config.model, config.project_dir)
+    ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
 
-    cmd_input = make_input(COMMANDS, list(PRESETS))  # None if no autocomplete available
+    arg_options = {"/provider": list(PRESETS), "/mode": list(agent.modes)}
+    cmd_input = make_input(COMMANDS, arg_options)  # None if no autocomplete available
     if cmd_input:
         ui.notice("type / for commands")
 
     while True:
         try:
             if cmd_input:
-                user = cmd_input.read("\n<ansigreen><b>you ›</b></ansigreen> ")
+                user = cmd_input.read(ui.prompt_html(agent.mode.name))
             else:
-                user = _read(ui.prompt())
+                user = _read(ui.prompt(agent.mode.name))
         except (EOFError, KeyboardInterrupt):
             ui.print("\nbye 👋")
             return
@@ -199,7 +202,20 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             ui.help()
             continue
         if user == "/status":
-            ui.status_line(config.provider, config.model, agent.context_tokens())
+            ui.status_line(config.provider, config.model, agent.mode.name, agent.context_tokens())
+            continue
+        if user in ("/mode", "/modes"):
+            for name, m in agent.modes.items():
+                mark = "●" if name == agent.mode.name else " "
+                ui.print(f"  {mark} [bold cyan]{name}[/bold cyan] — {m.description}")
+            ui.notice("switch with  /mode <name>")
+            continue
+        if user.startswith("/mode"):
+            name = user.split(maxsplit=1)[1].strip()
+            if agent.set_mode(name):
+                ui.notice(f"mode → {agent.mode.name}", style="green")
+            else:
+                ui.error(f"unknown mode '{name}'. Try: {', '.join(agent.modes)}")
             continue
         if user in ("/provider", "/providers"):
             ui.print("\n".join(f"  {'●' if n == config.provider else ' '} {n}" for n in PRESETS))

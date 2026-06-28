@@ -10,6 +10,7 @@ through a TerminalUI (see ui.py), so this file stays about logic, not looks.
 from __future__ import annotations
 
 from .compaction import compact, estimate_tokens
+from .modes import DEFAULT_MODE, Mode, builtin_modes
 from .provider import LLMProvider
 from .tools import Tools
 from .ui import TerminalUI
@@ -25,13 +26,29 @@ class Agent:
         tools: Tools,
         compact_threshold: int = 0,
         ui: TerminalUI | None = None,
+        modes: dict[str, Mode] | None = None,
     ):
         self.system = system
         self.provider = provider
         self.tools = tools
         self.compact_threshold = compact_threshold  # tokens; 0 disables auto-compaction
         self.ui = ui or TerminalUI()
+        self.modes = modes or builtin_modes()
+        self.mode = self.modes[DEFAULT_MODE]
         self.messages: list[dict] = []
+
+    def set_mode(self, name: str) -> bool:
+        mode = self.modes.get(name)
+        if mode is None:
+            return False
+        self.mode = mode
+        return True
+
+    def _system_for_mode(self) -> str:
+        return f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
+
+    def _mode_schemas(self) -> list[dict]:
+        return [s for s in self.tools.schemas if self.mode.allows(s["name"])]
 
     def run(self, user_input: str) -> None:
         self._maybe_compact()
@@ -39,7 +56,9 @@ class Agent:
 
         for _ in range(_MAX_STEPS):
             with self.ui.thinking():
-                resp = self.provider.complete(self.system, self.messages, self.tools.schemas)
+                resp = self.provider.complete(
+                    self._system_for_mode(), self.messages, self._mode_schemas()
+                )
 
             self.messages.append(
                 {
@@ -57,7 +76,14 @@ class Agent:
             results = []
             for call in resp.tool_calls:
                 self.ui.tool_call(call.name, dict(call.input))
-                content, is_error = self.tools.execute(call.name, dict(call.input))
+                if not self.mode.allows(call.name):
+                    content, is_error = (
+                        f"Tool '{call.name}' is not available in {self.mode.name} mode. "
+                        f"Switch to a mode that allows it (e.g. /mode code) or use a read-only tool.",
+                        True,
+                    )
+                else:
+                    content, is_error = self.tools.execute(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
             self.messages.append({"role": "tool_results", "results": results})

@@ -62,10 +62,29 @@ Type `/` and a **popup menu of commands** appears and filters as you type
 This needs `prompt_toolkit` (in `requirements.txt`); without it, commands still
 work by typing them in full.
 
+### Modes (the Kilo Code idea)
+
+One agent, several focused personalities. Each mode pairs a short instruction
+with a set of allowed tools, so you get the right behaviour *and* the right
+guardrails:
+
+| Mode | What it's for | Can edit / run? |
+|------|---------------|-----------------|
+| `code` | implement and edit code (default) | yes |
+| `architect` | plan and design first | no — read-only on code (can write notes) |
+| `ask` | answer questions about the project | no — pure read-only |
+| `debug` | find the root cause, then fix | yes |
+
+Switch any time with `/mode architect` (or `/mode` to list them). The popup
+completes mode names after `/mode`. Add your own modes as markdown files in
+`.kbcode/modes/` — `description:` and `tools:` (e.g. `read, notes`) frontmatter
+plus a body of instructions; the filename becomes the mode name.
+
 ### Chat commands
 
 - `/help` — show the command table
-- `/status` — show provider, model and context size
+- `/mode [name]` — switch mode: code / architect / ask / debug (no name = list)
+- `/status` — show provider, model, mode and context size
 - `/provider [name] [model]` — switch provider (no name = list them)
 - `/model [id]` — switch model (no id = list this provider's models)
 - `/kb` — list knowledge-base notes
@@ -115,11 +134,12 @@ Risky actions (writing files, running commands) ask for your approval first.
 kbcode/
   cli.py            entry point + chat loop
   agent.py          the agent loop
+  modes.py          code/architect/ask/debug modes (Kilo Code idea)
   ui.py             terminal look-and-feel (banner, markdown, tool lines)
   prompt_input.py   "/" command autocomplete popup (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
   provider.py       talks to Claude / any OpenAI-compatible model
-  tools.py          the agent's tools
+  tools.py          the agent's tools (+ tool-call repair, openclaw idea)
   prompts.py        the system prompt
   memory.py         persistent memory + skills (SQLite)
   knowledge_base.py kb/ notes + path:line pointer checker (claude-kb idea)
