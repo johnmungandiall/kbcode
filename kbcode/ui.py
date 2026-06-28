@@ -49,6 +49,53 @@ def _short(value: object, limit: int = 100) -> str:
     return text if len(text) <= limit else text[:limit] + "…"
 
 
+def _human_count(n: int) -> str:
+    """1234 -> '1.2k', 2_500_000 -> '2.5M'."""
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        return f"{n / 1000:.1f}k".replace(".0k", "k")
+    return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
+
+
+def _describe_tool(name: str, args: dict) -> tuple[str, str]:
+    """Turn a raw tool call into a human verb + target, like a real CLI shows."""
+    a = args or {}
+
+    def g(key: str) -> str:
+        return str(a.get(key, "")).strip()
+
+    if name == "read_file":
+        return "Read", g("path")
+    if name == "write_file":
+        return "Write", f"{g('path')}  ({len(str(a.get('content', ''))):,} chars)"
+    if name == "edit_file":
+        return "Edit", g("path")
+    if name == "list_dir":
+        return "List", g("path") or "."
+    if name == "search_code":
+        where = f"  in {g('path')}" if g("path") else ""
+        return "Search", f'"{g("pattern")}"{where}'
+    if name == "run_command":
+        return "Run", "$ " + g("command")
+    if name == "kb_read":
+        return "KB read", ""
+    if name == "kb_write":
+        return "KB write", g("name")
+    if name == "remember":
+        return "Remember", g("key") or _short(g("content"), 60)
+    if name == "recall":
+        return "Recall", f'"{g("query")}"'
+    if name == "save_skill":
+        return "Save skill", g("name")
+    if name == "manage_todos":
+        n = len(a.get("todos") or [])
+        return "Plan", f"{n} item{'s' if n != 1 else ''}"
+    if name == "run_subagent":
+        return "Delegate", f"→ {g('agent')}: {_short(g('task'), 60)}"
+    return name, (_short(a) if a else "")
+
+
 class TerminalUI:
     """All terminal output flows through here so the style stays consistent."""
 
@@ -85,21 +132,58 @@ class TerminalUI:
         return f"\n{tag}<ansigreen><b>you ›</b></ansigreen> "
 
     def help(self) -> None:
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column(style="bold cyan", overflow="fold")
-        table.add_column(style="white", overflow="fold")
-        for cmd, desc in COMMANDS:
-            table.add_row(cmd, desc)
+        desc = dict(COMMANDS)
+        groups = [
+            ("session", ["/help", "/status", "/insights", "/compact", "/reset", "/exit"]),
+            ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
+            ("planning & agents", ["/todo", "/agents"]),
+            ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
+        ]
+        table = Table.grid(padding=(0, 2))
+        table.add_column(justify="left", overflow="fold")
+        table.add_column(overflow="fold")
+        for gi, (title, cmds) in enumerate(groups):
+            if gi:
+                table.add_row("", "")
+            table.add_row(Text(title.upper(), style="bold dim"), "")
+            for cmd in cmds:
+                if cmd in desc:
+                    # Use Text (not markup) so '[name]' / '[--fix]' render literally.
+                    table.add_row(Text(cmd, style="bold cyan"), Text(desc[cmd], style="white"))
         self.console.print(Panel(table, title="commands", border_style="dim", padding=(1, 1)))
-        self.console.print("[dim]Anything else is sent to the agent as a request.[/dim]")
+        self.console.print("[dim]Anything else you type is sent to the agent as a request.[/dim]")
 
-    def status_line(self, provider: str, model: str, mode: str, tokens: int) -> None:
+    def permission(self, tool: str, detail: str) -> str:
+        """Render an approval prompt and read the answer. Returns 'y' / 'n' / 'a'."""
+        body = Text()
+        body.append(f"{tool}\n", style="bold yellow")
+        for line in (detail.splitlines() or [detail]):
+            body.append(line + "\n", style="white")
+        self.console.print(
+            Panel(body, title="⚠  permission needed", border_style="yellow", padding=(0, 1))
+        )
+        try:
+            ans = self.console.input(
+                "  allow?  [green]y[/green]es / [red]N[/red]o / [cyan]a[/cyan]lways  › "
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            return "n"
+        if ans in ("a", "always"):
+            return "a"
+        return "y" if ans in ("y", "yes") else "n"
+
+    def status_line(self, provider: str, model: str, mode: str, tokens: int, limit: int = 0) -> None:
+        ctx = f"~{_human_count(tokens)} tokens"
+        if limit > 0:
+            pct = min(100, round(tokens / limit * 100))
+            filled = round(pct / 10)
+            ctx += f"  [{'█' * filled}{'░' * (10 - filled)}] {pct}% before auto-compact"
         self.console.print(
             Text.assemble(
                 ("provider ", "dim"), (provider, "bold"),
                 ("   model ", "dim"), (model, "bold"),
                 ("   mode ", "dim"), (mode, "bold"),
-                ("   context ", "dim"), (f"~{tokens:,} tokens", "bold"),
+                ("   context ", "dim"), (ctx, "bold"),
             )
         )
 
@@ -119,15 +203,43 @@ class TerminalUI:
             self.console.print(text)
 
     def tool_call(self, name: str, args: dict) -> None:
-        rendered = _short(args) if args else ""
-        self.console.print(
-            Text.assemble((f"{_TOOL_ICON} ", "cyan"), (name, "bold cyan"), (f"  {rendered}", "dim"))
-        )
+        # Subagent inner calls arrive as "agent-name:tool" — nest them visually.
+        prefix = ""
+        if ":" in name:
+            head, _, sub = name.partition(":")
+            if sub:
+                prefix, name = head, sub
+        verb, detail = _describe_tool(name, args)
+        lead = "  " if prefix else ""
+        parts = [(lead, ""), (f"{_TOOL_ICON} ", "cyan")]
+        if prefix:
+            parts.append((f"{prefix} ", "dim cyan"))
+        parts.append((verb, "bold cyan"))
+        if detail:
+            parts.append((f"  {detail}", "dim"))
+        self.console.print(Text.assemble(*parts))
 
     def tool_result(self, content: object, is_error: bool) -> None:
-        style = "red" if is_error else "green dim"
-        marker = "  ✗ " if is_error else "  ↳ "
-        self.console.print(Text(marker + _short(content, 160), style=style))
+        text = str(content).strip()
+        first = text.splitlines()[0] if text else ""
+        if is_error:
+            self.console.print(Text("    ✗ " + _short(first, 160), style="red"))
+            return
+        extra = text.count("\n")
+        summary = _short(first, 160) or "(done)"
+        if extra:
+            summary += f"   +{extra} more line{'s' if extra != 1 else ''}"
+        self.console.print(Text("    ↳ " + summary, style="green dim"))
+
+    def turn_summary(self, elapsed: float, actions: int, in_tokens: int, out_tokens: int) -> None:
+        bits = []
+        if actions:
+            bits.append(f"{actions} action{'s' if actions != 1 else ''}")
+        tok = in_tokens + out_tokens
+        if tok:
+            bits.append(f"~{_human_count(tok)} tokens")
+        bits.append(f"{elapsed:.1f}s")
+        self.console.print(Text("  " + "  ·  ".join(bits), style="dim italic"))
 
     def todos(self, items: list[dict]) -> None:
         if not items:

@@ -9,6 +9,8 @@ through a TerminalUI (see ui.py), so this file stays about logic, not looks.
 
 from __future__ import annotations
 
+import time
+
 from .compaction import compact, estimate_tokens
 from .modes import DEFAULT_MODE, Mode, builtin_modes
 from .pricing import estimate_cost
@@ -64,6 +66,10 @@ class Agent:
         self._maybe_compact()
         self.messages.append({"role": "user", "content": user_input})
 
+        start = time.perf_counter()
+        before = dict(self.usage)
+        actions = 0
+
         for _ in range(_MAX_STEPS):
             with self.ui.thinking():
                 resp = self.provider.complete(
@@ -82,10 +88,12 @@ class Agent:
             self.ui.assistant_text(resp.text)
 
             if not resp.tool_calls:
+                self._turn_summary(start, actions, before)
                 return
 
             results = []
             for call in resp.tool_calls:
+                actions += 1
                 self.ui.tool_call(call.name, dict(call.input))
                 if not self.mode.allows(call.name):
                     content, is_error = (
@@ -100,6 +108,15 @@ class Agent:
             self.messages.append({"role": "tool_results", "results": results})
 
         self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
+        self._turn_summary(start, actions, before)
+
+    def _turn_summary(self, start: float, actions: int, before: dict) -> None:
+        self.ui.turn_summary(
+            time.perf_counter() - start,
+            actions,
+            self.usage["input_tokens"] - before["input_tokens"],
+            self.usage["output_tokens"] - before["output_tokens"],
+        )
 
     def context_tokens(self) -> int:
         return estimate_tokens(self.messages)

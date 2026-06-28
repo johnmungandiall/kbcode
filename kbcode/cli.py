@@ -70,7 +70,7 @@ gets your summary, not your steps.
 
 
 def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
-    perm = Permissions(auto_approve=config.auto_approve)
+    perm = Permissions(auto_approve=config.auto_approve, ui=ui)
     tools = Tools(config, memory, kb, perm)
     agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
     orders = ""
@@ -254,7 +254,10 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             ui.help()
             continue
         if user == "/status":
-            ui.status_line(config.provider, config.model, agent.mode.name, agent.context_tokens())
+            ui.status_line(
+                config.provider, config.model, agent.mode.name,
+                agent.context_tokens(), config.compact_threshold,
+            )
             continue
         if user in ("/mode", "/modes"):
             for name, m in agent.modes.items():
