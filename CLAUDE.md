@@ -11,7 +11,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Install deps: `python -m pip install -r requirements.txt`
 - Run the chat REPL: `python -m kbcode`
 - One-shot task: `python -m kbcode "do the thing"` (add `-y` / `--yes` to auto-approve writes and commands)
-- Scaffold a project: `python -m kbcode init` (creates `AGENT.md`, the `kb/` note set, `.kbcode/`)
+- Work on a different project: `python -m kbcode -C "<path>"` (`-C`/`--dir`/`--project` set the project root; the agent's tools are confined to it, so this is how you target another repo without `cd`). The folder must exist.
+- Scaffold a project: `python -m kbcode init` (creates `AGENT.md`, the `kb/` note set, `.kbcode/`) — accepts a path: `python -m kbcode init "<path>"`, or `python -m kbcode -C "<path>" init`.
 - Configure provider/model interactively: `python -m kbcode model` (picks provider, takes a key, **auto-fetches** the model list, saves to `.kbcode/settings.json` + `.env`)
 - There is **no test suite**. The de-facto check is byte-compilation: `python -m py_compile kbcode/*.py`. Logic is verified with throwaway inline scripts (construct `Tools`/`Agent`/`suggest()` and assert), not a framework.
 

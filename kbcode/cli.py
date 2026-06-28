@@ -353,10 +353,45 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             ui.notice("chat cleared")
             continue
 
+        # Guard a common mix-up: `init`/`model` are TERMINAL commands. Typed in
+        # the chat they would otherwise be sent to the agent, which then explores
+        # the wrong folder. Catch the command-like forms and explain instead.
+        first = user.split()[0].lower()
+        rest = user.split(maxsplit=1)[1] if len(user.split()) > 1 else ""
+        command_like = not rest or rest[0] in "-/.~" or ":\\" in rest or rest.startswith("\\")
+        if first in ("init", "model") and command_like:
+            ui.notice(
+                f"'{first}' is a terminal command, not a chat message — in chat, commands start with /.",
+                style="yellow",
+            )
+            if first == "init":
+                target = rest or "<folder>"
+                ui.print(
+                    "To set up and work on another project, quit and run it there:\n"
+                    f'  [bold]python -m kbcode -C "{target}" init[/bold]   (one-time setup)\n'
+                    f'  [bold]python -m kbcode -C "{target}"[/bold]        (start chatting on it)'
+                )
+            else:
+                ui.print("To change the model, use  [bold]/model[/bold]  here, or  [bold]python -m kbcode model[/bold]  in the terminal.")
+            continue
+
         try:
             agent.run(user)
         except Exception as exc:  # noqa: BLE001 - keep the REPL alive
             ui.error(str(exc))
+
+
+def _take_dir(argv: list[str]) -> Path | None:
+    """Pull a ``-C/--dir/--project <path>`` option out of argv, if present."""
+    for flag in ("-C", "--dir", "--project"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 < len(argv):
+                value = argv[i + 1]
+                del argv[i : i + 2]
+                return Path(value).expanduser()
+            argv.remove(flag)
+    return None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -368,14 +403,27 @@ def main(argv: list[str] | None = None) -> int:
             argv.remove(flag)
             auto = True
 
-    config = load_config(Path.cwd())
+    # Which project to work on: -C <path>, else `init <path>`, else the cwd.
+    project_dir = _take_dir(argv)
+    if argv and argv[0] == "init" and len(argv) > 1 and project_dir is None:
+        project_dir = Path(argv[1]).expanduser()
+        del argv[1]
+    if project_dir is not None and not project_dir.is_dir():
+        console.print(
+            f"[red]Folder not found:[/red] {project_dir}\n"
+            "Pass an existing folder, e.g.  python -m kbcode -C \"C:\\path\\to\\project\""
+        )
+        return 1
+
+    config = load_config(project_dir or Path.cwd())
     config.auto_approve = auto
     kb = KnowledgeBase(config.kb_dir)
 
     if argv and argv[0] == "init":
         _scaffold(config, kb)
         console.print(
-            "[green]Initialized.[/green] Created AGENT.md, kb/, and .kbcode/.\n"
+            f"[green]Initialized[/green] {config.project_dir}\n"
+            "Created AGENT.md, kb/, and .kbcode/.\n"
             "Next: pick a model with  [bold]python -m kbcode model[/bold]"
         )
         return 0
