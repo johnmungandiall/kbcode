@@ -34,6 +34,7 @@ COMMANDS = [
     ("/kb-check", "check kb/ path:line pointers still resolve"),
     ("/memory", "show recent long-term memory"),
     ("/skills", "list learned skills"),
+    ("/todo", "show the agent's current task checklist"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/reset", "forget this chat (memory + kb are kept)"),
     ("/exit", "quit"),
@@ -124,6 +125,23 @@ class TerminalUI:
         style = "red" if is_error else "green dim"
         marker = "  ✗ " if is_error else "  ↳ "
         self.console.print(Text(marker + _short(content, 160), style=style))
+
+    def todos(self, items: list[dict]) -> None:
+        if not items:
+            self.notice("No todos yet.")
+            return
+        styles = {"pending": "white", "in_progress": "bold yellow", "done": "green dim"}
+        marks = {"pending": "○", "in_progress": "◐", "done": "●"}
+        table = Table.grid(padding=(0, 1))
+        table.add_column(justify="center")
+        table.add_column(overflow="fold")
+        for t in items:
+            status = t.get("status", "pending")
+            cell = Text(t["task"], style=styles.get(status, "white"))
+            if status == "done":
+                cell.stylize("strike")
+            table.add_row(marks.get(status, "○"), cell)
+        self.console.print(Panel(table, title="todos", border_style="dim", padding=(0, 1)))
 
     # -- misc -----------------------------------------------------------
     def notice(self, msg: str, style: str = "dim") -> None:

@@ -110,6 +110,11 @@ class Config:
     def settings_file(self) -> Path:
         return self.kbcode_dir / "settings.json"
 
+    @property
+    def standing_orders_file(self) -> Path:
+        # openclaw idea: persistent instructions injected into every session.
+        return self.kbcode_dir / "standing-orders.md"
+
     def ensure_dirs(self) -> None:
         self.kbcode_dir.mkdir(parents=True, exist_ok=True)
         self.kb_dir.mkdir(parents=True, exist_ok=True)

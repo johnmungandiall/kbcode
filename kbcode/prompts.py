@@ -26,8 +26,14 @@ def build_system_prompt(
     skills: list[dict],
     memories: list[dict],
     agent_md: str = "",
+    standing_orders: str = "",
 ) -> str:
     parts = [BASE_SYSTEM]
+
+    # openclaw "standing orders": always-on instructions the user pins for every
+    # session. Placed right after the base rules so they take priority.
+    if standing_orders.strip():
+        parts.append("## Standing orders (always apply, set by the user)\n" + standing_orders.strip())
 
     if agent_md.strip():
         parts.append("## Project guide (AGENT.md)\n" + agent_md.strip())

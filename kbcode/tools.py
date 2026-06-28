@@ -23,6 +23,15 @@ from .permissions import Permissions
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 _MAX_READ_CHARS = 60000
 
+_TODO_MARKS = {"pending": "[ ]", "in_progress": "[~]", "done": "[x]"}
+
+
+def format_todos(todos: list[dict]) -> str:
+    """Render a todo checklist as plain text (for tool results and /todo)."""
+    if not todos:
+        return "(no todos yet)"
+    return "\n".join(f"{_TODO_MARKS.get(t['status'], '[ ]')} {t['task']}" for t in todos)
+
 
 class Tools:
     def __init__(self, config: Config, memory: Memory, kb: KnowledgeBase, perm: Permissions):
@@ -31,6 +40,7 @@ class Tools:
         self.memory = memory
         self.kb = kb
         self.perm = perm
+        self.todos: list[dict] = []  # the agent's task checklist for the current job
 
     # --- schema sent to the model -------------------------------------
     @property
@@ -148,6 +158,36 @@ class Tools:
                         "steps": {"type": "string", "description": "The steps, as markdown."},
                     },
                     "required": ["name", "description", "steps"],
+                },
+            },
+            {
+                "name": "manage_todos",
+                "description": (
+                    "Plan and track a multi-step task with a checklist. Pass the FULL list "
+                    "each call — it replaces the previous one. Keep exactly one item "
+                    "'in_progress', mark items 'done' as you finish, and add new ones as they "
+                    "come up. Use this for any job of 3+ steps so progress stays visible."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "todos": {
+                            "type": "array",
+                            "description": "The complete checklist, in order.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "task": {"type": "string"},
+                                    "status": {
+                                        "type": "string",
+                                        "enum": ["pending", "in_progress", "done"],
+                                    },
+                                },
+                                "required": ["task", "status"],
+                            },
+                        }
+                    },
+                    "required": ["todos"],
                 },
             },
         ]
@@ -301,3 +341,17 @@ class Tools:
 
     def _tool_save_skill(self, inp: dict) -> str:
         return self.memory.save_skill(inp["name"], inp["description"], inp["steps"])
+
+    # --- planning ------------------------------------------------------
+    def _tool_manage_todos(self, inp: dict) -> str:
+        cleaned: list[dict] = []
+        for item in inp.get("todos") or []:
+            task = str(item.get("task", "")).strip()
+            if not task:
+                continue
+            status = str(item.get("status", "pending")).strip().lower()
+            if status not in _TODO_MARKS:
+                status = "pending"
+            cleaned.append({"task": task, "status": status})
+        self.todos = cleaned
+        return "Updated checklist:\n" + format_todos(cleaned)

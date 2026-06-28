@@ -27,14 +27,39 @@ def _scaffold(config: Config, kb: KnowledgeBase) -> None:
     config.ensure_dirs()
     if not config.agent_md.exists():
         config.agent_md.write_text(AGENT_MD_TEMPLATE, encoding="utf-8")
+    if not config.standing_orders_file.exists():
+        config.standing_orders_file.write_text(_STANDING_ORDERS_TEMPLATE, encoding="utf-8")
     kb.scaffold()
+
+
+# Pinned, always-on instructions prepended to every session's system prompt.
+_STANDING_ORDERS_TEMPLATE = """\
+# Standing orders
+
+Anything you write here is added to the agent's instructions at the start of
+*every* session. Use it for durable rules the agent should always follow, e.g.:
+
+- Always run the project's tests after changing code.
+- Reply in plain language; avoid jargon.
+- Never edit files under `vendor/` or `migrations/`.
+
+(Delete these examples and add your own. Leave the file empty to disable.)
+"""
 
 
 def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
     perm = Permissions(auto_approve=config.auto_approve)
     tools = Tools(config, memory, kb, perm)
     agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
-    system = build_system_prompt(kb.read_all(), memory.list_skills(), memory.recent(), agent_md)
+    orders = ""
+    if config.standing_orders_file.exists():
+        raw = config.standing_orders_file.read_text(encoding="utf-8")
+        # Ignore the untouched scaffold (its examples are not real orders).
+        if raw.strip() and raw.strip() != _STANDING_ORDERS_TEMPLATE.strip():
+            orders = raw
+    system = build_system_prompt(
+        kb.read_all(), memory.list_skills(), memory.recent(), agent_md, orders
+    )
     return Agent(
         system,
         get_provider(config),
@@ -252,6 +277,9 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
         if user == "/skills":
             rows = memory.list_skills()
             ui.print("\n".join(f"- {r['name']}: {r['description']}" for r in rows) or "(no skills yet)")
+            continue
+        if user == "/todo":
+            ui.todos(agent.tools.todos)
             continue
         if user == "/compact":
             agent.compact_now()
