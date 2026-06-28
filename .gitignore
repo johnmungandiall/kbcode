@@ -1,0 +1,12 @@
+# secrets
+.env
+
+# kbcode local state (per-machine memory db, caches)
+.kbcode/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
