@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from .compaction import compact, estimate_tokens
 from .modes import DEFAULT_MODE, Mode, builtin_modes
+from .pricing import estimate_cost
 from .provider import LLMProvider
+from .subagents import Subagent
 from .tools import Tools
 from .ui import TerminalUI
 
 _MAX_STEPS = 50  # safety cap on tool round-trips per user message
+_SUBAGENT_MAX_STEPS = 30  # a delegated task gets its own, smaller budget
 
 
 class Agent:
@@ -27,6 +30,7 @@ class Agent:
         compact_threshold: int = 0,
         ui: TerminalUI | None = None,
         modes: dict[str, Mode] | None = None,
+        subagents: dict[str, Subagent] | None = None,
     ):
         self.system = system
         self.provider = provider
@@ -36,6 +40,12 @@ class Agent:
         self.modes = modes or builtin_modes()
         self.mode = self.modes[DEFAULT_MODE]
         self.messages: list[dict] = []
+        # Cumulative token spend this run, for /insights.
+        self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
+        # Subagent delegation (Claude Code idea): expose it to the tools layer.
+        self.subagents = subagents or {}
+        self.tools.subagents = self.subagents
+        self.tools.delegate = self._run_subagent
 
     def set_mode(self, name: str) -> bool:
         mode = self.modes.get(name)
@@ -59,6 +69,7 @@ class Agent:
                 resp = self.provider.complete(
                     self._system_for_mode(), self.messages, self._mode_schemas()
                 )
+            self._record_usage(resp.usage)
 
             self.messages.append(
                 {
@@ -92,6 +103,73 @@ class Agent:
 
     def context_tokens(self) -> int:
         return estimate_tokens(self.messages)
+
+    def _record_usage(self, usage: dict | None) -> None:
+        self.usage["requests"] += 1
+        if usage:
+            self.usage["input_tokens"] += usage.get("input_tokens", 0)
+            self.usage["output_tokens"] += usage.get("output_tokens", 0)
+
+    def insights(self) -> dict:
+        """Usage/cost summary for this run (Hermes' /insights, adapted)."""
+        u = self.usage
+        total = u["input_tokens"] + u["output_tokens"]
+        return {
+            "model": self.provider.config.model if hasattr(self.provider, "config") else "?",
+            "requests": u["requests"],
+            "input_tokens": u["input_tokens"],
+            "output_tokens": u["output_tokens"],
+            "total_tokens": total,
+            "context_tokens": self.context_tokens(),
+            "cost": estimate_cost(
+                getattr(getattr(self.provider, "config", None), "model", ""),
+                u["input_tokens"],
+                u["output_tokens"],
+            ),
+        }
+
+    def _run_subagent(self, name: str, task: str) -> tuple[str, bool]:
+        """Run a delegated task in its own context window; return (summary, is_error)."""
+        sub = self.subagents.get(name)
+        if sub is None:
+            avail = ", ".join(self.subagents) or "(none defined)"
+            return f"Unknown subagent '{name}'. Available: {avail}.", True
+
+        system = f"{self.system}\n\n## You are the '{name}' subagent\n{sub.instructions}"
+        schemas = [
+            s for s in self.tools.schemas
+            if s["name"] != "run_subagent" and sub.allows(s["name"])
+        ]
+        messages: list[dict] = [{"role": "user", "content": task}]
+        self.ui.notice(f"↳ delegating to subagent '{name}'…", style="cyan")
+
+        for _ in range(_SUBAGENT_MAX_STEPS):
+            resp = self.provider.complete(system, messages, schemas)
+            self._record_usage(resp.usage)
+            messages.append(
+                {"role": "assistant", "text": resp.text, "tool_calls": resp.tool_calls, "raw": resp.raw}
+            )
+            if not resp.tool_calls:
+                self.ui.notice(f"↳ subagent '{name}' done.", style="cyan")
+                return resp.text or "(subagent returned no text)", False
+
+            results = []
+            for call in resp.tool_calls:
+                self.ui.tool_call(f"{name}:{call.name}", dict(call.input))
+                if call.name == "run_subagent":
+                    content, is_error = "Subagents cannot spawn other subagents.", True
+                elif not sub.allows(call.name):
+                    content, is_error = (
+                        f"Tool '{call.name}' is not allowed for the '{name}' subagent.",
+                        True,
+                    )
+                else:
+                    content, is_error = self.tools.execute(call.name, dict(call.input))
+                self.ui.tool_result(content, is_error)
+                results.append({"id": call.id, "content": content, "is_error": is_error})
+            messages.append({"role": "tool_results", "results": results})
+
+        return f"Subagent '{name}' hit its step limit before finishing.", True
 
     def reset(self) -> None:
         self.messages.clear()

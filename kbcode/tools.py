@@ -41,10 +41,42 @@ class Tools:
         self.kb = kb
         self.perm = perm
         self.todos: list[dict] = []  # the agent's task checklist for the current job
+        # Subagent delegation is wired up by the Agent (see agent.py).
+        self.subagents: dict = {}
+        self.delegate = None  # callable(name, task) -> (summary, is_error)
 
     # --- schema sent to the model -------------------------------------
     @property
     def schemas(self) -> list[dict]:
+        base = self._base_schemas
+        if self.subagents and self.delegate is not None:
+            return base + [self._subagent_schema()]
+        return base
+
+    def _subagent_schema(self) -> dict:
+        roster = "\n".join(f"- {n}: {s.description}" for n, s in self.subagents.items())
+        return {
+            "name": "run_subagent",
+            "description": (
+                "Delegate a self-contained task to a specialist subagent that works in its "
+                "OWN context window and returns just a summary — use it for heavy exploration "
+                "or research so your own context stays lean. Available subagents:\n" + roster
+            ),
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string", "description": "Which subagent to use, by name."},
+                    "task": {
+                        "type": "string",
+                        "description": "A complete, standalone instruction; the subagent sees only this.",
+                    },
+                },
+                "required": ["agent", "task"],
+            },
+        }
+
+    @property
+    def _base_schemas(self) -> list[dict]:
         return [
             {
                 "name": "read_file",
@@ -355,3 +387,11 @@ class Tools:
             cleaned.append({"task": task, "status": status})
         self.todos = cleaned
         return "Updated checklist:\n" + format_todos(cleaned)
+
+    def _tool_run_subagent(self, inp: dict) -> str:
+        if self.delegate is None or not self.subagents:
+            raise ValueError("No subagents are configured (.kbcode/agents/).")
+        content, is_error = self.delegate(inp["agent"], inp["task"])
+        if is_error:
+            raise ValueError(content)
+        return content

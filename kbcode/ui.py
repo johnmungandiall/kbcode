@@ -31,10 +31,13 @@ COMMANDS = [
     ("/model [id]", "switch model (no id = list this provider's models)"),
     ("/status", "show provider, model, mode and context size"),
     ("/kb", "list knowledge-base notes"),
-    ("/kb-check", "check kb/ path:line pointers still resolve"),
     ("/memory", "show recent long-term memory"),
     ("/skills", "list learned skills"),
     ("/todo", "show the agent's current task checklist"),
+    ("/agents", "list available subagents (.kbcode/agents/)"),
+    ("/learn [topic]", "save what we just did as a reusable skill"),
+    ("/insights", "show tokens used and estimated cost this session"),
+    ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/reset", "forget this chat (memory + kb are kept)"),
     ("/exit", "quit"),
@@ -142,6 +145,29 @@ class TerminalUI:
                 cell.stylize("strike")
             table.add_row(marks.get(status, "○"), cell)
         self.console.print(Panel(table, title="todos", border_style="dim", padding=(0, 1)))
+
+    def insights(self, data: dict) -> None:
+        info = Table.grid(padding=(0, 2))
+        info.add_column(justify="right", style="dim")
+        info.add_column(style="bold")
+        info.add_row("model", str(data.get("model", "?")))
+        info.add_row("requests", f"{data.get('requests', 0):,}")
+        info.add_row("input tokens", f"{data.get('input_tokens', 0):,}")
+        info.add_row("output tokens", f"{data.get('output_tokens', 0):,}")
+        info.add_row("total tokens", f"{data.get('total_tokens', 0):,}")
+        info.add_row("context now", f"~{data.get('context_tokens', 0):,}")
+        cost = data.get("cost")
+        info.add_row("est. cost", f"${cost:.4f}" if cost is not None else "unknown model")
+        self.console.print(Panel(info, title="insights (this session)", border_style="dim", padding=(1, 1)))
+
+    def agents(self, items: dict) -> None:
+        if not items:
+            self.notice("No subagents defined. Add .kbcode/agents/<name>.md to create one.")
+            return
+        for name, sub in items.items():
+            self.console.print(
+                Text.assemble(("  ⤷ ", "cyan"), (name, "bold cyan"), (f" — {sub.description}", "dim"))
+            )
 
     # -- misc -----------------------------------------------------------
     def notice(self, msg: str, style: str = "dim") -> None:

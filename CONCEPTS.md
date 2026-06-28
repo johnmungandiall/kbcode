@@ -118,22 +118,24 @@ Secondary concepts mined from `docs/automation/` and `packages/`:
 ## Recommended next features for kbcode (priority order)
 
 Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Each names its source.
+**Status: items 1–6 are now implemented.**
 
-1. **Todo tool + `/todo`** *(Kilo Code / Claude Code)* — a `manage_todos` tool the agent updates across
-   a multi-step task, shown in the UI. Biggest reliability win for the least code.
-2. **Standing orders** *(openclaw)* — a `.kbcode/standing-orders.md` (or `AGENT.md` section) whose text
-   is prepended to the system prompt every run. ~10 lines, always-on guidance.
-3. **KB drift audit + auto-fix** *(claude-kb)* — upgrade `/kb-check` from *report* to a `verify`-style
-   pass that auto-fixes cheap pointer drift and appends a `kb/changelog.md` entry.
-4. **Subagents** *(Claude Code / claude-kb)* — `.kbcode/agents/*.md` run in their own context window
-   (start read-only: a `code-explorer`). Unlocks Orchestrator mode and the kb-maintainer agent.
-5. **`/insights` + iteration budget** *(Hermes)* — a usage/cost report over saved sessions, plus a
-   per-run step cap so the loop can't run away. Both small, both safety/observability wins.
-6. **`/learn` → SKILL.md** *(Hermes)* — a guided wrapper over `save_skill` that turns the current
-   conversation, a directory, or a URL into one reusable skill.
-7. **Per-mode sticky model + Orchestrator mode** *(Kilo Code)* — `model:` in mode frontmatter, then a
-   5th mode that delegates subtasks (needs #4).
+1. ✅ **Todo tool + `/todo`** *(Kilo Code / Claude Code)* — `manage_todos` tool, shown in the UI;
+   allowed in every mode via the READ group. (`tools.py`, `ui.py`, `cli.py`, `modes.py`)
+2. ✅ **Standing orders** *(openclaw)* — `.kbcode/standing-orders.md` is prepended to the system
+   prompt every run; the untouched scaffold is ignored. (`config.py`, `prompts.py`, `cli.py`)
+3. ✅ **KB drift auto-fix** *(claude-kb)* — `/kb-check --fix` relocates a drifted `path:line` by the
+   code symbol named on the note line (`KnowledgeBase.fix_pointers`). (`knowledge_base.py`, `cli.py`)
+4. ✅ **Subagents** *(Claude Code / claude-kb)* — `.kbcode/agents/*.md` run in their own context
+   window via the `run_subagent` tool; ships a read-only `code-explorer`. (`subagents.py`, `agent.py`,
+   `tools.py`, `cli.py`) — this is the base Orchestrator mode (#7) builds on.
+5. ✅ **`/insights`** *(Hermes)* — per-session tokens + estimated cost from real provider usage
+   (`pricing.py`, `Agent.insights`). (`provider.py`, `agent.py`, `ui.py`, `cli.py`)
+6. ✅ **`/learn`** *(Hermes)* — sends a guided prompt so the agent turns the conversation (optionally a
+   named topic) into a reusable skill via `save_skill`. (`cli.py`, `ui.py`)
+7. 🔜 **Per-mode sticky model + Orchestrator mode** *(Kilo Code)* — `model:` in mode frontmatter, then a
+   5th mode that delegates subtasks to the subagents from #4.
 
-**Suggested first step:** #1 and #2 together — they are the smallest, touch `tools.py` + `ui.py` +
-`prompts.py` only, and immediately make the agent more reliable and more steerable. (See `CLAUDE.md`
-→ "When adding things" for the exact add-a-tool / add-a-slash-command recipe.)
+**Still open / future:** #7 above, plus an *iteration budget* (per-run step cap — partly covered by the
+existing `_MAX_STEPS`/`_SUBAGENT_MAX_STEPS` caps), the `verify`-style **changelog bump** on KB fixes,
+richer `kb init` note taxonomy, and pre-commit drift hooks. See the per-repo tables for the rest.

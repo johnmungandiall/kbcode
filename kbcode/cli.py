@@ -16,6 +16,7 @@ from .permissions import Permissions
 from .prompt_input import make_input
 from .prompts import build_system_prompt
 from .provider import get_provider
+from .subagents import load_subagents
 from .tools import Tools
 from .ui import COMMANDS, TerminalUI
 
@@ -29,6 +30,11 @@ def _scaffold(config: Config, kb: KnowledgeBase) -> None:
         config.agent_md.write_text(AGENT_MD_TEMPLATE, encoding="utf-8")
     if not config.standing_orders_file.exists():
         config.standing_orders_file.write_text(_STANDING_ORDERS_TEMPLATE, encoding="utf-8")
+    agents_dir = config.kbcode_dir / "agents"
+    sample_agent = agents_dir / "code-explorer.md"
+    if not sample_agent.exists():
+        agents_dir.mkdir(parents=True, exist_ok=True)
+        sample_agent.write_text(_CODE_EXPLORER_AGENT, encoding="utf-8")
     kb.scaffold()
 
 
@@ -44,6 +50,22 @@ Anything you write here is added to the agent's instructions at the start of
 - Never edit files under `vendor/` or `migrations/`.
 
 (Delete these examples and add your own. Leave the file empty to disable.)
+"""
+
+# A starter subagent so .kbcode/agents/ has a working example to copy.
+_CODE_EXPLORER_AGENT = """\
+---
+description: Explore the codebase and report the key files and how a feature works.
+tools: read
+---
+You are a code explorer running in your own context window. You are read-only.
+
+Given a task, trace it through the code: find entry points, follow the call path,
+and note the files and `path:line` anchors that matter. Do NOT edit anything.
+
+Return a tight summary: the 3-8 files worth reading, what each does, and the one
+or two functions where the real work happens. Keep it short — the main agent only
+gets your summary, not your steps.
 """
 
 
@@ -67,6 +89,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
         compact_threshold=config.compact_threshold,
         ui=ui,
         modes=load_modes(config.kbcode_dir / "modes"),
+        subagents=load_subagents(config.kbcode_dir / "agents"),
     )
 
 
@@ -203,7 +226,11 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
     agent = _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
 
-    arg_options = {"/provider": list(PRESETS), "/mode": list(agent.modes)}
+    arg_options = {
+        "/provider": list(PRESETS),
+        "/mode": list(agent.modes),
+        "/kb-check": ["--fix"],
+    }
     cmd_input = make_input(COMMANDS, arg_options)  # None if no autocomplete available
     if cmd_input:
         ui.notice("type / for commands")
@@ -281,16 +308,42 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
         if user == "/todo":
             ui.todos(agent.tools.todos)
             continue
+        if user == "/insights":
+            ui.insights(agent.insights())
+            continue
+        if user in ("/agents", "/subagents"):
+            ui.agents(agent.subagents)
+            continue
+        if user.split() and user.split()[0] == "/learn":
+            topic = user.split(maxsplit=1)[1].strip() if len(user.split()) > 1 else ""
+            scope = f" Focus the skill on: {topic}." if topic else ""
+            agent.run(
+                "Review what we accomplished in this conversation and capture it as a reusable "
+                "skill by calling save_skill(): give it a short name, a one-line description, and "
+                "clear markdown steps someone could follow to repeat it." + scope
+            )
+            continue
         if user == "/compact":
             agent.compact_now()
             continue
-        if user == "/kb-check":
-            problems = kb.check_pointers(config.project_dir)
-            if problems:
-                ui.notice("Pointer problems:", style="yellow")
-                ui.print("\n".join(f"- {p}" for p in problems))
+        if user.split() and user.split()[0] == "/kb-check":
+            if "--fix" in user.split() or "fix" in user.split()[1:]:
+                fixed, unresolved = kb.fix_pointers(config.project_dir)
+                if fixed:
+                    ui.notice("Auto-fixed:", style="green")
+                    ui.print("\n".join(f"- {f}" for f in fixed))
+                if unresolved:
+                    ui.notice("Still need attention:", style="yellow")
+                    ui.print("\n".join(f"- {p}" for p in unresolved))
+                if not fixed and not unresolved:
+                    ui.notice("All kb/ pointers resolve — nothing to fix.", style="green")
             else:
-                ui.notice("All kb/ pointers resolve.", style="green")
+                problems = kb.check_pointers(config.project_dir)
+                if problems:
+                    ui.notice("Pointer problems (run /kb-check --fix to repair):", style="yellow")
+                    ui.print("\n".join(f"- {p}" for p in problems))
+                else:
+                    ui.notice("All kb/ pointers resolve.", style="green")
             continue
         if user == "/reset":
             agent.reset()

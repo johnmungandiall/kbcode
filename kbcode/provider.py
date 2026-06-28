@@ -35,6 +35,7 @@ class LLMResponse:
     text: str
     tool_calls: list[ToolCall]
     raw: object  # native assistant payload, stored back on the normalized message
+    usage: dict | None = None  # {"input_tokens": int, "output_tokens": int} when reported
 
 
 class LLMProvider:
@@ -112,7 +113,12 @@ class AnthropicProvider(LLMProvider):
             for b in resp.content
             if getattr(b, "type", None) == "tool_use"
         ]
-        return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content)
+        u = getattr(resp, "usage", None)
+        usage = {
+            "input_tokens": getattr(u, "input_tokens", 0) or 0,
+            "output_tokens": getattr(u, "output_tokens", 0) or 0,
+        } if u else None
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content, usage=usage)
 
     def list_models(self) -> list[str]:
         return [m.id for m in self.client.models.list()]
@@ -188,7 +194,12 @@ class OpenAICompatibleProvider(LLMProvider):
         raw: dict = {"role": "assistant", "content": msg.content or ""}
         if raw_tool_calls:
             raw["tool_calls"] = raw_tool_calls
-        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw)
+        u = getattr(resp, "usage", None)
+        usage = {
+            "input_tokens": getattr(u, "prompt_tokens", 0) or 0,
+            "output_tokens": getattr(u, "completion_tokens", 0) or 0,
+        } if u else None
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage)
 
     def list_models(self) -> list[str]:
         return [m.id for m in self.client.models.list().data]

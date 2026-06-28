@@ -119,6 +119,11 @@ _POINTER_RE = re.compile(r"([A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+)[:#]L?(\d+)")
 # Placeholder examples in the templates use these — don't flag them as real refs.
 _PLACEHOLDER_PARTS = ("path/to", "path.ext", "<line>", "name(")
 
+# For auto-fix: pull code-symbol-looking tokens off the note line, and spot
+# definition lines in the target file (the durable anchor a line number drifts from).
+_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_DEF_RE = re.compile(r"\b(?:def|class|function|func|fn|interface|type|struct)\b")
+
 
 class KnowledgeBase:
     def __init__(self, kb_dir: Path):
@@ -179,6 +184,89 @@ class KnowledgeBase:
                 if int(raw_line) > line_count:
                     problems.append(f"{where} -> only {line_count} lines (pointer is stale)")
         return problems
+
+    def fix_pointers(self, project_dir: Path) -> tuple[list[str], list[str]]:
+        """Auto-repair drifted `path:line` pointers (claude-kb's ``--fix``).
+
+        For each pointer whose line has moved, use the code symbol named on the
+        same note line as the durable anchor: find where that symbol now lives in
+        the file and rewrite the line number. Returns ``(fixed, unresolved)`` —
+        what was repaired, and what still needs a human (missing file, or a
+        pointer with no symbol to relocate by).
+        """
+        fixed: list[str] = []
+        unresolved: list[str] = []
+
+        for note in self.kb_dir.glob("*.md"):
+            text = note.read_text(encoding="utf-8", errors="replace")
+
+            def repl(m: re.Match, _note=note) -> str:
+                raw_path, raw_line = m.group(1), m.group(2)
+                if any(part in raw_path for part in _PLACEHOLDER_PARTS) or "://" in raw_path:
+                    return m.group(0)
+                target = (project_dir / raw_path.replace("\\", "/")).resolve()
+                where = f"kb/{_note.name}: {raw_path}:{raw_line}"
+                if not target.is_file():
+                    unresolved.append(f"{where} -> file not found")
+                    return m.group(0)
+                lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
+                start = text.rfind("\n", 0, m.start()) + 1
+                end = text.find("\n", m.end())
+                context = text[start : len(text) if end < 0 else end]
+                anchors = self._anchors(context, raw_path)
+                cur = int(raw_line)
+                new = self._relocate(lines, anchors, cur)
+                if new is None:
+                    if cur > len(lines):
+                        unresolved.append(
+                            f"{where} -> only {len(lines)} lines; name the function/class so it can relocate"
+                        )
+                    return m.group(0)
+                if new != cur:
+                    fixed.append(f"{where} -> line {new}")
+                    return m.group(0)[: -len(raw_line)] + str(new)
+                return m.group(0)
+
+            new_text = _POINTER_RE.sub(repl, text)
+            if new_text != text:
+                note.write_text(new_text, encoding="utf-8")
+        return fixed, unresolved
+
+    @staticmethod
+    def _anchors(context: str, raw_path: str) -> list[str]:
+        """Code-symbol tokens on a note line, best candidates first."""
+        out: list[str] = []
+        for tok in _IDENT_RE.findall(context):
+            if tok in raw_path or len(tok) < 3:
+                continue
+            looks_like_symbol = "_" in tok or tok != tok.lower() or (tok + "(") in context
+            if looks_like_symbol and tok not in out:
+                out.append(tok)
+        return out
+
+    @staticmethod
+    def _relocate(lines: list[str], anchors: list[str], current: int) -> int | None:
+        """Where an anchor now lives (1-based), or None if not confident.
+
+        Returns ``current`` unchanged if the pointed-at line still holds the
+        anchor. Otherwise prefers a unique definition line, then a unique call,
+        then a unique mention.
+        """
+        if not anchors:
+            return current if 1 <= current <= len(lines) else None
+        if 1 <= current <= len(lines) and any(a in lines[current - 1] for a in anchors):
+            return current
+        for anchor in anchors:
+            defs = [i + 1 for i, l in enumerate(lines) if anchor in l and _DEF_RE.search(l)]
+            if len(defs) == 1:
+                return defs[0]
+            calls = [i + 1 for i, l in enumerate(lines) if (anchor + "(") in l]
+            if len(calls) == 1:
+                return calls[0]
+            hits = [i + 1 for i, l in enumerate(lines) if anchor in l]
+            if len(hits) == 1:
+                return hits[0]
+        return None
 
     @staticmethod
     def _safe(name: str) -> str:
