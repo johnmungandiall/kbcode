@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 
 from .agent import Agent
-from .config import PRESETS, Config, load_config, save_settings
+from .config import PRESETS, Config, global_dir, load_config, save_settings
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
 from .memory import Memory
 from .modes import load_modes
@@ -115,8 +115,10 @@ def _require_key(config: Config) -> bool:
         return True
     console.print(f"[red]No API key found for provider '{config.provider}'.[/red]")
     console.print(
-        f"Add this line to your [bold].env[/bold] file (in this folder):\n"
-        f"  {config.key_env}=your-key-here\n"
+        "Set it up once for every project:\n"
+        "  [bold]python -m kbcode model[/bold]   (picks provider + model, saves your key globally)\n"
+        f"or add  [bold]{config.key_env}=your-key-here[/bold]  to a .env file — either in this "
+        f"project, in the folder you launch kbcode from, or in [bold]{global_dir() / '.env'}[/bold].\n"
         "See .env.example for every provider's setting."
     )
     return False
@@ -206,18 +208,22 @@ def _model_wizard(config: Config) -> int:
         if sel:
             config.model = sel
 
-    # 6) save: selection -> settings.json, key -> .env
+    # 6) save GLOBALLY (~/.kbcode) so it applies to every project: selection ->
+    #    settings.json, key -> .env. A project can still override via its own files.
+    home = global_dir()
     preset_base = PRESETS[provider]["base_url"]
     base_to_save = config.base_url if config.base_url != preset_base else None
-    save_settings(config.kbcode_dir, provider, config.model, base_to_save)
+    save_settings(home, provider, config.model, base_to_save)
     if key:
-        _upsert_env(config.project_dir / ".env", config.key_env, key)
+        _upsert_env(home / ".env", config.key_env, key)
         if base_to_save:
-            _upsert_env(config.project_dir / ".env", "KBCODE_BASE_URL", base_to_save)
+            _upsert_env(home / ".env", "KBCODE_BASE_URL", base_to_save)
 
     console.print(
-        f"[green]Saved.[/green] provider=[bold]{provider}[/bold] model=[bold]{config.model}[/bold]\n"
-        "Run  [bold]python -m kbcode[/bold]  to start chatting."
+        f"[green]Saved to {home}[/green] — applies to every project.\n"
+        f"provider=[bold]{provider}[/bold] model=[bold]{config.model}[/bold]\n"
+        "Start chatting here with  [bold]python -m kbcode[/bold], or on another folder with "
+        "[bold]python -m kbcode -C \"<path>\"[/bold]."
     )
     return 0
 

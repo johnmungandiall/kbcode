@@ -136,6 +136,11 @@ class Config:
         self.model = model or preset["model"]
 
 
+def global_dir() -> Path:
+    """User-level kbcode config (``~/.kbcode``) — shared by every project."""
+    return Path.home() / ".kbcode"
+
+
 def load_settings(kbcode_dir: Path) -> dict:
     path = kbcode_dir / "settings.json"
     if not path.exists():
@@ -153,12 +158,31 @@ def save_settings(kbcode_dir: Path, provider: str, model: str, base_url: str | N
 
 
 def load_config(project_dir: Path | None = None) -> Config:
-    """Build a Config. Precedence for provider/model/base_url is:
-    environment variables  >  saved .kbcode/settings.json  >  preset defaults.
+    """Build a Config. Precedence for provider/model/base_url and the API key is:
+    environment vars  >  the project's `.kbcode`/.env  >  the launch folder's  >
+    the global `~/.kbcode`  >  preset defaults.
+
+    The launch-folder and global fallbacks mean you can configure kbcode once
+    (e.g. `python -m kbcode model`, which saves to `~/.kbcode`) and then point it
+    at any project with `-C` without re-entering your key there.
     """
     project_dir = (project_dir or Path.cwd()).resolve()
+    launch_dir = Path.cwd().resolve()
+    home = global_dir()
+
+    # Load .env files highest-priority first (load_dotenv never overrides a value
+    # already set, so the project's .env wins, then the launch folder, then global).
     load_dotenv(project_dir / ".env")
-    settings = load_settings(project_dir / ".kbcode")
+    if launch_dir != project_dir:
+        load_dotenv(launch_dir / ".env")
+    load_dotenv(home / ".env")
+
+    # Merge settings.json the same way: read low→high priority, let higher win.
+    settings: dict = {}
+    for kbdir in (home, launch_dir / ".kbcode", project_dir / ".kbcode"):
+        for key, value in load_settings(kbdir).items():
+            if value is not None:
+                settings[key] = value
 
     def _int(name: str, default: int) -> int:
         raw = os.environ.get(name)

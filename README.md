@@ -21,11 +21,15 @@ It uses your own AI API key — Claude by default, or any OpenAI-compatible mode
    ```
    pip install -r requirements.txt
    ```
-3. Add your API key — copy `.env.example` to `.env` and paste your key:
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
-   Get one at https://console.anthropic.com/
+3. Add your API key, either way:
+   - **Interactive (recommended):** `python -m kbcode model` — pick a provider,
+     paste your key, choose a model; it's saved **globally** (`~/.kbcode`) so it
+     works for every project.
+   - **By hand:** copy `.env.example` to `.env` and paste your key:
+     ```
+     ANTHROPIC_API_KEY=sk-ant-...
+     ```
+   Get a Claude key at https://console.anthropic.com/
 
 ## Use
 
@@ -68,6 +72,12 @@ Already in a chat? Switch live with **`/open "C:\path\to\other-project"`** — i
 re-roots the session, sets the folder up if needed, and keeps your model + key.
 (Tip: if you type `init <path>` in the chat by mistake, kbcode notices and shows
 you the right command.)
+
+Your provider, model and API key are looked up from the project, then the folder
+you launched from, then a global `~/.kbcode` — so once configured (e.g. via
+`python -m kbcode model`, which saves globally), `-C` works on any project
+without re-entering your key there. A project can still override with its own
+`.env` / `.kbcode/settings.json`.
 
 ### The terminal
 
