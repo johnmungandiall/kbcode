@@ -22,7 +22,9 @@ from rich.text import Text
 _TOOL_ICON = "⏺"
 _ARROW = "›"
 
-_COMMANDS = [
+# The command palette — single source of truth for /help and for the
+# "/" autocomplete popup (see prompt_input.py).
+COMMANDS = [
     ("/help", "show this help"),
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
@@ -75,7 +77,7 @@ class TerminalUI:
         table = Table(show_header=False, box=None, padding=(0, 2))
         table.add_column(style="bold cyan", overflow="fold")
         table.add_column(style="white", overflow="fold")
-        for cmd, desc in _COMMANDS:
+        for cmd, desc in COMMANDS:
             table.add_row(cmd, desc)
         self.console.print(Panel(table, title="commands", border_style="dim", padding=(1, 1)))
         self.console.print("[dim]Anything else is sent to the agent as a request.[/dim]")

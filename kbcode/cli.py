@@ -12,10 +12,11 @@ from .config import PRESETS, Config, load_config, save_settings
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
 from .memory import Memory
 from .permissions import Permissions
+from .prompt_input import make_input
 from .prompts import build_system_prompt
 from .provider import get_provider
 from .tools import Tools
-from .ui import TerminalUI
+from .ui import COMMANDS, TerminalUI
 
 console = Console()
 ui = TerminalUI(console)
@@ -175,9 +176,16 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
     agent = _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir)
 
+    cmd_input = make_input(COMMANDS, list(PRESETS))  # None if no autocomplete available
+    if cmd_input:
+        ui.notice("type / for commands")
+
     while True:
         try:
-            user = _read(ui.prompt())
+            if cmd_input:
+                user = cmd_input.read("\n<ansigreen><b>you ›</b></ansigreen> ")
+            else:
+                user = _read(ui.prompt())
         except (EOFError, KeyboardInterrupt):
             ui.print("\nbye 👋")
             return

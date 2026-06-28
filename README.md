@@ -57,6 +57,11 @@ banner with your provider and model, answers rendered as markdown, tool calls
 shown live as `⏺ tool(args)` with a `↳` result preview, and a `/status` line
 showing how much context you've used.
 
+Type `/` and a **popup menu of commands** appears and filters as you type
+(arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names.
+This needs `prompt_toolkit` (in `requirements.txt`); without it, commands still
+work by typing them in full.
+
 ### Chat commands
 
 - `/help` — show the command table
@@ -111,6 +116,7 @@ kbcode/
   cli.py            entry point + chat loop
   agent.py          the agent loop
   ui.py             terminal look-and-feel (banner, markdown, tool lines)
+  prompt_input.py   "/" command autocomplete popup (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
   provider.py       talks to Claude / any OpenAI-compatible model
   tools.py          the agent's tools
