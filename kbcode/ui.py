@@ -30,6 +30,7 @@ COMMANDS = [
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
     ("/status", "show provider, model, mode and context size"),
+    ("/open <folder>", "switch to working on another project folder"),
     ("/kb", "list knowledge-base notes"),
     ("/memory", "show recent long-term memory"),
     ("/skills", "list learned skills"),
@@ -134,7 +135,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/status", "/insights", "/compact", "/reset", "/exit"]),
+            ("session", ["/help", "/status", "/open <folder>", "/insights", "/compact", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),

@@ -352,6 +352,24 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             agent.reset()
             ui.notice("chat cleared")
             continue
+        if user.split() and user.split()[0] in ("/open", "/cd"):
+            parts = user.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                ui.error('usage: /open "C:\\path\\to\\project"')
+                continue
+            target = Path(parts[1].strip().strip('"').strip("'")).expanduser()
+            if not target.is_dir():
+                ui.error(f"folder not found: {target}")
+                continue
+            config.project_dir = target.resolve()
+            memory.close()
+            kb = KnowledgeBase(config.kb_dir)
+            memory = Memory(config.memory_db)
+            _scaffold(config, kb)  # set it up (AGENT.md, kb/, .kbcode/) if new
+            agent = _build_agent(config, kb, memory)
+            ui.notice(f"now working on {config.project_dir}", style="green")
+            ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
+            continue
 
         # Guard a common mix-up: `init`/`model` are TERMINAL commands. Typed in
         # the chat they would otherwise be sent to the agent, which then explores
@@ -365,11 +383,11 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
                 style="yellow",
             )
             if first == "init":
-                target = rest or "<folder>"
+                target = rest.strip().strip('"') or "<folder>"
                 ui.print(
-                    "To set up and work on another project, quit and run it there:\n"
-                    f'  [bold]python -m kbcode -C "{target}" init[/bold]   (one-time setup)\n'
-                    f'  [bold]python -m kbcode -C "{target}"[/bold]        (start chatting on it)'
+                    f'To switch to it right now, type:  [bold]/open "{target}"[/bold]\n'
+                    "(that also sets it up). Or from the terminal:  "
+                    f'[bold]python -m kbcode -C "{target}"[/bold]'
                 )
             else:
                 ui.print("To change the model, use  [bold]/model[/bold]  here, or  [bold]python -m kbcode model[/bold]  in the terminal.")
