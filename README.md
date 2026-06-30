@@ -12,67 +12,70 @@ borrowed from a well-known agent:
 | **Tool-call repair** — fixes malformed calls, and recovers ones written as plain text | openclaw | Weaker models self-correct instead of hard-failing or stalling. |
 
 It uses your own AI API key — Claude by default, or any OpenAI-compatible model
-(see [Use other models](#use-other-models)).
+(see [Choose your AI model](#choose-your-ai-model)).
 
-## Setup
+## Quick start
 
-1. Install Python 3.10+.
-2. Install kbcode:
-   - **From GitHub (for normal use):**
-     ```
-     pip install git+https://github.com/johnmungandiall/kbcode.git
-     ```
-     This adds a real `kbcode` command you can run from anywhere. Check it with
-     `kbcode --version`.
-   - **From a local clone (for development):** from this folder, `pip install -e .`
-     — an *editable* install, so your code changes take effect immediately.
-   - **Without installing:** `pip install -r requirements.txt`, then run it as
-     `python -m kbcode`.
-3. Add your API key, either way:
-   - **Interactive (recommended):** `python -m kbcode model` — pick a provider,
-     paste your key, choose a model; it's saved **globally** (`~/.kbcode`) so it
-     works for every project.
-   - **By hand:** copy `.env.example` to `.env` and paste your key:
-     ```
-     ANTHROPIC_API_KEY=sk-ant-...
-     ```
-   Get a Claude key at https://console.anthropic.com/
+Three steps and you're chatting.
 
-### Version & updates
-
-- **See your version:** `kbcode --version` (or `/version` inside the chat). The
-  banner shows it too.
-- **Update to the latest:** `kbcode update` — pulls the newest release from
-  GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
-
-## Use
-
-(If you ran `pip install -e .`, use `kbcode` in place of `python -m kbcode` below.)
-
-From inside the project you want the agent to work on:
+**1. Install Python 3.10+**, then install kbcode:
 
 ```
-# set up the kb/ folder and AGENT.md once
-python -m kbcode init
-
-# let it learn the project and write notes
-python -m kbcode "build the knowledge base for this project"
-
-# start chatting
-python -m kbcode
+pip install git+https://github.com/johnmungandiall/kbcode.git
 ```
 
-You can also give a one-off task:
+That gives you a real `kbcode` command you can run from any folder. Check it:
 
 ```
-python -m kbcode "add input validation to login() and run the tests"
+kbcode --version
 ```
 
-Add `-y` to auto-approve file writes and commands (skip the y/N prompts):
+**2. Pick your AI model and add your key** — one time, saved for every project:
 
 ```
-python -m kbcode -y "fix the failing test in tests/test_auth.py"
+kbcode model
 ```
+
+It walks you through it: choose a provider (Claude, OpenAI, Gemini, DeepSeek,
+OpenRouter, …), paste your API key, and pick a model from the list it fetches
+for you. The choice is saved globally to `~/.kbcode`. (Get a Claude key at
+https://console.anthropic.com/ — for the other providers, see
+[Choose your AI model](#choose-your-ai-model).)
+
+**3. Go to your project and run it:**
+
+```
+cd path/to/your/project
+kbcode init        # one-time: creates AGENT.md + the kb/ notes folder
+kbcode             # start chatting
+```
+
+That's it. Ask in plain language — *"add input validation to login() and run the
+tests"* — and approve the file writes / commands when it asks. Press **Esc** any
+time to stop the agent.
+
+### Other ways to install
+
+- **Just try it (no install):** `pip install -r requirements.txt`, then run
+  `python -m kbcode` everywhere this guide says `kbcode`.
+- **For development (editable):** clone the repo and run `pip install -e .` from
+  it — your code edits take effect immediately.
+
+### All terminal commands
+
+Run these in your shell. (Use `python -m kbcode` instead of `kbcode` if you
+chose the no-install option.)
+
+| Command | What it does |
+|---|---|
+| `kbcode` | Start the chat on the current folder. |
+| `kbcode "do the thing"` | Run one task and exit (one-shot). |
+| `kbcode -y "do the thing"` | One-shot, but auto-approve every write & command (no y/N prompts). |
+| `kbcode init` | Set up the current folder (`AGENT.md` + `kb/`). Target another with `kbcode init "C:\path"`. |
+| `kbcode model` | Pick provider + key + model interactively; saved globally. |
+| `kbcode -C "C:\path"` | Work on another project folder without `cd` (also `--dir` / `--project`). |
+| `kbcode update` | Update to the latest version from GitHub. |
+| `kbcode --version` | Show the version (also `-v`, `-V`, or `/version` in chat). |
 
 ### Work on another project
 
@@ -138,6 +141,7 @@ plus a body of instructions; the filename becomes the mode name.
 
 Session:
 - `/help` — show the command table (grouped)
+- `/version` — show the kbcode version
 - `/status` — provider, model, mode, and a context-fullness bar
 - `/open <folder>` — switch to working on another project folder
 - `/insights` — tokens used and estimated cost this session
@@ -246,9 +250,25 @@ kbcode/
   config.py         paths + settings
 ```
 
-## Use other models
+## Choose your AI model
 
-kbcode works with Claude **and** any OpenAI-compatible model. Pick one in `.env`:
+kbcode works with Claude **and** any OpenAI-compatible model.
+
+**The easy way — `kbcode model`.** Just run it and follow the prompts: pick a
+provider, paste your key, and choose a model from the list it fetches. It saves
+everything globally (`~/.kbcode`), so every project uses it. This is all most
+people ever need.
+
+**Switch live inside a chat** (no restart):
+
+```
+/provider openai gpt-4o     # change provider (and optionally the model)
+/model deepseek-chat        # change just the model
+/provider                   # list available providers
+/model                      # list this provider's models
+```
+
+**By hand in `.env`** (if you prefer): set `KBCODE_PROVIDER` and the matching key:
 
 | Provider | `KBCODE_PROVIDER` | Key to set | Default model |
 |----------|-------------------|------------|---------------|
@@ -267,15 +287,14 @@ KBCODE_PROVIDER=deepseek
 DEEPSEEK_API_KEY=...
 ```
 
-Or switch live inside the chat:
-
-```
-/provider openai gpt-4o
-/model deepseek-chat
-/providers
-```
-
 Notes:
 - `KBCODE_MODEL` overrides the model id for any provider.
 - Switching provider clears the current chat (memory and kb are kept).
 - `KBCODE_EFFORT` (low/medium/high/max) applies to Claude only.
+
+## Update & version
+
+- **See your version:** `kbcode --version` (or `/version` in chat — the banner
+  shows it too).
+- **Update to the latest:** `kbcode update` — pulls the newest release from
+  GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
