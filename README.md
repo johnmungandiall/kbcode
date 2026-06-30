@@ -9,7 +9,7 @@ borrowed from a well-known agent:
 | **Memory + skills** — remembers across sessions | Hermes agent | It recalls past decisions and reuses how-tos it learned. |
 | **Knowledge base** — short `kb/` notes | claude-kb | It understands your project cheaply, without re-scanning every file. |
 | **Modes** — code / architect / ask / debug | Kilo Code | One agent with focused personalities and the right guardrails. |
-| **Tool-call repair** — fixes malformed calls | openclaw | Weaker models self-correct instead of hard-failing. |
+| **Tool-call repair** — fixes malformed calls, and recovers ones written as plain text | openclaw | Weaker models self-correct instead of hard-failing or stalling. |
 
 It uses your own AI API key — Claude by default, or any OpenAI-compatible model
 (see [Use other models](#use-other-models)).
@@ -236,7 +236,8 @@ kbcode/
   prompt_input.py   "/" command autocomplete + the selectable menu (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
   provider.py       talks to Claude / any OpenAI-compatible model (+ token usage)
-  tools.py          the agent's tools (+ tool-call repair, openclaw idea)
+  tools.py          the agent's tools (+ execute-time tool-call repair, openclaw idea)
+  repair.py         recover tool calls a weak model wrote as plain text (openclaw idea)
   pricing.py        rough per-model USD pricing for /insights (Hermes idea)
   prompts.py        the system prompt (+ standing orders)
   memory.py         persistent memory + skills (SQLite)

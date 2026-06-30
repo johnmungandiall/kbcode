@@ -15,6 +15,7 @@ from .compaction import compact, estimate_tokens
 from .modes import DEFAULT_MODE, Mode, builtin_modes
 from .pricing import estimate_cost
 from .provider import LLMProvider
+from .repair import promote
 from .subagents import Subagent
 from .tools import Tools
 from .ui import TerminalUI
@@ -85,11 +86,19 @@ class Agent:
                     "raw": resp.raw,
                 }
             )
-            self.ui.assistant_text(resp.text)
 
             if not resp.tool_calls:
+                promoted, cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
+                if promoted:
+                    if cleaned:
+                        self.ui.assistant_text(cleaned)
+                    actions += self._run_promoted(promoted)
+                    continue
+                self.ui.assistant_text(resp.text)
                 self._turn_summary(start, actions, before)
                 return
+
+            self.ui.assistant_text(resp.text)
 
             results = []
             for call in resp.tool_calls:
@@ -109,6 +118,38 @@ class Agent:
 
         self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
         self._turn_summary(start, actions, before)
+
+    def _run_promoted(self, promoted: list[tuple[str, dict]]) -> int:
+        """Run tool calls the model wrote as plain text, then feed results back.
+
+        We don't have provider-native tool ids for these (the model never used
+        the tool interface), so the results go back as a plain ``user`` turn —
+        which keeps the message list valid for replay on any provider — with a
+        nudge to use the proper format next time. Returns the action count.
+        """
+        self.ui.notice(
+            "recovered tool call(s) the model wrote as plain text — "
+            "running them and nudging it back to the proper format.",
+            style="yellow",
+        )
+        feedback = [
+            "Note: you wrote those tool calls as plain text instead of using the "
+            "tool-call interface. I ran them for you this time — please use the "
+            "proper tool-call format from now on. Results:"
+        ]
+        for name, args in promoted:
+            self.ui.tool_call(name, dict(args))
+            if not self.mode.allows(name):
+                content, is_error = (
+                    f"Tool '{name}' is not available in {self.mode.name} mode.",
+                    True,
+                )
+            else:
+                content, is_error = self.tools.execute(name, dict(args))
+            self.ui.tool_result(content, is_error)
+            feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
+        self.messages.append({"role": "user", "content": "\n".join(feedback)})
+        return len(promoted)
 
     def _turn_summary(self, start: float, actions: int, before: dict) -> None:
         self.ui.turn_summary(
@@ -167,6 +208,25 @@ class Agent:
                 {"role": "assistant", "text": resp.text, "tool_calls": resp.tool_calls, "raw": resp.raw}
             )
             if not resp.tool_calls:
+                promoted, _ = promote(resp.text, {s["name"] for s in schemas})
+                if promoted:
+                    feedback = [
+                        "Note: you wrote those tool calls as plain text. I ran them "
+                        "for you — please use the proper tool-call format. Results:"
+                    ]
+                    for tname, targs in promoted:
+                        self.ui.tool_call(f"{name}:{tname}", dict(targs))
+                        if not sub.allows(tname):
+                            content, is_error = (
+                                f"Tool '{tname}' is not allowed for the '{name}' subagent.",
+                                True,
+                            )
+                        else:
+                            content, is_error = self.tools.execute(tname, dict(targs))
+                        self.ui.tool_result(content, is_error)
+                        feedback.append(f"\n## {tname} [{'error' if is_error else 'ok'}]\n{content}")
+                    messages.append({"role": "user", "content": "\n".join(feedback)})
+                    continue
                 self.ui.notice(f"↳ subagent '{name}' done.", style="cyan")
                 return resp.text or "(subagent returned no text)", False
 

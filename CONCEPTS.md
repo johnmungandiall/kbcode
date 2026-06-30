@@ -98,8 +98,10 @@ Secondary concepts:
 
 ## 5. openclaw — *tool-call repair*
 
-Home concept (✅ in kbcode): `_repair()` — unknown tool name → closest match via `difflib`; missing
-required args → named — so weaker models self-correct instead of hard-failing.
+Home concept (✅ in kbcode): tool-call repair in **two layers** — *execute-time* `Tools._repair()`
+(unknown tool name → closest match via `difflib`; missing required args → named) **and** *parse-time*
+`repair.promote()` (recover a tool call a weak model wrote as plain text, when the provider reports no
+structured `tool_calls`) — so weaker models self-correct instead of hard-failing **or stalling**.
 
 Secondary concepts mined from `docs/automation/` and `packages/`:
 
@@ -109,7 +111,7 @@ Secondary concepts mined from `docs/automation/` and `packages/`:
 | **Standing orders** | Persistent instructions auto-injected into every session ("always check compliance before replying"). | 🔜 trivial: a file whose contents prepend the system prompt every run. |
 | **Hooks (internal vs typed)** | File-based side-effect hooks vs in-process typed hooks that can rewrite prompts / block tools. | 🔜 same hook idea as §1; converge into one design. |
 | **Background tasks ledger** | Track detached work; `tasks list` / `tasks audit`. | ⏭️ needs a daemon; out of scope. |
-| **`tool-call-repair` as a package** | The repair logic isolated & testable. | ✅ kbcode has the concept inline. |
+| **`tool-call-repair` as a package** | The repair logic isolated & testable; notably its job is to **promote tool calls a model emitted as plain text** into real calls. | ✅ kbcode's `repair.py` (`promote()`) recovers `[name]{…}` / `[tool:name]` / `<name>{…}</name>` / bare `{"name"/"tool"/"function", "arguments"}` blocks, fed back as a `user` turn; plus execute-time `Tools._repair`. |
 | **Channels (Slack/Discord/Matrix/SMS…)** | Multi-surface messaging. | ⏭️ not a local coding CLI concern. |
 | **net-policy / plugin-sdk / model-catalog** | Network egress policy, plugin contract, dynamic model registry. | Partly ✅ (kbcode auto-fetches model lists); rest ⏭️. |
 
@@ -118,7 +120,7 @@ Secondary concepts mined from `docs/automation/` and `packages/`:
 ## Recommended next features for kbcode (priority order)
 
 Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Each names its source.
-**Status: items 1–6, 8, and 9 are now implemented.**
+**Status: items 1–6 and 8–10 are now implemented.**
 
 1. ✅ **Todo tool + `/todo`** *(Kilo Code / Claude Code)* — `manage_todos` tool, shown in the UI;
    allowed in every mode via the READ group. (`tools.py`, `ui.py`, `cli.py`, `modes.py`)
@@ -141,6 +143,10 @@ Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Eac
 9. ✅ **Error classifier + auto-retry** *(Hermes `error_classifier.py`)* — `provider._classify` +
    `_with_retry` retry transient failures (429/5xx/network) with exponential backoff and surface
    auth/bad-request as a clean `ProviderError(hint=…)`; the CLI prints it without a traceback. (`provider.py`, `cli.py`)
+10. ✅ **Plain-text tool-call repair** *(openclaw `tool-call-repair`)* — when a weak / OpenAI-compatible
+   model writes a tool call as text instead of using the function-calling interface, `repair.promote`
+   recovers it and `Agent._run_promoted` runs it + nudges the model back to the proper format, so the
+   turn no longer stalls at "no tool calls → done". (`repair.py`, `agent.py`)
 
 Alongside these, a **production pass**: `pyproject.toml` makes `kbcode` a real installable command, and
 write/edit tool-lines now show the **full resolved path** so you always see where a file lands.
