@@ -1,67 +1,91 @@
-# kbcode
+# 🤖 kbcode
 
-A small AI coding agent you run in your terminal. It blends five ideas, each
-borrowed from a well-known agent:
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
+![Version](https://img.shields.io/badge/version-1.0.2-2ea44f)
+![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
+![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 
-| Idea | From | What it gives you |
+**A small AI coding agent you run in your terminal.** 💬 Ask in plain language —
+it reads your code, writes files, and runs commands for you, using *your own* AI key.
+
+> [!TIP]
+> First time? Jump straight to **[🚀 Quick start](#-quick-start)** — three steps and you're chatting.
+
+It blends five ideas, each borrowed from a well-known agent:
+
+| 🧩 Idea | 📦 From | ✨ What it gives you |
 |------|------|-------------------|
-| **Hands** — reads/writes files, runs commands | Claude Code | The agent actually does the work, not just talks. |
-| **Memory + skills** — remembers across sessions | Hermes agent | It recalls past decisions and reuses how-tos it learned. |
-| **Knowledge base** — short `kb/` notes | claude-kb | It understands your project cheaply, without re-scanning every file. |
-| **Modes** — code / architect / ask / debug | Kilo Code | One agent with focused personalities and the right guardrails. |
-| **Tool-call repair** — fixes malformed calls, and recovers ones written as plain text | openclaw | Weaker models self-correct instead of hard-failing or stalling. |
+| **🛠️ Hands** — reads/writes files, runs commands | Claude Code | The agent actually does the work, not just talks. |
+| **🧠 Memory + skills** — remembers across sessions | Hermes agent | It recalls past decisions and reuses how-tos it learned. |
+| **📚 Knowledge base** — short `kb/` notes | claude-kb | It understands your project cheaply, without re-scanning every file. |
+| **🎭 Modes** — code / architect / ask / debug | Kilo Code | One agent with focused personalities and the right guardrails. |
+| **🔧 Tool-call repair** — fixes malformed calls, recovers ones written as plain text | openclaw | Weaker models self-correct instead of hard-failing or stalling. |
 
-It uses your own AI API key — Claude by default, or any OpenAI-compatible model
-(see [Choose your AI model](#choose-your-ai-model)).
+It works with **Claude** (default) or **any OpenAI-compatible model** — see
+[🧠 Choose your AI model](#-choose-your-ai-model).
 
-## Quick start
+## 🚀 Quick start
 
-Three steps and you're chatting.
+Three steps and you're chatting. 🎉
 
-**1. Install Python 3.10+**, then install kbcode:
+### 1️⃣ Install
 
-```
+Install Python 3.10+, then:
+
+```bash
 pip install git+https://github.com/johnmungandiall/kbcode.git
 ```
 
 That gives you a real `kbcode` command you can run from any folder. Check it:
 
-```
+```bash
 kbcode --version
 ```
 
-**2. Pick your AI model and add your key** — one time, saved for every project:
+### 2️⃣ Configure your AI model 🔑
 
-```
+Run the setup wizard — **once**, and it's saved for every project:
+
+```bash
 kbcode model
 ```
 
-It walks you through it: choose a provider (Claude, OpenAI, Gemini, DeepSeek,
-OpenRouter, …), paste your API key, and pick a model from the list it fetches
-for you. The choice is saved globally to `~/.kbcode`. (Get a Claude key at
-https://console.anthropic.com/ — for the other providers, see
-[Choose your AI model](#choose-your-ai-model).)
+It asks you three easy things:
 
-**3. Go to your project and run it:**
+1. **Which provider?** — Claude, OpenAI, Gemini, DeepSeek, OpenRouter… (type the number)
+2. **Your API key** — paste it in
+3. **Which model?** — it fetches the list for you; pick a number
 
-```
+> [!IMPORTANT]
+> You need an API key from your provider. For Claude, get one at
+> **<https://console.anthropic.com/>**. Your key is saved to `~/.kbcode` on your
+> own computer — never shared.
+
+> [!NOTE]
+> Prefer not to use the wizard? See [🧠 Choose your AI model](#-choose-your-ai-model)
+> to set it by hand, or to switch models later from inside the chat.
+
+### 3️⃣ Run it on your project ▶️
+
+```bash
 cd path/to/your/project
 kbcode init        # one-time: creates AGENT.md + the kb/ notes folder
 kbcode             # start chatting
 ```
 
-That's it. Ask in plain language — *"add input validation to login() and run the
-tests"* — and approve the file writes / commands when it asks. Press **Esc** any
-time to stop the agent.
+> [!TIP]
+> That's it! Ask in plain language — *"add input validation to login() and run the
+> tests"* — approve the file writes / commands when it asks, and press **Esc** any
+> time to stop the agent.
 
-### Other ways to install
+### 🧰 Other ways to install
 
 - **Just try it (no install):** `pip install -r requirements.txt`, then run
   `python -m kbcode` everywhere this guide says `kbcode`.
 - **For development (editable):** clone the repo and run `pip install -e .` from
   it — your code edits take effect immediately.
 
-### All terminal commands
+### ⌨️ All terminal commands
 
 Run these in your shell. (Use `python -m kbcode` instead of `kbcode` if you
 chose the no-install option.)
@@ -77,7 +101,7 @@ chose the no-install option.)
 | `kbcode update` | Update to the latest version from GitHub. |
 | `kbcode --version` | Show the version (also `-v`, `-V`, or `/version` in chat). |
 
-### Work on another project
+### 📁 Work on another project
 
 By default kbcode works on the folder you launch it in. To point it at a
 different project without `cd`-ing there, use `-C` (also `--dir` / `--project`):
@@ -98,7 +122,7 @@ you launched from, then a global `~/.kbcode` — so once configured (e.g. via
 without re-entering your key there. A project can still override with its own
 `.env` / `.kbcode/settings.json`.
 
-### The terminal
+### 🖥️ The terminal
 
 kbcode runs as a chat terminal in the style of Claude Code / Hermes: a header
 banner with your provider and model, and answers rendered as markdown. Tool
@@ -119,7 +143,7 @@ after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
 `prompt_toolkit` (in `requirements.txt`); without it, commands still work by
 typing them in full.
 
-### Modes (the Kilo Code idea)
+### 🎭 Modes (the Kilo Code idea)
 
 One agent, several focused personalities. Each mode pairs a short instruction
 with a set of allowed tools, so you get the right behaviour *and* the right
@@ -137,7 +161,9 @@ completes mode names after `/mode`. Add your own modes as markdown files in
 `.kbcode/modes/` — `description:` and `tools:` (e.g. `read, notes`) frontmatter
 plus a body of instructions; the filename becomes the mode name.
 
-### Chat commands
+### ⌨️ Chat commands
+
+Type `/` in the chat to see them all (with a popup menu). Grouped:
 
 Session:
 - `/help` — show the command table (grouped)
@@ -165,7 +191,7 @@ Models & modes:
 - `/provider [name] [model]` — switch provider (no name = list them)
 - `/model [id]` — switch model (no id = list this provider's models)
 
-### Planning, subagents, and what it learns
+### 🧩 Planning, subagents, and what it learns
 
 - **Todos** — for a multi-step job the agent keeps a checklist (the `manage_todos`
   tool); see it any time with `/todo`. ✓ done · ◐ in progress · ○ pending.
@@ -180,14 +206,14 @@ Models & modes:
 - **Learn** — `/learn` (optionally `/learn <topic>`) turns what you just did into a
   reusable skill, saved to memory and listed by `/skills`.
 
-### Standing orders (always-on instructions)
+### 📌 Standing orders (always-on instructions)
 
 Anything you write in `.kbcode/standing-orders.md` is added to the agent's
 instructions at the **start of every session** — e.g. "always run the tests
 after changing code" or "reply in plain language." `init` creates a commented
 template; leave it untouched (or empty) to disable.
 
-### Long sessions stay cheap (auto-compaction)
+### 💸 Long sessions stay cheap (auto-compaction)
 
 When a chat grows long, kbcode automatically summarizes the older middle of the
 conversation into a short recap and keeps going — so it doesn't slow down, get
@@ -195,7 +221,7 @@ expensive, or overflow the model's context window. (This is the Hermes idea.)
 Tune it with `KBCODE_COMPACT_TOKENS` in `.env` (`0` turns it off), or run
 `/compact` yourself any time.
 
-## How it works
+## ⚙️ How it works
 
 ```
 your request
@@ -223,12 +249,14 @@ your request
 - **`.kbcode/modes/`** — your custom modes (`*.md`), if any.
 - **`AGENT.md`** — a short pointer file telling the agent how to work here.
 
-Risky actions (writing files, running commands) ask for your approval first.
-And as a safety rail, the agent **refuses** to write to or edit sensitive files —
-`.git/`, `.ssh/`, `.env` and secrets, private keys, and kbcode's own state — even
-if you approve (templates like `.env.example` and your `.gitignore` are fine).
+> [!CAUTION]
+> **You're always in control.** Risky actions (writing files, running commands)
+> ask for your approval first. As an extra safety rail, the agent **refuses** to
+> write to or edit sensitive files — `.git/`, `.ssh/`, `.env` and secrets, private
+> keys, and kbcode's own state — even if you approve. (Templates like
+> `.env.example` and your `.gitignore` are fine.)
 
-## Project layout
+## 🗂️ Project layout
 
 ```
 kbcode/
@@ -250,51 +278,67 @@ kbcode/
   config.py         paths + settings
 ```
 
-## Choose your AI model
+## 🧠 Choose your AI model
 
-kbcode works with Claude **and** any OpenAI-compatible model.
+kbcode works with **Claude** and **any OpenAI-compatible model**. Three ways,
+easiest first.
 
-**The easy way — `kbcode model`.** Just run it and follow the prompts: pick a
-provider, paste your key, and choose a model from the list it fetches. It saves
-everything globally (`~/.kbcode`), so every project uses it. This is all most
-people ever need.
+### ✅ The easy way — `kbcode model`
 
-**Switch live inside a chat** (no restart):
-
+```bash
+kbcode model
 ```
+
+Run it and follow the prompts: pick a provider, paste your key, choose a model
+from the list it fetches. It's saved globally (`~/.kbcode`), so every project
+uses it. **This is all most people ever need.**
+
+> [!WARNING]
+> **Model not configured? / "No API key found"?** That just means no key is saved
+> yet (or you're on a fresh install). Fix it in one of two ways:
+> - Run **`kbcode model`** again and paste your key, **or**
+> - Add your key to `~/.kbcode/.env` by hand, e.g. `ANTHROPIC_API_KEY=sk-ant-...`
+>
+> Confirm it worked: start `kbcode` and check the banner shows your provider + model.
+
+### 🔄 Switch live inside a chat (no restart)
+
+```text
 /provider openai gpt-4o     # change provider (and optionally the model)
 /model deepseek-chat        # change just the model
 /provider                   # list available providers
 /model                      # list this provider's models
 ```
 
-**By hand in `.env`** (if you prefer): set `KBCODE_PROVIDER` and the matching key:
+### ⚙️ By hand in `.env`
 
-| Provider | `KBCODE_PROVIDER` | Key to set | Default model |
+Set `KBCODE_PROVIDER` and the matching key:
+
+| Provider | `KBCODE_PROVIDER` | 🔑 Key to set | Default model |
 |----------|-------------------|------------|---------------|
-| Claude | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-4-8` |
-| OpenAI (ChatGPT) | `openai` | `OPENAI_API_KEY` | `gpt-4o` |
-| Google Gemini | `gemini` | `GEMINI_API_KEY` | `gemini-2.0-flash` |
-| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
-| OpenRouter (many models) | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o` |
-| MiMo (via OpenRouter) | `mimo` | `OPENROUTER_API_KEY` | set `KBCODE_MODEL` |
-| Any custom endpoint | `custom` | `KBCODE_API_KEY` + `KBCODE_BASE_URL` | set `KBCODE_MODEL` |
+| 🟣 Claude | `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-4-8` |
+| 🟢 OpenAI (ChatGPT) | `openai` | `OPENAI_API_KEY` | `gpt-4o` |
+| 🔵 Google Gemini | `gemini` | `GEMINI_API_KEY` | `gemini-2.0-flash` |
+| 🌊 DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| 🛰️ OpenRouter (many models) | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o` |
+| 🤖 MiMo (via OpenRouter) | `mimo` | `OPENROUTER_API_KEY` | set `KBCODE_MODEL` |
+| 🧩 Any custom endpoint | `custom` | `KBCODE_API_KEY` + `KBCODE_BASE_URL` | set `KBCODE_MODEL` |
 
 Example `.env`:
 
-```
+```bash
 KBCODE_PROVIDER=deepseek
 DEEPSEEK_API_KEY=...
 ```
 
-Notes:
-- `KBCODE_MODEL` overrides the model id for any provider.
-- Switching provider clears the current chat (memory and kb are kept).
-- `KBCODE_EFFORT` (low/medium/high/max) applies to Claude only.
+> [!NOTE]
+> - `KBCODE_MODEL` overrides the model id for any provider.
+> - Switching provider clears the current chat (memory and kb are kept).
+> - `KBCODE_EFFORT` (low/medium/high/max) applies to Claude only.
 
-## Update & version
+## 🔄 Update & version
 
-- **See your version:** `kbcode --version` (or `/version` in chat — the banner
+- 🔢 **See your version:** `kbcode --version` (or `/version` in chat — the banner
   shows it too).
-- **Update to the latest:** `kbcode update` — pulls the newest release from
+- ⬆️ **Update to the latest:** `kbcode update` — pulls the newest release from
   GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
