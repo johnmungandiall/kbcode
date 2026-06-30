@@ -146,7 +146,22 @@ class AnthropicProvider(LLMProvider):
         out: list[dict] = []
         for m in messages:
             if m["role"] == "user":
-                out.append({"role": "user", "content": m["content"]})
+                if m.get("images"):
+                    content: list[dict] = []
+                    if m["content"]:
+                        content.append({"type": "text", "text": m["content"]})
+                    for im in m["images"]:
+                        content.append({
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": im["media_type"],
+                                "data": im["data"],
+                            },
+                        })
+                    out.append({"role": "user", "content": content})
+                else:
+                    out.append({"role": "user", "content": m["content"]})
             elif m["role"] == "assistant":
                 out.append({"role": "assistant", "content": m["raw"]})
             elif m["role"] == "tool_results":
@@ -241,7 +256,16 @@ class OpenAICompatibleProvider(LLMProvider):
         out: list[dict] = [{"role": "system", "content": system}]
         for m in messages:
             if m["role"] == "user":
-                out.append({"role": "user", "content": m["content"]})
+                if m.get("images"):
+                    parts: list[dict] = []
+                    if m["content"]:
+                        parts.append({"type": "text", "text": m["content"]})
+                    for im in m["images"]:
+                        url = f"data:{im['media_type']};base64,{im['data']}"
+                        parts.append({"type": "image_url", "image_url": {"url": url}})
+                    out.append({"role": "user", "content": parts})
+                else:
+                    out.append({"role": "user", "content": m["content"]})
             elif m["role"] == "assistant":
                 out.append(m["raw"])  # native assistant message dict
             elif m["role"] == "tool_results":

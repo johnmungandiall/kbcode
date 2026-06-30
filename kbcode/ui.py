@@ -40,6 +40,7 @@ COMMANDS = [
     ("/skills", "list learned skills"),
     ("/todo", "show the agent's current task checklist"),
     ("/agents", "list available subagents (.kbcode/agents/)"),
+    ("/image [path]", "attach an image (clipboard, or a file) for your next message — also Alt+V"),
     ("/learn [topic]", "save what we just did as a reusable skill"),
     ("/insights", "show tokens used and estimated cost this session"),
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
@@ -161,7 +162,7 @@ class TerminalUI:
         groups = [
             ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
-            ("planning & agents", ["/todo", "/agents"]),
+            ("planning & agents", ["/todo", "/agents", "/image [path]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
         ]
         table = Table.grid(padding=(0, 2))

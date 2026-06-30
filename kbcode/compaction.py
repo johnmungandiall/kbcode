@@ -42,14 +42,23 @@ _SUMMARY_INSTRUCTION = (
 
 
 def estimate_tokens(messages: list[dict]) -> int:
-    """Rough token estimate (~4 chars/token) over the whole message list."""
-    total = 0
+    """Rough token estimate (~4 chars/token) over the whole message list.
+
+    Image attachments are counted as a flat per-image cost rather than by their
+    base64 size — otherwise one screenshot would look like tens of thousands of
+    tokens and trigger needless compaction.
+    """
+    chars = 0
+    image_tokens = 0
     for m in messages:
+        if m.get("images"):
+            image_tokens += 1300 * len(m["images"])  # rough vision cost per image
+            m = {k: v for k, v in m.items() if k != "images"}
         try:
-            total += len(json.dumps(m, default=str))
+            chars += len(json.dumps(m, default=str))
         except (TypeError, ValueError):
-            total += len(str(m))
-    return total // 4
+            chars += len(str(m))
+    return chars // 4 + image_tokens
 
 
 def _exchange_starts(messages: list[dict]) -> list[int]:

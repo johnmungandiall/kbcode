@@ -126,13 +126,21 @@ def select(options: list[str], header: str | None = None) -> tuple[bool, int | N
 
 
 def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]] | None = None):
-    """Return an input object with a ``.read(prompt_html)`` method, or None."""
+    """Return an input object with ``.read(prompt_html)`` and ``.pop_images()``, or None.
+
+    Besides slash-command autocomplete, this binds **Alt+V** to attach an image
+    from the clipboard to the next message (for vision-capable models). Attached
+    images wait in a buffer shown in the bottom toolbar; ``pop_images()`` returns
+    and clears them — the caller sends them with the user's next turn.
+    """
     if not sys.stdin.isatty():
         return None  # piped / non-interactive: let the caller use plain input
     try:
         from prompt_toolkit import PromptSession
+        from prompt_toolkit.application import run_in_terminal
         from prompt_toolkit.completion import Completer, Completion
         from prompt_toolkit.formatted_text import HTML
+        from prompt_toolkit.key_binding import KeyBindings
     except Exception:  # noqa: BLE001 - prompt_toolkit missing or broken
         return None
 
@@ -149,12 +157,46 @@ def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]
                     display_meta=meta,
                 )
 
-    session = PromptSession(completer=_SlashCompleter(), complete_while_typing=True)
+    images: list[dict] = []  # pending attachments, drained by pop_images()
+    kb = KeyBindings()
+
+    @kb.add("escape", "v")  # Alt+V (terminals send Esc then 'v')
+    def _attach_image(event):
+        from .images import grab_clipboard_image
+
+        img = grab_clipboard_image()
+        if img:
+            images.append(img)
+            event.app.invalidate()  # refresh the bottom toolbar count
+        else:
+            run_in_terminal(
+                lambda: print(
+                    "  (no image on the clipboard — copy an image first; "
+                    "clipboard paste needs Pillow: pip install Pillow)"
+                )
+            )
+
+    def _toolbar():
+        if images:
+            return HTML(f" 📎 {len(images)} image(s) attached — sent with your next message")
+        return HTML(" tip: <b>Alt+V</b> attaches an image from your clipboard")
+
+    session = PromptSession(
+        completer=_SlashCompleter(),
+        complete_while_typing=True,
+        key_bindings=kb,
+        bottom_toolbar=_toolbar,
+    )
 
     class _Input:
         def read(self, prompt_html: str) -> str:
             raw = session.prompt(HTML(prompt_html))
             # Strip any stray BOM/control chars some shells inject.
             return "".join(c for c in raw if c.isprintable()).strip()
+
+        def pop_images(self) -> list[dict]:
+            out = list(images)
+            images.clear()
+            return out
 
     return _Input()

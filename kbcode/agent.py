@@ -92,9 +92,12 @@ class Agent:
     def _mode_schemas(self) -> list[dict]:
         return [s for s in self.tools.schemas if self.mode.allows(s["name"])]
 
-    def run(self, user_input: str) -> None:
+    def run(self, user_input: str, images: list[dict] | None = None) -> None:
         self._maybe_compact()
-        self.messages.append({"role": "user", "content": user_input})
+        msg: dict = {"role": "user", "content": user_input}
+        if images:  # vision attachments (Alt+V / /image) — see images.py
+            msg["images"] = images
+        self.messages.append(msg)
 
         start = time.perf_counter()
         before = dict(self.usage)

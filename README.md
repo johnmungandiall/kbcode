@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0.2-2ea44f)
+![Version](https://img.shields.io/badge/version-1.1.0-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 
@@ -142,6 +142,24 @@ Type `/` and a **popup menu of commands** appears and filters as you type
 after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
 `prompt_toolkit` (in `requirements.txt`); without it, commands still work by
 typing them in full.
+
+### 🖼️ Images (vision)
+
+Show the agent a screenshot or a picture:
+
+- **📋 From your clipboard — press `Alt+V`.** Copy any image (e.g. a screenshot),
+  press **Alt+V** in the chat, then type your question and Enter. The bottom bar
+  shows `📎 1 image attached`.
+- **📁 From a file — `/image <path>`** (or just `/image` to grab the clipboard):
+  ```text
+  /image C:\Users\me\Pictures\error.png
+  what does this error mean?
+  ```
+- **⚡ One-shot — `--image`:** `kbcode --image error.png "what's wrong here?"`
+
+> [!IMPORTANT]
+> Use a **vision-capable model** (Claude, GPT-4o, Gemini…). Clipboard paste needs
+> Pillow — it's installed automatically with kbcode, or `pip install Pillow`.
 
 ### 🎭 Modes (the Kilo Code idea)
 

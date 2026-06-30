@@ -265,7 +265,9 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
     }
     cmd_input = make_input(COMMANDS, arg_options)  # None if no autocomplete available
     if cmd_input:
-        ui.notice("type / for commands")
+        ui.notice("type / for commands · Alt+V attaches an image")
+
+    pending_images: list[dict] = []  # vision attachments waiting for the next turn
 
     while True:
         try:
@@ -276,6 +278,14 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
         except (EOFError, KeyboardInterrupt):
             ui.print("\nbye 👋")
             return
+        if cmd_input:  # collect any images attached with Alt+V during this prompt
+            new_imgs = cmd_input.pop_images()
+            if new_imgs:
+                pending_images.extend(new_imgs)
+                ui.notice(
+                    f"📎 {len(pending_images)} image(s) attached — they'll go with your next message.",
+                    style="green",
+                )
         if not user:
             continue
 
@@ -387,6 +397,26 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             agent.reset()
             ui.notice("chat cleared")
             continue
+        if user.split() and user.split()[0] in ("/image", "/img"):
+            from .images import grab_clipboard_image, load_image_file
+
+            parts = user.split(maxsplit=1)
+            arg = parts[1].strip().strip('"').strip("'") if len(parts) > 1 else ""
+            img = load_image_file(arg) if arg else grab_clipboard_image()
+            if img:
+                pending_images.append(img)
+                ui.notice(
+                    f"📎 image attached ({len(pending_images)} pending) — type your question and it'll be sent.",
+                    style="green",
+                )
+            elif arg:
+                ui.error(f"couldn't read an image at: {arg}")
+            else:
+                ui.error(
+                    "no image on the clipboard. Copy an image first (or use /image <path>). "
+                    "Clipboard paste needs Pillow:  pip install Pillow"
+                )
+            continue
         if user.split() and user.split()[0] in ("/open", "/cd"):
             parts = user.split(maxsplit=1)
             if len(parts) < 2 or not parts[1].strip():
@@ -430,7 +460,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
 
         try:
             with interrupt_on_escape():  # press Esc (or Ctrl-C) to stop this turn
-                agent.run(user)
+                agent.run(user, images=pending_images or None)
         except KeyboardInterrupt:
             ui.notice("interrupted — back to the prompt.", style="yellow")
         except ProviderError as exc:
@@ -439,6 +469,8 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
                 ui.notice(exc.hint)
         except Exception as exc:  # noqa: BLE001 - keep the REPL alive
             ui.error(str(exc))
+        finally:
+            pending_images.clear()  # consumed by this turn (or dropped on error)
 
 
 def _take_dir(argv: list[str]) -> Path | None:
@@ -452,6 +484,27 @@ def _take_dir(argv: list[str]) -> Path | None:
                 return Path(value).expanduser()
             argv.remove(flag)
     return None
+
+
+def _take_images(argv: list[str]) -> list[dict]:
+    """Pull every ``--image/-i <path>`` option out of argv and load it (one-shot)."""
+    from .images import load_image_file
+
+    images: list[dict] = []
+    for flag in ("--image", "-i"):
+        while flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                argv.remove(flag)
+                break
+            path = argv[i + 1]
+            del argv[i : i + 2]
+            img = load_image_file(path)
+            if img:
+                images.append(img)
+            else:
+                console.print(f"[yellow]Skipped (not a readable image):[/yellow] {path}")
+    return images
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -470,6 +523,8 @@ def main(argv: list[str] | None = None) -> int:
         if flag in argv:
             argv.remove(flag)
             auto = True
+
+    images = _take_images(argv)  # one-shot vision attachments: --image/-i <path>
 
     # Which project to work on: -C <path>, else `init <path>`, else the cwd.
     project_dir = _take_dir(argv)
@@ -505,10 +560,10 @@ def main(argv: list[str] | None = None) -> int:
 
     memory = Memory(config.memory_db)
     try:
-        if argv:  # one-shot: kbcode "do something"
+        if argv or images:  # one-shot: kbcode "do something" [--image pic.png]
             agent = _build_agent(config, kb, memory)
             with interrupt_on_escape():  # Esc / Ctrl-C stops the run
-                agent.run(" ".join(argv))
+                agent.run(" ".join(argv), images=images or None)
         else:  # interactive chat
             _repl(config, kb, memory)
     except KeyboardInterrupt:
