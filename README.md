@@ -208,6 +208,9 @@ your request
 - **`AGENT.md`** — a short pointer file telling the agent how to work here.
 
 Risky actions (writing files, running commands) ask for your approval first.
+And as a safety rail, the agent **refuses** to write to or edit sensitive files —
+`.git/`, `.ssh/`, `.env` and secrets, private keys, and kbcode's own state — even
+if you approve (templates like `.env.example` and your `.gitignore` are fine).
 
 ## Project layout
 

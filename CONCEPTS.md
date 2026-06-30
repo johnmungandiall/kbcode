@@ -52,8 +52,8 @@ Secondary concepts mined from `agent/`:
 | **Iteration budget** (`iteration_budget.py`) | Thread-safe per-agent step cap (parent 90, subagent 50) — stops runaway loops. | 🔜 cheap safety rail for `Agent.run`. |
 | **Pluggable context engine** (`context_engine.py`) | Compaction is an abstract, config-selected strategy (`context.engine`), not hardwired. | 🔜 small refactor: make `compaction` swappable; default = current summarizer. |
 | **`/learn`** (`learn_prompt.py`) | Turn "what we just did" / a dir / a URL into one reusable `SKILL.md`. | 🔜 great UX layer over the existing `save_skill`. |
-| **File safety** (`file_safety.py`) | Shared guardrails (protected paths, refuse-list) reused by every write path. | 🔜 hardens `Tools._resolve` / write gating. |
-| **Error classifier** (`error_classifier.py`) | Categorise provider/tool errors → retry vs surface vs abort. | 🔜 improves the provider fallback logic. |
+| **File safety** (`file_safety.py`) | Shared guardrails (protected paths, refuse-list) reused by every write path. | ✅ `Tools._protected_reason` refuses writes/edits to `.git/`, `.ssh/`, `.env`/secrets, keys, and kbcode's own state (allows `.env.example`, `.gitignore`, agent/mode markdown). |
+| **Error classifier** (`error_classifier.py`) | Categorise provider/tool errors → retry vs surface vs abort. | ✅ `provider._classify` + `_with_retry` (retry transient 429/5xx/network with backoff; surface auth/bad-request as `ProviderError`). |
 | **Multi-provider adapters** | anthropic / openai / gemini-native / bedrock / azure / codex. | ✅ kbcode covers anthropic + any OpenAI-compatible; native Gemini/Bedrock are ⏭️ for now. |
 | **Background review, LSP client, browser/image providers, credential pool, ACP** | Larger subsystems. | ⏭️ beyond a small local CLI. |
 
@@ -118,7 +118,7 @@ Secondary concepts mined from `docs/automation/` and `packages/`:
 ## Recommended next features for kbcode (priority order)
 
 Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Each names its source.
-**Status: items 1–6 are now implemented.**
+**Status: items 1–6, 8, and 9 are now implemented.**
 
 1. ✅ **Todo tool + `/todo`** *(Kilo Code / Claude Code)* — `manage_todos` tool, shown in the UI;
    allowed in every mode via the READ group. (`tools.py`, `ui.py`, `cli.py`, `modes.py`)
@@ -135,7 +135,17 @@ Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Eac
    named topic) into a reusable skill via `save_skill`. (`cli.py`, `ui.py`)
 7. 🔜 **Per-mode sticky model + Orchestrator mode** *(Kilo Code)* — `model:` in mode frontmatter, then a
    5th mode that delegates subtasks to the subagents from #4.
+8. ✅ **File safety / write guardrails** *(Hermes `file_safety.py`)* — `Tools._protected_reason` refuses
+   writes/edits to `.git/`, `.ssh/`, `.env` & secrets, private keys, and kbcode's own state files, while
+   allowing templates (`.env.example`), `.gitignore`, and user-authored agent/mode markdown. (`tools.py`)
+9. ✅ **Error classifier + auto-retry** *(Hermes `error_classifier.py`)* — `provider._classify` +
+   `_with_retry` retry transient failures (429/5xx/network) with exponential backoff and surface
+   auth/bad-request as a clean `ProviderError(hint=…)`; the CLI prints it without a traceback. (`provider.py`, `cli.py`)
+
+Alongside these, a **production pass**: `pyproject.toml` makes `kbcode` a real installable command, and
+write/edit tool-lines now show the **full resolved path** so you always see where a file lands.
 
 **Still open / future:** #7 above, plus an *iteration budget* (per-run step cap — partly covered by the
 existing `_MAX_STEPS`/`_SUBAGENT_MAX_STEPS` caps), the `verify`-style **changelog bump** on KB fixes,
-richer `kb init` note taxonomy, and pre-commit drift hooks. See the per-repo tables for the rest.
+richer `kb init` note taxonomy, pre-commit drift hooks, file-based slash commands, and lifecycle hooks.
+See the per-repo tables for the rest.

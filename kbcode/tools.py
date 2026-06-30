@@ -23,6 +23,16 @@ from .permissions import Permissions
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 _MAX_READ_CHARS = 60000
 
+# Production safety rail (the Hermes file_safety idea): files the agent must
+# never write to or edit. Secrets, VCS/agent internals — the user can still
+# change these by hand, the agent just won't clobber them. _resolve already
+# confines paths to the project root; this guards what's *inside* it.
+_PROTECTED_DIRS = {".git", ".ssh"}  # off-limits anywhere in the path
+_PROTECTED_NAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", ".npmrc", ".pypirc", ".netrc"}
+_PROTECTED_SUFFIXES = {".pem", ".key", ".pfx", ".p12", ".keystore"}
+_KBCODE_STATE = {"memory.db", "settings.json"}  # only protected under .kbcode/
+_ENV_TEMPLATE_TAILS = {"example", "sample", "template", "dist", "defaults"}  # .env.example is fine
+
 _TODO_MARKS = {"pending": "[ ]", "in_progress": "[~]", "done": "[x]"}
 
 
@@ -270,6 +280,31 @@ class Tools:
             raise ValueError(f"Path escapes the project root: {path}")
         return p
 
+    def _protected_reason(self, p: Path) -> str | None:
+        """Return *why* writing to ``p`` is refused (a safety rail), or None if
+        it's fine. ``p`` is already resolved and confined to the project root."""
+        try:
+            parts = p.relative_to(self.root).parts
+        except ValueError:
+            return None  # outside the root is already handled by _resolve
+        if any(part in _PROTECTED_DIRS for part in parts):
+            hit = next(part for part in parts if part in _PROTECTED_DIRS)
+            return f"inside the protected '{hit}/' directory"
+        if p.name in _KBCODE_STATE and ".kbcode" in parts:
+            return "kbcode's own state file"
+        if p.name in _PROTECTED_NAMES:
+            return "a credentials file"
+        if p.suffix.lower() in _PROTECTED_SUFFIXES:
+            return "a private key / certificate"
+        low = p.name.lower()
+        if low == ".env":
+            return "an environment/secrets file"
+        if low.startswith(".env."):
+            tail = low.split(".", 2)[2] if low.count(".") >= 2 else ""
+            if tail not in _ENV_TEMPLATE_TAILS:
+                return "an environment/secrets file"
+        return None
+
     # --- file tools ----------------------------------------------------
     def _tool_read_file(self, inp: dict) -> str:
         p = self._resolve(inp["path"])
@@ -284,6 +319,12 @@ class Tools:
     def _tool_write_file(self, inp: dict) -> str:
         p = self._resolve(inp["path"])
         n = len(inp["content"])
+        reason = self._protected_reason(p)
+        if reason:
+            raise ValueError(
+                f"Refused: {p} is {reason}, which kbcode won't write automatically. "
+                "Edit it yourself if you really need to."
+            )
         # Show the full resolved path (not the model's bare relative name) so the
         # user always knows exactly where the file lands — and what they're approving.
         if not self.perm.check("write_file", f"write {p} ({n} chars)"):
@@ -294,6 +335,12 @@ class Tools:
 
     def _tool_edit_file(self, inp: dict) -> str:
         p = self._resolve(inp["path"])
+        reason = self._protected_reason(p)
+        if reason:
+            raise ValueError(
+                f"Refused: {p} is {reason}, which kbcode won't edit automatically. "
+                "Edit it yourself if you really need to."
+            )
         if not p.exists():
             raise ValueError(f"No such file: {inp['path']}")
         text = p.read_text(encoding="utf-8", errors="replace")
