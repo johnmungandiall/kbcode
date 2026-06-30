@@ -11,6 +11,7 @@ from rich.console import Console
 from . import __version__
 from .agent import Agent
 from .config import PRESETS, Config, global_dir, load_config, save_settings
+from .interrupt import interrupt_on_escape
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
 from .memory import Memory
 from .modes import load_modes
@@ -428,7 +429,8 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             continue
 
         try:
-            agent.run(user)
+            with interrupt_on_escape():  # press Esc (or Ctrl-C) to stop this turn
+                agent.run(user)
         except KeyboardInterrupt:
             ui.notice("interrupted — back to the prompt.", style="yellow")
         except ProviderError as exc:
@@ -505,7 +507,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if argv:  # one-shot: kbcode "do something"
             agent = _build_agent(config, kb, memory)
-            agent.run(" ".join(argv))
+            with interrupt_on_escape():  # Esc / Ctrl-C stops the run
+                agent.run(" ".join(argv))
         else:  # interactive chat
             _repl(config, kb, memory)
     except KeyboardInterrupt:

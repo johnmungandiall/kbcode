@@ -232,7 +232,9 @@ class TerminalUI:
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):
-        return self.console.status("[dim]thinking…[/dim]", spinner="dots")
+        return self.console.status(
+            "[dim]thinking…[/dim]  [dim italic](Esc to interrupt)[/dim italic]", spinner="dots"
+        )
 
     def working(self, label: str):
         return self.console.status(f"[dim]{label}[/dim]", spinner="dots")

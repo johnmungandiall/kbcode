@@ -107,6 +107,9 @@ versus the auto-compact threshold. Approval prompts for risky actions are a
 **selectable Yes / Always / No menu** (↑/↓ + Enter, or press 1/2/3) — Claude Code
 style — falling back to a typed `y/N/a` prompt where no interactive menu is available.
 
+While a turn is running you can press **Esc** (or Ctrl-C) to interrupt it and drop
+back to the prompt — the spinner shows an `(Esc to interrupt)` hint.
+
 Type `/` and a **popup menu of commands** appears and filters as you type
 (arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names,
 after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
