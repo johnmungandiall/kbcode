@@ -19,6 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
+from . import __version__
 from .prompt_input import select
 
 _TOOL_ICON = "⏺"
@@ -28,6 +29,7 @@ _ARROW = "›"
 # "/" autocomplete popup (see prompt_input.py).
 COMMANDS = [
     ("/help", "show this help"),
+    ("/version", "show the kbcode version"),
     ("/mode [name]", "switch mode: code / architect / ask / debug (no name = list)"),
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
@@ -138,7 +140,12 @@ class TerminalUI:
         body.add_row(Text("/help for commands  ·  /exit to quit", style="dim"))
 
         self.console.print(
-            Panel(body, title="[bold cyan]kbcode[/bold cyan]", border_style="cyan", padding=(1, 2))
+            Panel(
+                body,
+                title=f"[bold cyan]kbcode[/bold cyan] [dim]v{__version__}[/dim]",
+                border_style="cyan",
+                padding=(1, 2),
+            )
         )
 
     def prompt(self, mode: str = "code") -> str:
@@ -152,7 +159,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/status", "/open <folder>", "/insights", "/compact", "/reset", "/exit"]),
+            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),

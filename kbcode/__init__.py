@@ -6,4 +6,4 @@ It blends three ideas:
   - claude-kb   : a token-cheap knowledge base so we don't re-scan the repo.
 """
 
-__version__ = "0.1.0"
+__version__ = "1.0.0"

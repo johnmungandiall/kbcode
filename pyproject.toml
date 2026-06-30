@@ -21,7 +21,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/"
+Homepage = "https://github.com/johnmungandiall/kbcode"
+Repository = "https://github.com/johnmungandiall/kbcode"
+Issues = "https://github.com/johnmungandiall/kbcode/issues"
 
 # This is what makes `kbcode` a real command after `pip install`:
 #   pip install -e .      (from this folder, during development)

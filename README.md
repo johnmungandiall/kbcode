@@ -17,14 +17,16 @@ It uses your own AI API key — Claude by default, or any OpenAI-compatible mode
 ## Setup
 
 1. Install Python 3.10+.
-2. Install kbcode. Either way works:
-   - **As a command (recommended):** from this folder,
+2. Install kbcode:
+   - **From GitHub (for normal use):**
      ```
-     pip install -e .
+     pip install git+https://github.com/johnmungandiall/kbcode.git
      ```
-     This adds a real `kbcode` command, so anywhere you can just type
-     `kbcode` instead of `python -m kbcode`.
-   - **Dependencies only:** `pip install -r requirements.txt`, then run it with
+     This adds a real `kbcode` command you can run from anywhere. Check it with
+     `kbcode --version`.
+   - **From a local clone (for development):** from this folder, `pip install -e .`
+     — an *editable* install, so your code changes take effect immediately.
+   - **Without installing:** `pip install -r requirements.txt`, then run it as
      `python -m kbcode`.
 3. Add your API key, either way:
    - **Interactive (recommended):** `python -m kbcode model` — pick a provider,
@@ -35,6 +37,13 @@ It uses your own AI API key — Claude by default, or any OpenAI-compatible mode
      ANTHROPIC_API_KEY=sk-ant-...
      ```
    Get a Claude key at https://console.anthropic.com/
+
+### Version & updates
+
+- **See your version:** `kbcode --version` (or `/version` inside the chat). The
+  banner shows it too.
+- **Update to the latest:** `kbcode update` — pulls the newest release from
+  GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
 
 ## Use
 

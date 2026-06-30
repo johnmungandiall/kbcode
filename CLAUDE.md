@@ -10,6 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Install deps: `python -m pip install -r requirements.txt`
 - Install as a command: `pip install -e .` (uses `pyproject.toml`; the `[project.scripts]` entry point `kbcode = "kbcode.cli:main"` puts a real `kbcode` on PATH, so `kbcode …` works anywhere — equivalent to `python -m kbcode …`). Version is `dynamic` from `kbcode.__version__`.
+- End users install/update from GitHub: `pip install git+https://github.com/johnmungandiall/kbcode.git`; in-app `kbcode update` (`_self_update` in cli.py) shells out to `pip install --upgrade` on the same target.
+- Show version: `kbcode --version` / `-v` / `-V` (handled before config/key load in `main`), the `/version` chat command, and the banner title. Single source: `kbcode.__version__`. A release = bump `__version__`, then tag `vX.Y.Z` + push.
 - Run the chat REPL: `python -m kbcode`
 - One-shot task: `python -m kbcode "do the thing"` (add `-y` / `--yes` to auto-approve writes and commands)
 - Work on a different project: `python -m kbcode -C "<path>"` (`-C`/`--dir`/`--project` set the project root; the agent's tools are confined to it, so this is how you target another repo without `cd`). The folder must exist.

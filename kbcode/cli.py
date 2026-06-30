@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 from pathlib import Path
 
 from rich.console import Console
 
+from . import __version__
 from .agent import Agent
 from .config import PRESETS, Config, global_dir, load_config, save_settings
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
@@ -22,6 +24,28 @@ from .ui import COMMANDS, TerminalUI
 
 console = Console()
 ui = TerminalUI(console)
+
+# Where releases live, so `kbcode update` can pull the latest (GitHub install).
+_REPO_URL = "https://github.com/johnmungandiall/kbcode"
+_GIT_TARGET = f"git+{_REPO_URL}.git"
+
+
+def _self_update() -> int:
+    """`kbcode update` — upgrade the install in place from GitHub."""
+    console.print(f"[cyan]Updating kbcode from {_REPO_URL} …[/cyan]")
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "--upgrade", _GIT_TARGET],
+            check=False,
+        )
+    except Exception as exc:  # noqa: BLE001 - surface any launch failure cleanly
+        console.print(f"[red]Update failed:[/red] {exc}")
+        return 1
+    if proc.returncode == 0:
+        console.print("[green]Updated.[/green]  Check with  [bold]kbcode --version[/bold]")
+    else:
+        console.print("[yellow]pip reported a problem (see its output above).[/yellow]")
+    return proc.returncode
 
 
 def _scaffold(config: Config, kb: KnowledgeBase) -> None:
@@ -260,6 +284,9 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
         if user == "/help":
             ui.help()
             continue
+        if user == "/version":
+            ui.print(f"kbcode v{__version__}  ·  update with  [bold]kbcode update[/bold]")
+            continue
         if user == "/status":
             ui.status_line(
                 config.provider, config.model, agent.mode.name,
@@ -427,6 +454,14 @@ def _take_dir(argv: list[str]) -> Path | None:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+
+    # Version + update are handled before anything else: they need no project,
+    # config, or API key.
+    if any(f in argv for f in ("--version", "-v", "-V")):
+        console.print(f"kbcode {__version__}")
+        return 0
+    if argv and argv[0] == "update":
+        return _self_update()
 
     auto = False
     for flag in ("-y", "--yes"):
