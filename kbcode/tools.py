@@ -283,11 +283,14 @@ class Tools:
 
     def _tool_write_file(self, inp: dict) -> str:
         p = self._resolve(inp["path"])
-        if not self.perm.check("write_file", f"write {inp['path']} ({len(inp['content'])} chars)"):
+        n = len(inp["content"])
+        # Show the full resolved path (not the model's bare relative name) so the
+        # user always knows exactly where the file lands — and what they're approving.
+        if not self.perm.check("write_file", f"write {p} ({n} chars)"):
             raise PermissionError("User denied permission to write the file.")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(inp["content"], encoding="utf-8")
-        return f"wrote {inp['path']} ({len(inp['content'])} chars)"
+        return f"wrote {p} ({n} chars)"
 
     def _tool_edit_file(self, inp: dict) -> str:
         p = self._resolve(inp["path"])
@@ -299,10 +302,10 @@ class Tools:
             raise ValueError("old_string not found in file.")
         if count > 1:
             raise ValueError(f"old_string appears {count} times; make it unique.")
-        if not self.perm.check("edit_file", f"edit {inp['path']}"):
+        if not self.perm.check("edit_file", f"edit {p}"):
             raise PermissionError("User denied permission to edit the file.")
         p.write_text(text.replace(inp["old_string"], inp["new_string"], 1), encoding="utf-8")
-        return f"edited {inp['path']}"
+        return f"edited {p}"
 
     def _tool_list_dir(self, inp: dict) -> str:
         p = self._resolve(inp.get("path", "."))

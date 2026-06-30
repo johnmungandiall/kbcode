@@ -15,7 +15,7 @@ from .modes import load_modes
 from .permissions import Permissions
 from .prompt_input import make_input
 from .prompts import build_system_prompt
-from .provider import get_provider
+from .provider import ProviderError, get_provider
 from .subagents import load_subagents
 from .tools import Tools
 from .ui import COMMANDS, TerminalUI
@@ -70,6 +70,7 @@ gets your summary, not your steps.
 
 
 def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
+    ui.root = config.project_dir  # so file tool-lines show the full path
     perm = Permissions(auto_approve=config.auto_approve, ui=ui)
     tools = Tools(config, memory, kb, perm)
     agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
@@ -84,7 +85,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
     )
     return Agent(
         system,
-        get_provider(config),
+        get_provider(config, ui),
         tools,
         compact_threshold=config.compact_threshold,
         ui=ui,
@@ -299,7 +300,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             continue
         if user.startswith("/model"):
             config.model = user.split(maxsplit=1)[1].strip()
-            agent.provider = get_provider(config)  # same chat, new model
+            agent.provider = get_provider(config, ui)  # same chat, new model
             ui.notice(f"model → {config.model}", style="green")
             continue
         if user == "/kb":
@@ -401,6 +402,12 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
 
         try:
             agent.run(user)
+        except KeyboardInterrupt:
+            ui.notice("interrupted — back to the prompt.", style="yellow")
+        except ProviderError as exc:
+            ui.error(str(exc))
+            if exc.hint:
+                ui.notice(exc.hint)
         except Exception as exc:  # noqa: BLE001 - keep the REPL alive
             ui.error(str(exc))
 
@@ -466,6 +473,14 @@ def main(argv: list[str] | None = None) -> int:
             agent.run(" ".join(argv))
         else:  # interactive chat
             _repl(config, kb, memory)
+    except KeyboardInterrupt:
+        console.print("\n[yellow]interrupted.[/yellow]")
+        return 130
+    except ProviderError as exc:
+        console.print(f"[red]{exc}[/red]")
+        if exc.hint:
+            console.print(f"[dim]{exc.hint}[/dim]")
+        return 1
     finally:
         memory.close()
     return 0

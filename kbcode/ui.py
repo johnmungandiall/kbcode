@@ -61,19 +61,31 @@ def _human_count(n: int) -> str:
     return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
 
 
-def _describe_tool(name: str, args: dict) -> tuple[str, str]:
+def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str, str]:
     """Turn a raw tool call into a human verb + target, like a real CLI shows."""
     a = args or {}
 
     def g(key: str) -> str:
         return str(a.get(key, "")).strip()
 
+    def full(path: str) -> str:
+        """Resolve a path to its full location so the user sees *where* a file
+        lands (the model usually passes a bare relative name). Reads/search keep
+        the short form; only writes/edits use this."""
+        if not path or root is None:
+            return path
+        try:
+            p = Path(path)
+            return str((p if p.is_absolute() else root / p).resolve())
+        except (OSError, ValueError):
+            return path
+
     if name == "read_file":
         return "Read", g("path")
     if name == "write_file":
-        return "Write", f"{g('path')}  ({len(str(a.get('content', ''))):,} chars)"
+        return "Write", f"{full(g('path'))}  ({len(str(a.get('content', ''))):,} chars)"
     if name == "edit_file":
-        return "Edit", g("path")
+        return "Edit", full(g("path"))
     if name == "list_dir":
         return "List", g("path") or "."
     if name == "search_code":
@@ -104,6 +116,9 @@ class TerminalUI:
 
     def __init__(self, console: Console | None = None):
         self.console = console or Console()
+        # Project root, so file tool-lines can show *where* a file actually is.
+        # Set by the CLI when an agent is built / a project is opened.
+        self.root: Path | None = None
 
     # -- chrome ---------------------------------------------------------
     def banner(self, provider: str, model: str, cwd: Path, mode: str = "code") -> None:
@@ -230,7 +245,7 @@ class TerminalUI:
             head, _, sub = name.partition(":")
             if sub:
                 prefix, name = head, sub
-        verb, detail = _describe_tool(name, args)
+        verb, detail = _describe_tool(name, args, self.root)
         lead = "  " if prefix else ""
         parts = [(lead, ""), (f"{_TOOL_ICON} ", "cyan")]
         if prefix:

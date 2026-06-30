@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kbcode"
+description = "A small, self-contained AI coding agent for your terminal."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "John" }]
+keywords = ["ai", "agent", "coding", "cli", "llm", "claude"]
+dynamic = ["version"]
+
+dependencies = [
+    "anthropic>=0.40",
+    "openai>=1.40",
+    "python-dotenv>=1.0",
+    "rich>=13.0",
+    "prompt_toolkit>=3.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/"
+
+# This is what makes `kbcode` a real command after `pip install`:
+#   pip install -e .      (from this folder, during development)
+#   pip install .         (a normal install)
+# then just run:  kbcode
+[project.scripts]
+kbcode = "kbcode.cli:main"
+
+[tool.setuptools]
+packages = ["kbcode"]
+
+[tool.setuptools.dynamic]
+version = { attr = "kbcode.__version__" }

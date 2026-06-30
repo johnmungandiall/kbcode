@@ -17,10 +17,15 @@ It uses your own AI API key — Claude by default, or any OpenAI-compatible mode
 ## Setup
 
 1. Install Python 3.10+.
-2. Install dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
+2. Install kbcode. Either way works:
+   - **As a command (recommended):** from this folder,
+     ```
+     pip install -e .
+     ```
+     This adds a real `kbcode` command, so anywhere you can just type
+     `kbcode` instead of `python -m kbcode`.
+   - **Dependencies only:** `pip install -r requirements.txt`, then run it with
+     `python -m kbcode`.
 3. Add your API key, either way:
    - **Interactive (recommended):** `python -m kbcode model` — pick a provider,
      paste your key, choose a model; it's saved **globally** (`~/.kbcode`) so it
@@ -32,6 +37,8 @@ It uses your own AI API key — Claude by default, or any OpenAI-compatible mode
    Get a Claude key at https://console.anthropic.com/
 
 ## Use
+
+(If you ran `pip install -e .`, use `kbcode` in place of `python -m kbcode` below.)
 
 From inside the project you want the agent to work on:
 

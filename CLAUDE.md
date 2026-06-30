@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - Install deps: `python -m pip install -r requirements.txt`
+- Install as a command: `pip install -e .` (uses `pyproject.toml`; the `[project.scripts]` entry point `kbcode = "kbcode.cli:main"` puts a real `kbcode` on PATH, so `kbcode …` works anywhere — equivalent to `python -m kbcode …`). Version is `dynamic` from `kbcode.__version__`.
 - Run the chat REPL: `python -m kbcode`
 - One-shot task: `python -m kbcode "do the thing"` (add `-y` / `--yes` to auto-approve writes and commands)
 - Work on a different project: `python -m kbcode -C "<path>"` (`-C`/`--dir`/`--project` set the project root; the agent's tools are confined to it, so this is how you target another repo without `cd`). The folder must exist.
@@ -32,7 +33,9 @@ The design goal is **provider-agnostic**: one agent loop drives Claude or any Op
 
 Each provider (`AnthropicProvider`, `OpenAICompatibleProvider`) translates this to/from its own API in `_to_native`, and stores the model's own assistant payload back in `raw` so the next request replays it **losslessly** (Claude thinking blocks vs OpenAI `tool_calls` differ structurally). A session uses exactly one provider, so `raw` is always that provider's shape. **Invariant to preserve:** the normalized↔native translation must round-trip, and user/assistant turns must stay alternating after any message-list surgery (see compaction).
 
-`get_provider(config)` dispatches on `config.kind` (`"anthropic"` vs `"openai"`). Every non-Claude provider — OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom — is the *same* `OpenAICompatibleProvider` with a different `base_url`. Anthropic calls use a staged-fallback (`thinking`/`output_config` → `thinking` → plain) that catches `TypeError` for older SDKs.
+`get_provider(config, ui=None)` dispatches on `config.kind` (`"anthropic"` vs `"openai"`). Every non-Claude provider — OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom — is the *same* `OpenAICompatibleProvider` with a different `base_url`. Anthropic calls use a staged-fallback (`thinking`/`output_config` → `thinking` → plain) that catches `TypeError` for older SDKs.
+
+**Resilience (provider.py).** Every real API call is wrapped in `_with_retry(fn, ui)`: transient failures (HTTP 429, 5xx, connection/timeout — classified by `_classify` from the SDK-agnostic `status_code` + message, so it needs neither SDK's exception types) are retried with exponential backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`), emitting a yellow "retrying…" notice through the optional `ui`. Hard errors (401/403 auth, 4xx bad request) raise `ProviderError(message, hint=…)` immediately — no retry. `_with_retry` deliberately **re-raises `TypeError` untouched** so the Anthropic staged-fallback still works. The CLI catches `ProviderError` (REPL turn loop *and* one-shot `main`) to print a clean message + hint instead of a traceback, and catches `KeyboardInterrupt` to drop back to the prompt (exit 130 in one-shot).
 
 ### Modes apply per turn (modes.py + agent.py)
 A `Mode` pairs instruction text with an allowed-tool set. `Agent.run` rebuilds two things on **every** model call from the current mode: `_system_for_mode()` (base system prompt + mode instructions) and `_mode_schemas()` (tool schemas filtered to what the mode allows). Enforcement is two-layer: disallowed tools are never shown to the model, *and* `run()` guards at execute time. Built-ins: `code`/`debug` (all tools), `architect` (read + notes), `ask` (read-only). Custom modes load from `.kbcode/modes/*.md`. Note `manage_todos` lives in the `READ` group so the task checklist is available even in read-only modes.
