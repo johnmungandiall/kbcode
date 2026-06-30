@@ -9,6 +9,7 @@ through a TerminalUI (see ui.py), so this file stays about logic, not looks.
 
 from __future__ import annotations
 
+import threading
 import time
 
 from .compaction import compact, estimate_tokens
@@ -57,6 +58,34 @@ class Agent:
         self.mode = mode
         return True
 
+    def _complete(self, system: str, messages: list[dict], schemas: list[dict]):
+        """Call the provider off the main thread so Esc / Ctrl-C stay responsive.
+
+        A blocking HTTP request holds the socket deep in C, so a pending
+        KeyboardInterrupt (raised by the Esc watcher or Ctrl-C) isn't delivered
+        until the read returns — which is why Esc felt dead while "thinking…".
+        Here the request runs in a daemon worker while the main thread waits in
+        short Python-level polls, so the interrupt lands within ~50 ms. The
+        orphaned worker just finishes and its result is dropped.
+        """
+        box: dict = {}
+        done = threading.Event()
+
+        def work() -> None:
+            try:
+                box["resp"] = self.provider.complete(system, messages, schemas)
+            except BaseException as exc:  # carried over and re-raised on the main thread
+                box["err"] = exc
+            finally:
+                done.set()
+
+        threading.Thread(target=work, daemon=True).start()
+        while not done.wait(0.05):
+            pass
+        if "err" in box:
+            raise box["err"]
+        return box["resp"]
+
     def _system_for_mode(self) -> str:
         return f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
 
@@ -73,7 +102,7 @@ class Agent:
 
         for _ in range(_MAX_STEPS):
             with self.ui.thinking():
-                resp = self.provider.complete(
+                resp = self._complete(
                     self._system_for_mode(), self.messages, self._mode_schemas()
                 )
             self._record_usage(resp.usage)
@@ -202,7 +231,7 @@ class Agent:
         self.ui.notice(f"↳ delegating to subagent '{name}'…", style="cyan")
 
         for _ in range(_SUBAGENT_MAX_STEPS):
-            resp = self.provider.complete(system, messages, schemas)
+            resp = self._complete(system, messages, schemas)
             self._record_usage(resp.usage)
             messages.append(
                 {"role": "assistant", "text": resp.text, "tool_calls": resp.tool_calls, "raw": resp.raw}

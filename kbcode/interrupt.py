@@ -8,9 +8,10 @@ Everything is TTY-only and fully guarded: with piped input, no console, or an
 unsupported platform, :func:`interrupt_on_escape` is a no-op and the turn runs
 normally — so kbcode never breaks because of this.
 
-Note: a synchronous provider call blocked deep in a socket read can only be
-interrupted once it returns to Python, so Esc lands between steps / during tool
-execution rather than mid-request. (Streaming makes it feel instant.)
+Esc works mid-request too: ``Agent._complete`` runs the blocking provider call
+on a daemon worker and waits for it in short Python-level polls, so a pending
+``KeyboardInterrupt`` is delivered within ~50 ms instead of waiting for the
+socket read to return.
 """
 
 from __future__ import annotations
