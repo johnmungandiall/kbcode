@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.0-2ea44f)
+![Version](https://img.shields.io/badge/version-1.1.1-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 
@@ -160,6 +160,12 @@ Show the agent a screenshot or a picture:
 > [!IMPORTANT]
 > Use a **vision-capable model** (Claude, GPT-4o, Gemini…). Clipboard paste needs
 > Pillow — it's installed automatically with kbcode, or `pip install Pillow`.
+
+> [!WARNING]
+> **Alt+V does nothing?** First make sure you're on the latest version
+> (`kbcode update`, then `kbcode --version` should show ≥ 1.1.1). When it fires
+> you'll see `📎 image attached`. If your terminal swallows Alt+V (some consoles
+> do), just use **`/image`** instead — it always works.
 
 ### 🎭 Modes (the Kilo Code idea)
 

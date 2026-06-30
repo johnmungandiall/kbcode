@@ -160,21 +160,31 @@ def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]
     images: list[dict] = []  # pending attachments, drained by pop_images()
     kb = KeyBindings()
 
-    @kb.add("escape", "v")  # Alt+V (terminals send Esc then 'v')
     def _attach_image(event):
         from .images import grab_clipboard_image
 
         img = grab_clipboard_image()
         if img:
             images.append(img)
-            event.app.invalidate()  # refresh the bottom toolbar count
+            n = len(images)
+            # Print a visible confirmation (not just the toolbar) so it's obvious
+            # the hotkey fired — then refresh the toolbar count.
+            run_in_terminal(
+                lambda: print(f"  📎 image attached ({n}) — type your question and press Enter.")
+            )
+            event.app.invalidate()
         else:
             run_in_terminal(
                 lambda: print(
-                    "  (no image on the clipboard — copy an image first; "
-                    "clipboard paste needs Pillow: pip install Pillow)"
+                    "  (no image on the clipboard — copy an image first, "
+                    "or use /image <path>. Clipboard paste needs Pillow: pip install Pillow)"
                 )
             )
+
+    # Alt+V (terminals deliver Alt as an Esc prefix). Bind a few variants so it
+    # fires across Windows consoles / shift state; /image is the guaranteed path.
+    kb.add("escape", "v")(_attach_image)
+    kb.add("escape", "V")(_attach_image)
 
     def _toolbar():
         if images:
