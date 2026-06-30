@@ -74,7 +74,7 @@ Secondary concepts mined from `kb/`, `prompt.md`, `update.md`, `verify.md`, `che
 | **`[[wiki-links]]` between notes** | Cross-link notes so related context is discoverable. | ✅/🔜 used in memory; could be surfaced in `kb/` too. |
 | **`slim` pass** | Shrink a bloated context file by moving detail into `kb/`. | 🔜 a `/slim` for `AGENT.md`/`CLAUDE.md`. |
 | **Pre-commit drift hook** | `tools/hooks/pre-commit` runs the checker so drift never lands. | 🔜 ship a sample git hook (opt-in). |
-| **Note taxonomy** | Standard notes: `overview`, `architecture`, `conventions`, `glossary`, `gotchas`, `cheatsheet`, `changelog`, `about-you`. | 🔜 `kbcode init` could scaffold this richer set. |
+| **Note taxonomy** | Standard notes: `overview`, `architecture`, `conventions`, `glossary`, `gotchas`, `cheatsheet`, `changelog`, `about-you`. | ✅ `kbcode init` scaffolds all eight (`_TEMPLATES` in `knowledge_base.py`); AGENT.md's notes-map lists them. |
 
 ---
 
@@ -147,5 +147,5 @@ write/edit tool-lines now show the **full resolved path** so you always see wher
 
 **Still open / future:** #7 above, plus an *iteration budget* (per-run step cap — partly covered by the
 existing `_MAX_STEPS`/`_SUBAGENT_MAX_STEPS` caps), the `verify`-style **changelog bump** on KB fixes,
-richer `kb init` note taxonomy, pre-commit drift hooks, file-based slash commands, and lifecycle hooks.
+pre-commit drift hooks, file-based slash commands, and lifecycle hooks.
 See the per-repo tables for the rest.

@@ -45,6 +45,8 @@ base in `kb/` instead of making it re-scan the whole repo.
 - `kb/conventions.md` — how code/notes here are structured.
 - `kb/gotchas.md` — traps to know before editing.
 - `kb/glossary.md` — project-specific terms.
+- `kb/cheatsheet.md` — the commands/snippets you reach for most.
+- `kb/changelog.md` — notable changes, newest first (the only place history lives).
 - `kb/about-you.md` — the USER: style, tech, goals, rules.
 """
 
@@ -95,6 +97,29 @@ Cite the code that proves each trap as `path:line` so [[conventions]] checks pas
 - **Term** — what it means here (one line).
 
 Cross-link the note that owns each concept, e.g. [[architecture]].
+""",
+    "cheatsheet": """# Cheatsheet — the commands and snippets you reach for most.
+
+Copy-paste ready. Group by task; keep each line runnable.
+
+## Run / build / test
+- `command` — what it does
+
+## Common tasks
+- (task) -> `command`
+
+See [[overview]] for first-time setup and [[gotchas]] for what to avoid.
+""",
+    "changelog": """# Changelog — notable changes, newest first.
+
+The ONLY place release history lives (don't duplicate it in other notes).
+One line per change that future-you or the agent should know about.
+
+## Unreleased
+- (what changed) - why it matters. See [[architecture]].
+
+## (date) - first version
+- Initial knowledge base scaffolded.
 """,
     "about-you": """# About you — the USER this agent works for. Not about the code.
 
