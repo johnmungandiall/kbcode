@@ -99,3 +99,23 @@ def test_search_code_no_matches(tmp_path, monkeypatch):
     monkeypatch.setattr(tools, "_ripgrep_available", lambda: False)
     out = tools._tool_search_code({"pattern": "nonexistent-pattern-xyz"})
     assert out == "(no matches)"
+
+
+def test_search_code_outside_project_shows_absolute_path(tmp_path, monkeypatch):
+    """A match outside the project root must not abort the search. kbcode isn't
+    sandboxed to the project folder, so ``_resolve`` honors an absolute path
+    pointing elsewhere — but ``Path.relative_to(self.root)`` raises ValueError
+    ('... is not in the subpath of ...') on such a file. The hit should fall
+    back to its absolute path instead of blowing up the whole tool."""
+    tools = _make_tools(tmp_path)
+    monkeypatch.setattr(tools, "_ripgrep_available", lambda: False)
+    # a sibling of the project root, i.e. OUTSIDE it
+    sibling = tmp_path / "other_project"
+    sibling.mkdir()
+    hit = sibling / "app.dart"
+    hit.write_text("expiryDate here\n", encoding="utf-8")
+
+    out = tools._tool_search_code({"pattern": "expiryDate", "path": str(sibling)})
+
+    assert "expiryDate here" in out
+    assert str(hit) in out  # absolute path, since it can't be made relative to root

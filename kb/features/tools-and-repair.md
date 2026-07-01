@@ -27,8 +27,13 @@ kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:27`) — checked
 against the full resolved path, not just relative to the project root — while
 allowing templates (`.env.example`, `_ENV_TEMPLATE_TAILS`,
 `kbcode/tools/file.py:28`), `.gitignore`, and user-authored `.kbcode/agents`/
-`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:134`) drives
+`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:136`) drives
 the `-- OUTSIDE the project folder` flag on the permission prompt.
+`_display_path()` (`kbcode/tools/core.py:139`) formats a resolved path for tool
+output — relative to the root when inside the project, absolute otherwise —
+because those same out-of-project paths make a bare `Path.relative_to(root)`
+raise `ValueError`, which would abort the tool (search hits used to do this; see
+[[gotchas]]). New tools that print a resolved path must go through it.
 
 ## The roster & UI
 Tools: `read/write/edit/list/search/run` + `kb_read/kb_write` +

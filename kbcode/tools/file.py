@@ -252,7 +252,7 @@ class FileToolsMixin:
                 with fp.open("r", encoding="utf-8", errors="strict") as fh:
                     for i, line in enumerate(fh, 1):
                         if regex.search(line):
-                            rel = fp.relative_to(self.root)
+                            rel = self._display_path(fp)
                             snippet, n = redact_with_count(line.rstrip()[:200], code_file=True)
                             redacted += n
                             hits.append(f"{rel}:{i}: {snippet}")

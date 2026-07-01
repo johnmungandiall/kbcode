@@ -104,6 +104,21 @@
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
 
+## Displaying a path relative to root breaks outside the project
+- `kbcode/tools/file.py:255` — `_tool_search_code` formats each hit through
+  `self._display_path(fp)` (`kbcode/tools/core.py:139`), **not** a raw
+  `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
+  (`_resolve` honors absolute paths, see [[tools-and-repair]] and
+  [[kbcode-write-anywhere]] intent), so a search/list base can point outside
+  `root`. `Path.relative_to(self.root)` raises `ValueError` ('... is not in the
+  subpath of ...') on a file that isn't under `root` — and that ValueError is
+  **not** caught by search's `except (UnicodeDecodeError, OSError)`, so it aborts
+  the whole tool on the first hit (this is what broke every search against a
+  parent/sibling project). `_display_path` returns relative-when-inside,
+  absolute-otherwise. Any new tool that displays a resolved path must use it,
+  never a bare `relative_to`. Regression test: `tests/test_tools_search.py`
+  (`test_search_code_outside_project_shows_absolute_path`).
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains

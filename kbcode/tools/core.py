@@ -136,6 +136,18 @@ class ToolsCore:
     def _is_outside_project(self, p: Path) -> bool:
         return self.root not in p.parents and p != self.root
 
+    def _display_path(self, p: Path):
+        """A path for display in tool output: relative to the project root
+        when it lives inside the project, absolute otherwise. kbcode isn't
+        sandboxed to the project folder (see ``_resolve``), so search/list
+        results can point outside it — and ``Path.relative_to`` raises
+        ``ValueError`` ('... is not in the subpath of ...') on a path that
+        isn't under ``root``, which would otherwise abort the whole tool."""
+        try:
+            return p.relative_to(self.root)
+        except ValueError:
+            return p
+
     @staticmethod
     def _unified_diff(old: str, new: str, fromfile: str, tofile: str, max_chars: int = 4000) -> str:
         """A capped unified diff for a permission prompt (#7.2) — shown so the
