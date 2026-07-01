@@ -202,7 +202,8 @@ class _TickingStatus:
     elapsed time itself is the "still alive" signal.
     """
 
-    def __init__(self, console: Console, label: str, hint: str = "", total_start: float | None = None):
+    def __init__(self, console: Console, label: str, hint: str = "", total_start: float | None = None, ui: TerminalUI | None = None):
+        self._ui = ui
         self._label = label
         self._hint = hint
         self._total_start = total_start
@@ -210,6 +211,7 @@ class _TickingStatus:
         self._status = console.status(self._render(0.0), spinner="dots")
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._stopped = False
 
     def _render(self, elapsed: float) -> str:
         text = f"[dim]{self._label}… {elapsed:.1f}s[/dim]"
@@ -229,13 +231,30 @@ class _TickingStatus:
         self._status.__enter__()
         self._thread = threading.Thread(target=self._tick, daemon=True)
         self._thread.start()
+        if self._ui is not None:
+            self._ui._active_status = self
         return self
 
-    def __exit__(self, *exc):
+    def stop(self) -> None:
+        """Tear down the spinner + ticker thread. Idempotent and safe to call
+        from any thread, so the streaming-text callback — which runs on the
+        provider worker thread — can end the spinner the instant the first
+        token arrives. If it didn't, the ticker's Rich ``Live`` redraw (every
+        100ms) would race the raw streamed prints and shred the reply into
+        trailing line-fragments (see [[gotchas]] streaming note)."""
+        if self._stopped:
+            return
+        self._stopped = True
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=0.2)
-        return self._status.__exit__(*exc)
+        self._status.__exit__(None, None, None)
+        if self._ui is not None and self._ui._active_status is self:
+            self._ui._active_status = None
+
+    def __exit__(self, *exc):
+        self.stop()
+        return False
 
 
 class TerminalUI:
@@ -250,6 +269,10 @@ class TerminalUI:
         # running grand total, so the total keeps counting across separate
         # thinking / tool-running spinners instead of resetting each time.
         self._turn_start: float | None = None
+        # The spinner currently on screen, if any. stream_chunk() stops it the
+        # moment real text starts arriving so the spinner's background redraw
+        # can't race the streamed prints (see _TickingStatus.stop).
+        self._active_status: _TickingStatus | None = None
 
     def turn_started(self) -> None:
         """Mark the start of a new agent turn (call once per user turn)."""
@@ -369,15 +392,15 @@ class TerminalUI:
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):
-        return _TickingStatus(self.console, "thinking", "(Esc to interrupt)", self._turn_start)
+        return _TickingStatus(self.console, "thinking", "(Esc to interrupt)", self._turn_start, ui=self)
 
     def working(self, label: str):
-        return _TickingStatus(self.console, label.rstrip("… "), total_start=self._turn_start)
+        return _TickingStatus(self.console, label.rstrip("… "), total_start=self._turn_start, ui=self)
 
     def tool_running(self):
         """Spinner shown while a tool call is actually executing, so a slow
         command (e.g. a long ``run_command``) never looks like it stalled."""
-        return _TickingStatus(self.console, "running", "(Esc to interrupt)", self._turn_start)
+        return _TickingStatus(self.console, "running", "(Esc to interrupt)", self._turn_start, ui=self)
 
     def assistant_text(self, text: str) -> None:
         if not text.strip():
@@ -390,11 +413,21 @@ class TerminalUI:
     def stream_chunk(self, text: str) -> None:
         """Print one streamed text chunk as it arrives (#3.1/#7.1) — raw, not
         markdown-rendered (there's no way to safely re-parse markdown from a
-        partial chunk), and safe to call while a thinking()/working() status
-        is active: Rich hides and redraws the spinner around each print.
+        partial chunk).
+
+        The first chunk stops any live thinking()/working() spinner first. The
+        spinner is a Rich ``Live`` region refreshed from a background ticker
+        thread; leaving it running while these partial-line prints stream in
+        lets the two threads race, and the spinner's redraw shreds the reply
+        into trailing fragments. Once real text is flowing it's also the
+        liveness signal the spinner was standing in for, so dropping it is the
+        right call, not just a workaround.
         """
-        if text:
-            self.console.print(text, end="", markup=False, highlight=False)
+        if not text:
+            return
+        if self._active_status is not None:
+            self._active_status.stop()
+        self.console.print(text, end="", markup=False, highlight=False)
 
     def stream_newline(self) -> None:
         """End a streamed response — chunks have no trailing newline of their own."""

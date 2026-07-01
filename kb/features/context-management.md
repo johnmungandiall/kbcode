@@ -15,7 +15,7 @@ manual via `/compact` -> `Agent.compact_now()` (`kbcode/agent.py:566`).
 
 ## Knowledge base (product feature)
 `KnowledgeBase` (`kbcode/knowledge_base.py:153`) holds `kb/` notes loaded into the
-system prompt (`kbcode/prompts.py:40` `build_system_prompt`) so the agent doesn't
+system prompt (`kbcode/prompts.py:41` `build_system_prompt`) so the agent doesn't
 re-scan files; `read_all()` (`kbcode/knowledge_base.py:169`). `check_pointers()`
 (`kbcode/knowledge_base.py:217`, `/kb-check`) resolves every `path:line` reference and
 flags missing files / stale lines; placeholder examples are skipped.

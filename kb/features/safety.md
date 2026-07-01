@@ -29,9 +29,9 @@ maintenance; deleting `.kbcode/checkpoints/` is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:318`), which renders a context panel then
+`ui.permission(tool, detail)` (`kbcode/ui.py:341`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:344`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:367`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
 (`kbcode/permissions.py:26`) for headless use.
 

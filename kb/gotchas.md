@@ -35,6 +35,20 @@
   actual submodule (`core.py`/`file.py`/`kb.py`/`memory.py`/`planning.py`/
   `subagent.py`/`schemas.py`)
 
+## Streamed text must stop the thinking spinner first
+- The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:225`). Streamed
+  reply text arrives via `on_text` on the *provider worker thread*
+  (`kbcode/agent.py:124`). Two threads writing the terminal at once = the spinner's
+  redraw stomps the half-printed line, shredding any multi-line reply into trailing
+  fragments (was true for tables AND plain prose).
+- Fix: `stream_chunk` (`kbcode/ui.py:413`) calls `_active_status.stop()`
+  (`kbcode/ui.py:238`, idempotent + thread-safe) on the first token, so from then on
+  only the worker thread prints. Don't re-introduce a spinner that stays live during
+  streaming.
+- Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
+  `Markdown()` (`kbcode/ui.py:405`) is not used on the streaming path.
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains

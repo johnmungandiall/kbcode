@@ -25,7 +25,7 @@ blocks nested delegation, and returns only the final text. Token usage still
 accrues to `Agent.usage`.
 
 ## Standing orders
-`build_system_prompt()` (`kbcode/prompts.py:40`) injects an optional `standing_orders`
+`build_system_prompt()` (`kbcode/prompts.py:41`) injects an optional `standing_orders`
 string (from `.kbcode/standing-orders.md`) right after the base rules, so it
 takes priority. `cli._build_agent` (`kbcode/cli.py:109`) ignores the untouched scaffold
 template (`_STANDING_ORDERS_TEMPLATE`, `kbcode/cli.py:79`) so its examples never become

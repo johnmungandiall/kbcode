@@ -111,10 +111,12 @@ class Agent:
 
         ``on_text``, if given, switches to the provider's streaming call
         (#3.1/#7.1) and is invoked with each text chunk *from the worker
-        thread* as it arrives — safe because Rich's Console has its own
-        internal lock and this codebase already updates a status spinner from
-        a background thread the same way (see _TickingStatus). Left as None
-        (the default), this behaves exactly as before: one blocking call.
+        thread* as it arrives. Rich's Console has its own internal lock so
+        individual prints stay atomic, but the thinking() spinner is a
+        Live region redrawn from its own ticker thread — two threads writing
+        the terminal at once shred the streamed line. So ui.stream_chunk stops
+        the spinner on the first token; after that only the worker thread
+        prints. Left as None (the default): one blocking call, spinner intact.
         """
         box: dict = {}
         done = threading.Event()

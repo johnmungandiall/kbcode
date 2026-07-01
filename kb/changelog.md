@@ -11,7 +11,16 @@ the component list (existed in code, missing from the map) and documented the
 new `.claude/hooks/kb_*.py` enforcement hooks in `about-kb.md` (committed this
 session, undocumented). No other drift found.
 
-## v1.6.1 (current)
+## v1.6.2 (current)
+- Fix streamed replies rendering as shredded line-fragments (only the tail of
+  each line survived — hit tables and plain prose alike). The thinking spinner
+  is a Rich `Live` region redrawn from a background ticker thread; leaving it
+  live while reply text streamed in from the provider worker thread meant two
+  threads wrote the terminal at once and the spinner's redraw stomped each
+  half-printed line. `ui.stream_chunk` now stops the spinner on the first token
+  (`_TickingStatus.stop`, idempotent + thread-safe) so only one writer remains.
+
+## v1.6.1
 - Fix packaging: `pyproject.toml` only declared the top-level `kbcode`
   package, so the `tools/` subpackage (split out of `tools.py` in v1.6.0)
   was silently missing from every `pip install`, making `kbcode`/`kb` crash
