@@ -2,6 +2,15 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## KB audit — 2026-07-01
+`tools/kb-check.sh --fix`/`--freshness` reported 0 broken/stale/drift (133
+pointers). Manual spot-check of ~60 `Name (path:line)` pointers (name-match not
+covered by the checker for that style) found one real miss: `architecture.md`
+named `_repl()` where the function is `repl()` — fixed. Added `wizard.py` to
+the component list (existed in code, missing from the map) and documented the
+new `.claude/hooks/kb_*.py` enforcement hooks in `about-kb.md` (committed this
+session, undocumented). No other drift found.
+
 ## v1.6.1 (current)
 - Fix packaging: `pyproject.toml` only declared the top-level `kbcode`
   package, so the `tools/` subpackage (split out of `tools.py` in v1.6.0)

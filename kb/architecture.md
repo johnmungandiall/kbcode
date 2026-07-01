@@ -8,6 +8,7 @@ model unchanged (see [[providers]]).
 ## Components
 
 - `cli.py` — entry point + chat REPL + slash commands + `-C` / `init` / `/open`
+- `wizard.py` — `model_wizard()`, the `kbcode model` provider/key/model setup flow
 - `agent.py` — the agent loop (`Agent.run`), subagent delegation, `/insights`
 - `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC ([[providers]])
 - `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `schemas.py` ([[tools-and-repair]])
@@ -30,7 +31,7 @@ model unchanged (see [[providers]]).
 - `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` (`kbcode/cli.py:327`) → `load_config()` → `_build_agent()` → `_repl()` (`kbcode/repl.py:151`)
+1. `main()` (`kbcode/cli.py:327`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:151`)
 2. User types a message → `Agent.run()` (`kbcode/agent.py:182`) → `Agent._complete()` (`kbcode/agent.py:102`) calls provider
 3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()` (`kbcode/tools/core.py:76`)
 4. Tool results appended → loop repeats until no more tool_calls

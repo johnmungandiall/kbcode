@@ -80,5 +80,10 @@ Read this before you maintain the KB, edit notes, or dispatch a sub-agent.
   styles; `--fix` auto-repairs drifted line numbers by the name anchor;
   `--freshness` flags notes older than the code) via the sample
   `tools/hooks/pre-commit` or before release.
+- This is also enforced live in Claude Code sessions on THIS repo via
+  `.claude/settings.json` hooks: `.claude/hooks/kb_update_reminder.py`
+  (PostToolUse on Edit/Write/MultiEdit) nudges once per session after a
+  non-KB file changes; `.claude/hooks/kb_drift_check.py` (Stop) blocks
+  ending a turn once if `tools/kb-check.sh` reports a broken pointer.
 
 See [[conventions]] for note-writing rules, [[overview]] for the big picture.
