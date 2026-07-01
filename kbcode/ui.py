@@ -11,6 +11,7 @@ back to plain text, so it stays robust on basic Windows consoles.
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 
@@ -117,6 +118,48 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
     if name == "run_subagent":
         return "Delegate", f"→ {g('agent')}: {_short(g('task'), 60)}"
     return name, (_short(a) if a else "")
+
+
+class _TickingStatus:
+    """A :meth:`Console.status` spinner whose label counts up in seconds.
+
+    A plain spinner still animates once a second or two of blocking work has
+    passed, but nothing on screen shows *how long* it's been running — which
+    is exactly what makes a slow tool call or model turn look stalled. A
+    background ticker thread updates the status text every 100ms so the
+    elapsed time itself is the "still alive" signal.
+    """
+
+    def __init__(self, console: Console, label: str, hint: str = ""):
+        self._label = label
+        self._hint = hint
+        self._start = 0.0
+        self._status = console.status(self._render(0.0), spinner="dots")
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def _render(self, elapsed: float) -> str:
+        text = f"[dim]{self._label}… {elapsed:.1f}s[/dim]"
+        if self._hint:
+            text += f"  [dim italic]{self._hint}[/dim italic]"
+        return text
+
+    def _tick(self) -> None:
+        while not self._stop.wait(0.1):
+            self._status.update(self._render(time.perf_counter() - self._start))
+
+    def __enter__(self):
+        self._start = time.perf_counter()
+        self._status.__enter__()
+        self._thread = threading.Thread(target=self._tick, daemon=True)
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=0.2)
+        return self._status.__exit__(*exc)
 
 
 class TerminalUI:
@@ -238,12 +281,15 @@ class TerminalUI:
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):
-        return self.console.status(
-            "[dim]thinking…[/dim]  [dim italic](Esc to interrupt)[/dim italic]", spinner="dots"
-        )
+        return _TickingStatus(self.console, "thinking", "(Esc to interrupt)")
 
     def working(self, label: str):
-        return self.console.status(f"[dim]{label}[/dim]", spinner="dots")
+        return _TickingStatus(self.console, label.rstrip("… "))
+
+    def tool_running(self):
+        """Spinner shown while a tool call is actually executing, so a slow
+        command (e.g. a long ``run_command``) never looks like it stalled."""
+        return _TickingStatus(self.console, "running", "(Esc to interrupt)")
 
     def assistant_text(self, text: str) -> None:
         if not text.strip():

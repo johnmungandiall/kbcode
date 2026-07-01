@@ -207,7 +207,8 @@ class Agent:
                         True,
                     )
                 else:
-                    content, is_error = self.tools.execute(call.name, dict(call.input))
+                    with self.ui.tool_running():
+                        content, is_error = self.tools.execute(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
                 content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
@@ -242,7 +243,8 @@ class Agent:
                     True,
                 )
             else:
-                content, is_error = self.tools.execute(name, dict(args))
+                with self.ui.tool_running():
+                    content, is_error = self.tools.execute(name, dict(args))
             self.ui.tool_result(content, is_error)
             content = self._with_kb_reminder(name, dict(args), content, is_error)
             feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
@@ -376,7 +378,8 @@ class Agent:
                                 True,
                             )
                         else:
-                            content, is_error = self.tools.execute(tname, dict(targs))
+                            with self.ui.tool_running():
+                                content, is_error = self.tools.execute(tname, dict(targs))
                         self.ui.tool_result(content, is_error)
                         feedback.append(f"\n## {tname} [{'error' if is_error else 'ok'}]\n{content}")
                     messages.append({"role": "user", "content": "\n".join(feedback)})
@@ -395,7 +398,8 @@ class Agent:
                         True,
                     )
                 else:
-                    content, is_error = self.tools.execute(call.name, dict(call.input))
+                    with self.ui.tool_running():
+                        content, is_error = self.tools.execute(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
             messages.append({"role": "tool_results", "results": results})
