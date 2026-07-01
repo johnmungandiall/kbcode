@@ -2,7 +2,17 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.9 (current)
+## v1.9.10 (current)
+- **Further exploration improvements**:
+  - `search_code` now supports `limit` parameter (default 50) to prevent dumping too many results that lead to more loops.
+  - `repo_map` significantly improved: prefers ripgrep (rg) when available for faster and more accurate symbol extraction, limits to ~5 symbols per file for clean output, better fallback.
+  - `code-explorer` subagent now explicitly includes `repo_map` and stronger instructions.
+  - More examples and emphasis in core system prompt for scoped, efficient searches (e.g., broker comparisons).
+  - Updated documentation in gotchas and tools-and-repair.
+
+- Previous anti-loop and interrupt fixes from 1.9.9 carried forward.
+
+## v1.9.9
 - **Prevent search/exploration loops + better Esc handling** — updated prompts
   and tool descriptions to force efficient exploration: always start with
   `repo_map` (scoped), use `search_code` with `path` to narrow (e.g. specific
