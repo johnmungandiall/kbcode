@@ -45,21 +45,37 @@ _GIT_TARGET = f"git+{_REPO_URL}.git"
 
 
 def _self_update() -> int:
-    """`kbcode update` — upgrade the install in place from GitHub."""
+    """`kbcode update` — upgrade the install in place from GitHub.
+
+    Two pip steps on purpose. A plain ``pip install --upgrade git+URL`` is a
+    silent no-op whenever ``__version__`` has not changed: pip sees the same
+    version already installed and reports "Requirement already satisfied",
+    so any fix pushed to GitHub without a version bump never reaches users
+    (they stay on stale code even though ``kbcode update`` "succeeded"). The
+    first step still runs a normal upgrade so any new/bumped dependencies get
+    pulled in; the second force-reinstalls kbcode itself (``--no-deps`` to
+    avoid re-fetching every dependency, ``--no-cache-dir`` so pip rebuilds
+    from the current GitHub HEAD instead of serving a cached same-version
+    wheel). That second step is what actually guarantees the latest code
+    lands regardless of the version string.
+    """
     console.print(f"[cyan]Updating kbcode from {_REPO_URL} …[/cyan]")
+    steps = (
+        [sys.executable, "-m", "pip", "install", "--upgrade", _GIT_TARGET],
+        [sys.executable, "-m", "pip", "install", "--upgrade",
+         "--force-reinstall", "--no-deps", "--no-cache-dir", _GIT_TARGET],
+    )
     try:
-        proc = subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--upgrade", _GIT_TARGET],
-            check=False,
-        )
+        for cmd in steps:
+            proc = subprocess.run(cmd, check=False)
+            if proc.returncode != 0:
+                console.print("[yellow]pip reported a problem (see its output above).[/yellow]")
+                return proc.returncode
     except Exception as exc:  # noqa: BLE001 - surface any launch failure cleanly
         console.print(f"[red]Update failed:[/red] {exc}")
         return 1
-    if proc.returncode == 0:
-        console.print("[green]Updated.[/green]  Check with  [bold]kbcode --version[/bold]")
-    else:
-        console.print("[yellow]pip reported a problem (see its output above).[/yellow]")
-    return proc.returncode
+    console.print("[green]Updated.[/green]  Check with  [bold]kbcode --version[/bold]")
+    return 0
 
 
 def _scaffold(config: Config, kb: KnowledgeBase) -> None:

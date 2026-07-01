@@ -478,7 +478,16 @@ DEEPSEEK_API_KEY=...
 - 🔢 **See your version:** `kbcode --version` (or `/version` in chat — the banner
   shows it too).
 - ⬆️ **Update to the latest:** `kbcode update` — pulls the newest release from
-  GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
+  GitHub and force-reinstalls kbcode so the latest code always lands, even
+  when the version number hasn't changed.
+- 🩹 **Stuck on an old version?** If `kbcode update` keeps leaving you on an
+  older build (a known trap in versions ≤ 1.9.0, where a plain
+  `pip install --upgrade` would silently do nothing), run this once by hand to
+  break out of it — after that, `kbcode update` works normally:
+
+  ```bash
+  pip install --upgrade --force-reinstall --no-cache-dir git+https://github.com/johnmungandiall/kbcode.git
+  ```
 
 ## 🧪 Development
 

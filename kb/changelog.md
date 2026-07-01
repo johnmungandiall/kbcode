@@ -2,7 +2,23 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.0 (current)
+## v1.9.1 (current)
+- **`kbcode update` now actually delivers new code** (`kbcode/cli.py`
+  `_self_update`) — the old command ran a bare `pip install --upgrade
+  git+URL`, which pip treats as "already satisfied" (a silent no-op) whenever
+  `__version__` is unchanged, so any fix pushed to GitHub without a version
+  bump never reached installed users even though the update "succeeded". They
+  stayed on stale code while a dev running `python -m kbcode` from the updated
+  source tree saw the fix — the classic "works from source, broken when
+  installed" report. Now runs two pip steps: a normal `--upgrade` (to pick up
+  new/bumped deps) then `--upgrade --force-reinstall --no-deps --no-cache-dir`
+  on kbcode itself so the current GitHub HEAD is rebuilt every time regardless
+  of the version string. README's "Update & version" section documents a
+  one-time manual `--force-reinstall` for users stuck on ≤ 1.9.0 (whose old
+  update command can't self-heal until they bump past the no-op). See
+  [[cheatsheet]].
+
+## v1.9.0
 - **System prompt now stamps the current date/time** (`kbcode/prompts.py`) —
   `build_system_prompt()` injects a `## Current date & time` section
   (`datetime.now()`, injectable via a `now:` kwarg for tests) telling the

@@ -33,8 +33,8 @@ No provider here has a native video content-part (Anthropic Messages API has
 none at all), so `describe_video()` (`kbcode/vision_fallback.py:146`) skips
 `kind=="anthropic"` candidates and always makes a raw OpenAI-compatible call
 with a `video_url` part. `videos.load_video_file()` (`kbcode/videos.py:31`) base64s a
-local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:303` `_describe_videos`) /
-`--video` (one-shot, `kbcode/cli.py:288`) call this synchronously; the description is
+local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:319` `_describe_videos`) /
+`--video` (one-shot, `kbcode/cli.py:304`) call this synchronously; the description is
 threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:167`) —
 the main model never sees raw video.
 
