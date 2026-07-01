@@ -16,6 +16,18 @@ Define them as markdown files in ``.kbcode/agents/*.md``::
     You are a code explorer. Trace the feature, then return a tight summary...
 
 The agent's name is the filename (``code-explorer.md`` -> ``code-explorer``).
+
+If the model asks for several ``run_subagent`` calls in one turn, they run
+concurrently (#4.3 extension) instead of one-at-a-time — but ONLY when every
+targeted subagent's ``tools:`` list is an explicit, narrow subset of the
+schema-declared parallel-safe tools (``read_file``, ``list_dir``,
+``search_code``, ``kb_read``, ``kb_search``, ``web_search`` — see
+``tools/schemas.py``). The default ``tools: read`` shown above does NOT
+qualify, since it also includes ``recall``/``manage_todos``, which touch
+state that isn't thread-safe to share. Narrow a subagent's ``tools:`` to
+just the read-only tools it needs (e.g. ``tools: read_file, search_code``)
+to make it eligible for concurrent dispatch; see
+:meth:`Agent._subagent_parallel_safe`.
 """
 
 from __future__ import annotations

@@ -7,8 +7,10 @@ these run offline and instantly.
 from __future__ import annotations
 
 import sys
+import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from kbcode.agent import _MAX_PROMOTED_RECOVERIES, Agent
 from kbcode.config import Config
@@ -16,6 +18,7 @@ from kbcode.knowledge_base import KnowledgeBase
 from kbcode.memory import Memory
 from kbcode.permissions import Permissions
 from kbcode.provider import LLMResponse, ToolCall
+from kbcode.subagents import Subagent
 from kbcode.tools import Tools
 from kbcode.ui import TerminalUI
 
@@ -43,6 +46,39 @@ class FakeProvider:
         # text as one chunk, so the real agent-loop streaming call site still
         # exercises normally against this fake.
         self.stream_call_count += 1
+        resp = self.complete(system, messages, tools)
+        if on_text and resp.text:
+            on_text(resp.text)
+        return resp
+
+
+class _KeyedProvider:
+    """Like FakeProvider, but for tests that dispatch >1 subagent concurrently:
+    FakeProvider's plain `responses.pop(0)` queue isn't safe to share across
+    threads, and even if it were, pop order between racing threads is
+    nondeterministic. This instead replies based on which subagent's system
+    prompt is asking (a plain dict lookup, not a shared mutable queue), so
+    each subagent gets its own deterministic scripted answer regardless of
+    thread interleaving. Calls whose system prompt matches none of the
+    subagent keys (i.e. the main agent's own turns) pop from `main_replies`,
+    which only the single main thread ever touches.
+    """
+
+    def __init__(self, subagent_replies: dict[str, LLMResponse], main_replies: list[LLMResponse]):
+        self.subagent_replies = subagent_replies
+        self.main_replies = list(main_replies)
+        self.calls: list[dict] = []
+        self._lock = threading.Lock()
+
+    def complete(self, system, messages, tools):
+        with self._lock:
+            self.calls.append({"system": system, "messages": list(messages), "tools": tools})
+        for key, resp in self.subagent_replies.items():
+            if key in system:
+                return resp
+        return self.main_replies.pop(0)
+
+    def stream(self, system, messages, tools, on_text=None):
         resp = self.complete(system, messages, tools)
         if on_text and resp.text:
             on_text(resp.text)
@@ -193,8 +229,6 @@ def test_complete_with_on_text_streams(tmp_path):
 
 
 def test_subagent_delegate_does_not_stream(tmp_path):
-    from kbcode.subagents import Subagent
-
     provider = FakeProvider([_final("subagent answer")])
     agent, _tools = _make_agent(tmp_path, provider)
     sub = Subagent(name="helper", description="test helper", instructions="Answer briefly.", tools=None)
@@ -453,6 +487,124 @@ def test_parallel_safe_tools_derived_from_schema_flag(tmp_path):
     # mutating tools (write/run) must never be marked safe.
     assert "write_file" not in tools.parallel_safe_tools
     assert "run_command" not in tools.parallel_safe_tools
+
+
+# --- concurrent run_subagent dispatch (#4.3 extension) ---------------------
+
+
+def test_parallel_subagent_batch_dispatches_concurrently_with_correct_ordering(tmp_path):
+    outer = LLMResponse(
+        text="",
+        tool_calls=[
+            _call("run_subagent", {"agent": "a", "task": "task a"}),
+            _call("run_subagent", {"agent": "b", "task": "task b"}),
+        ],
+        raw={},
+    )
+    provider = _KeyedProvider(
+        subagent_replies={
+            "'a' subagent": _final("answer from a"),
+            "'b' subagent": _final("answer from b"),
+        },
+        main_replies=[outer, _final("done")],
+    )
+    agent, tools = _make_agent(tmp_path, provider)
+    agent.subagents["a"] = Subagent(
+        name="a", description="a", instructions="Answer briefly.", tools=frozenset({"read_file"})
+    )
+    agent.subagents["b"] = Subagent(
+        name="b", description="b", instructions="Answer briefly.", tools=frozenset({"read_file"})
+    )
+
+    agent.run("delegate to both")
+
+    tool_results = [m for m in agent.messages if m["role"] == "tool_results"][0]["results"]
+    assert len(tool_results) == 2
+    assert [r["is_error"] for r in tool_results] == [False, False]
+    # results must line up with the ORIGINAL call order/ids, not swapped —
+    # this is the regression the outcomes-dict-keyed-by-call.id pattern guards.
+    assert tool_results[0]["id"] == outer.tool_calls[0].id
+    assert tool_results[1]["id"] == outer.tool_calls[1].id
+    assert tool_results[0]["content"] == "answer from a"
+    assert tool_results[1]["content"] == "answer from b"
+
+
+def test_mixed_eligibility_subagent_batch_falls_back_to_sequential(tmp_path, monkeypatch):
+    outer = LLMResponse(
+        text="",
+        tool_calls=[
+            _call("run_subagent", {"agent": "safe", "task": "t1"}),
+            _call("run_subagent", {"agent": "unsafe", "task": "t2"}),
+        ],
+        raw={},
+    )
+    provider = FakeProvider([outer, _final("safe answer"), _final("unsafe answer"), _final("done")])
+    agent, tools = _make_agent(tmp_path, provider)
+    agent.subagents["safe"] = Subagent(
+        name="safe", description="", instructions="Answer briefly.", tools=frozenset({"read_file"})
+    )
+    agent.subagents["unsafe"] = Subagent(
+        name="unsafe", description="", instructions="Answer briefly.", tools=None  # every tool
+    )
+
+    def _boom(self, calls):
+        raise AssertionError("should not batch when a targeted subagent isn't parallel-safe")
+
+    monkeypatch.setattr(Agent, "_run_subagents_parallel_batch", _boom)
+
+    agent.run("delegate to both")
+
+    tool_results = [m for m in agent.messages if m["role"] == "tool_results"][0]["results"]
+    assert len(tool_results) == 2
+    assert [r["is_error"] for r in tool_results] == [False, False]
+
+
+def test_subagent_parallel_safe_edge_cases(tmp_path):
+    from kbcode.modes import READ
+
+    provider = FakeProvider([])
+    agent, tools = _make_agent(tmp_path, provider)
+    safe_set = tools.parallel_safe_tools
+
+    assert agent._subagent_parallel_safe("does-not-exist") is False
+
+    agent.subagents["none_tools"] = Subagent(name="none_tools", description="", instructions="x", tools=None)
+    assert agent._subagent_parallel_safe("none_tools") is False
+
+    agent.subagents["default_read"] = Subagent(
+        name="default_read", description="", instructions="x", tools=frozenset(READ)
+    )
+    assert agent._subagent_parallel_safe("default_read") is False  # includes recall/manage_todos
+
+    agent.subagents["narrow"] = Subagent(
+        name="narrow", description="", instructions="x", tools=frozenset({"read_file", "search_code"})
+    )
+    assert agent._subagent_parallel_safe("narrow") is True
+
+    agent.subagents["exact"] = Subagent(name="exact", description="", instructions="x", tools=frozenset(safe_set))
+    assert agent._subagent_parallel_safe("exact") is True
+
+    agent.subagents["mixed"] = Subagent(
+        name="mixed", description="", instructions="x", tools=frozenset({"read_file", "write_file"})
+    )
+    assert agent._subagent_parallel_safe("mixed") is False
+
+
+def test_record_usage_thread_safe_under_concurrency(tmp_path):
+    provider = FakeProvider([])
+    agent, _tools = _make_agent(tmp_path, provider)
+
+    n = 50
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = [
+            pool.submit(agent._record_usage, {"input_tokens": 1, "output_tokens": 2}) for _ in range(n)
+        ]
+        for f in futures:
+            f.result()
+
+    assert agent.usage["requests"] == n
+    assert agent.usage["input_tokens"] == n
+    assert agent.usage["output_tokens"] == 2 * n
 
 
 # --- token-budget-aware tool results (#4.2) --------------------------------

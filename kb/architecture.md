@@ -34,8 +34,8 @@ model unchanged (see [[providers]]).
 
 ## Data / control flow
 1. `main()` (`kbcode/cli.py:329`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:151`)
-2. User types a message → `Agent.run()` (`kbcode/agent.py:186`) → `Agent._complete()` (`kbcode/agent.py:104`) calls provider
-3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:178`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:89`) — see [[safety]]
+2. User types a message → `Agent.run()` (`kbcode/agent.py:221`) → `Agent._complete()` (`kbcode/agent.py:124`) calls provider
+3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:195`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:89`) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 

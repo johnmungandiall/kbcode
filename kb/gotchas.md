@@ -5,7 +5,7 @@
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls
-- `kbcode/agent.py:104-140` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
+- `kbcode/agent.py:124-162` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
@@ -39,7 +39,7 @@
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
   background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:226`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
-  (`kbcode/agent.py:129`). Two threads writing the terminal at once = the spinner's
+  (`kbcode/agent.py:148`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
 - Fix: `stream_chunk` (`kbcode/ui.py:415`) calls `_active_status.stop()`

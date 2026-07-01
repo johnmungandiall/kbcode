@@ -40,14 +40,23 @@ _EMERGENCY_STOP_MULTIPLIER = 3
 # Parallel tool calls (#4.3): only tools that are pure reads (no permission
 # prompt, no file mutation, no checkpoint, no shared SQLite connection) are
 # safe to run off the main thread. write_file/edit_file/run_command/kb_write/
-# remember/recall/save_skill/manage_todos/run_subagent all stay sequential —
-# either because ordering matters (edit then run the tests it affects) or
-# because they touch state (Permissions' interactive prompt, Checkpoints'
-# once-per-turn git snapshot, Memory's sqlite3 connection) that isn't
-# thread-safe to share across a pool. WHICH tools are safe is no longer listed
-# here: each tool declares `parallel_safe` in its schema (tools/schemas.py) and
-# the set is read via self.tools.parallel_safe_tools, so adding a read-only tool
+# remember/recall/save_skill/manage_todos all stay sequential — either
+# because ordering matters (edit then run the tests it affects) or because
+# they touch state (Permissions' interactive prompt, Checkpoints' once-per-
+# turn git snapshot, Memory's sqlite3 connection) that isn't thread-safe to
+# share across a pool. WHICH tools are safe is no longer listed here: each
+# tool declares `parallel_safe` in its schema (tools/schemas.py) and the set
+# is read via self.tools.parallel_safe_tools, so adding a read-only tool
 # can't silently fall back to sequential.
+#
+# run_subagent is a conditional exception: a run of consecutive run_subagent
+# calls runs concurrently too, but ONLY when every targeted subagent's own
+# `tools:` frontmatter is a subset of that same parallel_safe set (see
+# Agent._subagent_parallel_safe / _run_subagents_parallel_batch below) — the
+# default `tools: read` does NOT qualify (it includes recall/manage_todos,
+# which touch Memory's connection / todos state), so a subagent must be
+# authored with an explicit, narrow tool list to opt in. Anything broader
+# (any write/exec tool, or `tools: None` = every tool) stays sequential.
 _PARALLEL_MAX_WORKERS = 8
 
 # KB lifecycle hooks (the claude-kb idea): distinct from the general,
@@ -84,6 +93,14 @@ class Agent:
         self.session = None
         # Cumulative token spend this run, for /insights.
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
+        # _record_usage can now be called from multiple subagent threads at
+        # once (#4.3 extension — see _run_subagents_parallel_batch).
+        self._usage_lock = threading.Lock()
+        # Set (per pool worker thread only) by _quiet_dispatch while a
+        # subagent runs inside a parallel batch, so _run_subagent suppresses
+        # its own inline UI output there — Rich's Live-backed spinner isn't
+        # safe to have two open at once. Unset (falsy) on the main thread.
+        self._quiet_subagents = threading.local()
         # KB lifecycle hooks state: the reminder fires once per session (like
         # claude-kb's session-scoped marker file); the drift check resets every
         # turn (see run()).
@@ -288,6 +305,19 @@ class Agent:
                     actions += len(batch)
                     i = j
                     continue
+                if (
+                    self._is_parallel_subagent_call(call)
+                    and i + 1 < len(calls)
+                    and self._is_parallel_subagent_call(calls[i + 1])
+                ):
+                    j = i + 1
+                    while j < len(calls) and self._is_parallel_subagent_call(calls[j]):
+                        j += 1
+                    batch = calls[i:j]
+                    results.extend(self._run_subagents_parallel_batch(batch))
+                    actions += len(batch)
+                    i = j
+                    continue
                 actions += 1
                 self.ui.tool_call(call.name, dict(call.input))
                 if not self.mode.allows(call.name):
@@ -343,6 +373,57 @@ class Agent:
                 )
             self.ui.tool_result(content, is_error)
             content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
+            results.append({"id": call.id, "content": content, "is_error": is_error})
+        return results
+
+    def _quiet_dispatch(self, call) -> tuple[str, bool]:
+        """Run one tool call with _run_subagent's inline UI output suppressed
+        (see the _quiet_subagents thread-local) — used only inside
+        _run_subagents_parallel_batch's pool, so per-call notices/spinners
+        don't interleave or fight over TerminalUI's shared status region
+        across threads."""
+        self._quiet_subagents.on = True
+        try:
+            return self._dispatch_tool(call.name, dict(call.input))
+        finally:
+            self._quiet_subagents.on = False
+
+    def _run_subagents_parallel_batch(self, calls: list) -> list[dict]:
+        """Run a run of consecutive run_subagent calls concurrently, when
+        every one targets a subagent whose tools are a subset of
+        parallel_safe_tools (#4.3 extension — see _subagent_parallel_safe).
+
+        Mirrors _run_parallel_batch: parallelize the work, render call/result
+        lines afterward in the original order. Still goes through
+        _dispatch_tool (not _run_subagent directly), so PreToolUse/PostToolUse
+        hooks fire exactly as they do for a sequential run_subagent call.
+        """
+        allowed = [c for c in calls if self.mode.allows(c.name)]
+        outcomes: dict[str, tuple[str, bool]] = {}
+        if allowed:
+            label = f"delegating to {len(allowed)} subagents in parallel"
+            with self.ui.working(label):
+                with ThreadPoolExecutor(max_workers=min(_PARALLEL_MAX_WORKERS, len(allowed))) as pool:
+                    future_to_call = {
+                        pool.submit(self._quiet_dispatch, c): c for c in allowed
+                    }
+                    for future, call in future_to_call.items():
+                        outcomes[call.id] = future.result()
+
+        results = []
+        for call in calls:
+            agent_name = call.input.get("agent", "?")
+            self.ui.notice(f"↳ delegating to subagent '{agent_name}'…", style="cyan")
+            self.ui.tool_call(call.name, dict(call.input))
+            if call.id in outcomes:
+                content, is_error = outcomes[call.id]
+            else:
+                content, is_error = (
+                    f"Tool '{call.name}' is not available in {self.mode.name} mode.",
+                    True,
+                )
+            self.ui.tool_result(content, is_error)
+            self.ui.notice(f"↳ subagent '{agent_name}' done.", style="cyan")
             results.append({"id": call.id, "content": content, "is_error": is_error})
         return results
 
@@ -487,10 +568,11 @@ class Agent:
         return estimate_tokens(self.messages)
 
     def _record_usage(self, usage: dict | None) -> None:
-        self.usage["requests"] += 1
-        if usage:
-            self.usage["input_tokens"] += usage.get("input_tokens", 0)
-            self.usage["output_tokens"] += usage.get("output_tokens", 0)
+        with self._usage_lock:
+            self.usage["requests"] += 1
+            if usage:
+                self.usage["input_tokens"] += usage.get("input_tokens", 0)
+                self.usage["output_tokens"] += usage.get("output_tokens", 0)
 
     def insights(self) -> dict:
         """Usage/cost summary for this run (Hermes' /insights, adapted)."""
@@ -510,8 +592,36 @@ class Agent:
             ),
         }
 
+    def _subagent_parallel_safe(self, name: str) -> bool:
+        """A subagent is eligible for concurrent dispatch (#4.3 extension) only
+        if it's authored with an explicit, narrow ``tools:`` list that is a
+        subset of the schema-declared parallel_safe set (tools/schemas.py) —
+        NOT the mode-level READ group, which also includes recall/manage_todos
+        (Memory's sqlite3 connection / todos state aren't thread-safe to
+        share). The default ``tools: read`` frontmatter does NOT qualify; an
+        author must deliberately narrow it (e.g. ``tools: read_file,
+        search_code, kb_read``) to opt in. Unknown subagent name or
+        ``tools: None`` ("every tool") is never eligible."""
+        sub = self.subagents.get(name)
+        if sub is None or sub.tools is None:
+            return False
+        return sub.tools <= self.tools.parallel_safe_tools
+
+    def _is_parallel_subagent_call(self, call) -> bool:
+        return call.name == "run_subagent" and self._subagent_parallel_safe(
+            call.input.get("agent", "")
+        )
+
     def _run_subagent(self, name: str, task: str) -> tuple[str, bool]:
-        """Run a delegated task in its own context window; return (summary, is_error)."""
+        """Run a delegated task in its own context window; return (summary, is_error).
+
+        When called from inside a parallel subagent batch (see
+        _run_subagents_parallel_batch / _quiet_dispatch), the per-thread
+        _quiet_subagents flag is set, so this suppresses its own inline UI
+        output — Rich's Live-backed spinner isn't safe to have two open at
+        once — and the caller renders a summary afterward instead.
+        """
+        quiet = getattr(self._quiet_subagents, "on", False)
         sub = self.subagents.get(name)
         if sub is None:
             avail = ", ".join(self.subagents) or "(none defined)"
@@ -523,7 +633,8 @@ class Agent:
             if s["name"] != "run_subagent" and sub.allows(s["name"])
         ]
         messages: list[dict] = [{"role": "user", "content": task}]
-        self.ui.notice(f"↳ delegating to subagent '{name}'…", style="cyan")
+        if not quiet:
+            self.ui.notice(f"↳ delegating to subagent '{name}'…", style="cyan")
 
         for _ in range(_SUBAGENT_MAX_STEPS):
             resp = self._complete(system, messages, schemas)
@@ -539,25 +650,31 @@ class Agent:
                         "for you — please use the proper tool-call format. Results:"
                     ]
                     for tname, targs in promoted:
-                        self.ui.tool_call(f"{name}:{tname}", dict(targs))
+                        if not quiet:
+                            self.ui.tool_call(f"{name}:{tname}", dict(targs))
                         if not sub.allows(tname):
                             content, is_error = (
                                 f"Tool '{tname}' is not allowed for the '{name}' subagent.",
                                 True,
                             )
+                        elif quiet:
+                            content, is_error = self._dispatch_tool(tname, dict(targs))
                         else:
                             with self.ui.tool_running():
                                 content, is_error = self._dispatch_tool(tname, dict(targs))
-                        self.ui.tool_result(content, is_error)
+                        if not quiet:
+                            self.ui.tool_result(content, is_error)
                         feedback.append(f"\n## {tname} [{'error' if is_error else 'ok'}]\n{content}")
                     messages.append({"role": "user", "content": "\n".join(feedback)})
                     continue
-                self.ui.notice(f"↳ subagent '{name}' done.", style="cyan")
+                if not quiet:
+                    self.ui.notice(f"↳ subagent '{name}' done.", style="cyan")
                 return resp.text or "(subagent returned no text)", False
 
             results = []
             for call in resp.tool_calls:
-                self.ui.tool_call(f"{name}:{call.name}", dict(call.input))
+                if not quiet:
+                    self.ui.tool_call(f"{name}:{call.name}", dict(call.input))
                 if call.name == "run_subagent":
                     content, is_error = "Subagents cannot spawn other subagents.", True
                 elif not sub.allows(call.name):
@@ -565,10 +682,13 @@ class Agent:
                         f"Tool '{call.name}' is not allowed for the '{name}' subagent.",
                         True,
                     )
+                elif quiet:
+                    content, is_error = self._dispatch_tool(call.name, dict(call.input))
                 else:
                     with self.ui.tool_running():
                         content, is_error = self._dispatch_tool(call.name, dict(call.input))
-                self.ui.tool_result(content, is_error)
+                if not quiet:
+                    self.ui.tool_result(content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
             messages.append({"role": "tool_results", "results": results})
 

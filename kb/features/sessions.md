@@ -3,11 +3,11 @@
 ## Session history
 Every chat is persisted per-project to `.kbcode/sessions/<id>.jsonl`.
 `SessionRecorder` (`kbcode/sessions.py:89`) appends one JSON line per message **as it
-happens** — `Agent._append()` (`kbcode/agent.py:175`) wraps every
+happens** — `Agent._append()` (`kbcode/agent.py:210`) wraps every
 `self.messages.append`, so a crash loses at most the in-flight message. Three
 other record types share the file: `meta` (written once by `cli._build_agent`,
 `kbcode/cli.py:111`, capturing provider/model/mode/git branch), `usage` (written after
-every turn), and `reset` (written by `Agent.reset()`, `kbcode/agent.py:539` — a marker,
+every turn), and `reset` (written by `Agent.reset()`, `kbcode/agent.py:697` — a marker,
 not a new file, so replay only reconstructs what happened after the last reset
 while the file keeps a full audit trail underneath).
 
@@ -20,11 +20,15 @@ reconstructs `tool_calls` back into `ToolCall` instances (`sessions
 attribute.
 
 ## Usage tally
-`Agent.usage` (`kbcode/agent.py:85`) accumulates `requests`/`input_tokens`/
+`Agent.usage` (`kbcode/agent.py:95`) accumulates `requests`/`input_tokens`/
 `output_tokens` from each response's usage (both providers populate it, see
-[[providers]]); `Agent.insights()` (`kbcode/agent.py:457`) + `pricing.estimate_cost()`
+[[providers]]), written through `Agent._record_usage()` (`kbcode/agent.py:570`)
+under `Agent._usage_lock` (a `threading.Lock()` set in `__init__`) since #4.3's
+`run_subagent` extension can now call it from multiple pool threads at once —
+see [[modes-subagents]], [[tools-and-repair]]. `Agent.insights()`
+(`kbcode/agent.py:577`) + `pricing.estimate_cost()`
 (`kbcode/pricing.py:27`) back `/insights`. After every user turn `Agent._turn_summary()`
-(`kbcode/agent.py:438`) prints the `actions * tokens * elapsed` footer and records
+(`kbcode/agent.py:557`) prints the `actions * tokens * elapsed` footer and records
 usage so `/insights` reflects a session even if it never cleanly exits.
 `sessions.lifetime_stats()` (`kbcode/sessions.py:328`) rolls every saved session's
 last-known usage into an all-time total, pricing each with *its own* recorded

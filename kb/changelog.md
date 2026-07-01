@@ -3,15 +3,28 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **Concurrent `run_subagent` dispatch** (#4.3 extension, `kbcode/agent.py`) —
+  a run of 2+ consecutive `run_subagent` calls now dispatches concurrently
+  (same `ThreadPoolExecutor`/`_PARALLEL_MAX_WORKERS` mechanism as the
+  existing read-only-tool batching), but only when every targeted subagent's
+  `tools:` frontmatter is a subset of the schema-declared `parallel_safe`
+  tool set (`Agent._subagent_parallel_safe`) — the default `tools: read`
+  does not qualify. `Agent._record_usage()` is now lock-guarded
+  (`Agent._usage_lock`) since usage can be recorded from multiple subagent
+  pool threads at once; `_run_subagent()` gained a thread-local quiet flag
+  (`Agent._quiet_subagents`) so its inline UI output is suppressed when
+  running inside a parallel batch, byte-for-byte unchanged on the normal
+  sequential path. No new tool, no schema change, no LLM call added. See
+  [[tools-and-repair]], [[modes-subagents]].
 - **Hooks system** (`kbcode/hooks.py`, the Claude Code idea) —
   PreToolUse/PostToolUse/Stop tool-call interception via a `"hooks"` key in
   `.kbcode/settings.json`, reimplementing Claude Code's public documented
   hooks contract (JSON-over-stdin, exit-code protocol: 0 allow / 2 block /
   other non-fatal) from scratch. `ToolsCore` builds a `HooksRunner` per
-  project; `Agent._dispatch_tool()` wraps every tool call (5 call sites,
-  including subagent delegation) with Pre/PostToolUse, and
-  `Agent._stop_hook_feedback()` lets a `Stop` hook veto ending a turn. See
-  [[safety]].
+  project; `Agent._dispatch_tool()` wraps every tool call (6 call sites as
+  of the concurrent-subagent extension above, including subagent
+  delegation) with Pre/PostToolUse, and `Agent._stop_hook_feedback()` lets a
+  `Stop` hook veto ending a turn. See [[safety]].
 
 ## v1.8.0 (current)
 - **`web_search` tool** (`kbcode/tools/web.py`) — the Hermes web-search idea,
