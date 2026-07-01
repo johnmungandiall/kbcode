@@ -1,7 +1,9 @@
 # secrets
 .env
 
-# kbcode local state (per-machine memory db, caches)
+# kbcode local state (per-machine memory db, caches) — the app recreates this
+# folder and its scaffolding on first run (kbcode/cli.py), so nothing here
+# needs to be committed for a fresh install to get the same features.
 .kbcode/
 
 # cloned repos we study but don't ship
