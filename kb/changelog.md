@@ -2,7 +2,15 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.7 (current)
+## v1.9.8 (current)
+- **New `edit_files` tool** — perform multiple precise search/replace edits
+  across files in a single call (with one combined permission prompt showing
+  diffs). Inspired by Zed's strong multi-file AI editing after cloning and
+  studying the reference repo.
+  - Updated EDIT mode group and system prompts to leverage it for coordinated
+    changes.
+
+## v1.9.7
 - **New `repo_map` tool** — added a structural codebase map tool (inspired by
   Aider's excellent repository map after studying the cloned reference).
   Returns key files, classes, functions, and signatures to help the agent
