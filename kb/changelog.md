@@ -3,6 +3,13 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **System prompt now stamps the current date/time** (`kbcode/prompts.py`) —
+  `build_system_prompt()` injects a `## Current date & time` section
+  (`datetime.now()`, injectable via a `now:` kwarg for tests) telling the
+  model its training data can be stale and to use `web_search` instead of
+  guessing for news/current-events/recent-version/price questions. Fixes the
+  model composing search queries with a guessed, wrong-year date. See
+  [[tools-and-repair]].
 - **Configurable hooks timeout** (`kbcode/hooks.py`) — `HooksRunner`'s
   per-command `subprocess` timeout (30s default) can now be overridden via a
   `"timeout"` key in the `"hooks"` block of `.kbcode/settings.json` (e.g.

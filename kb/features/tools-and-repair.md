@@ -83,5 +83,13 @@ is guarded by `Agent._usage_lock` (a `threading.Lock()` set in `__init__`)
 since it can now be called from multiple subagent pool threads at once — see
 [[modes-subagents]].
 
+## Date-awareness for `web_search`
+`build_system_prompt()` (`kbcode/prompts.py:41`) stamps a `## Current date &
+time` section with `datetime.now()` (injectable via a `now:` kwarg for tests)
+and tells the model its training data can be stale — don't guess a
+training-cutoff-era date, and use `web_search` for anything time-sensitive
+instead of answering from memory. Fixes the model composing search queries
+with a wrong/guessed year (e.g. "July 2025" when it's actually 2026).
+
 See [[conventions]] for how to add a new tool, [[gotchas]] for the two-layer
 repair trap and the schema-metadata-strip trap.

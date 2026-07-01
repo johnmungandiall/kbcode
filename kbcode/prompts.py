@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 BASE_SYSTEM = """You are kbcode, a careful AI coding agent working inside a single project on the user's machine.
@@ -44,8 +45,23 @@ def build_system_prompt(
     agent_md: str = "",
     standing_orders: str = "",
     extra_prompts: str = "",
+    now: datetime | None = None,
 ) -> str:
     parts = [BASE_SYSTEM]
+
+    # Ground the model in the real date so it doesn't guess a stale one (e.g.
+    # its training-cutoff year) when reasoning about "latest"/"current" or
+    # composing a web_search query — ``now`` is injectable for tests.
+    stamp = now or datetime.now()
+    parts.append(
+        "## Current date & time\n"
+        f"Right now it is {stamp:%A, %B %d, %Y, %H:%M} (local time on the user's "
+        "machine). Your training data has a knowledge cutoff and can be stale — "
+        "don't assume a date near that cutoff, and don't answer news/current-events/"
+        "recent-version/price questions from memory alone. Use the web_search tool "
+        "to check anything time-sensitive, and use the date above (not a guess) when "
+        "forming search queries or judging how recent a result is."
+    )
 
     # openclaw "standing orders": always-on instructions the user pins for every
     # session. Placed right after the base rules so they take priority.

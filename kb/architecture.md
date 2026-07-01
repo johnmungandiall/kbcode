@@ -17,7 +17,7 @@ model unchanged (see [[providers]]).
 - `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md` ([[modes-subagents]])
 - `knowledge_base.py` — `KnowledgeBase` class, scaffold templates, `check_pointers()` + `fix_pointers()` ([[context-management]])
 - `memory.py` — `Memory` class (SQLite), `remember`/`recall`/`save_skill`
-- `prompts.py` — `build_system_prompt()` assembles system message from base + standing orders + AGENT.md + kb + skills + memories
+- `prompts.py` — `build_system_prompt()` assembles system message from base + current date/time + standing orders + AGENT.md + kb + skills + memories
 - `sessions.py` — `SessionRecorder` (JSONL per chat), `list_sessions`, `load_session`, `lifetime_stats` ([[sessions]])
 - `compaction.py` — `compact()` summarizes old turns to stay within context window ([[context-management]])
 - `repair.py` — `promote()` recovers tool calls written as plain text ([[tools-and-repair]])

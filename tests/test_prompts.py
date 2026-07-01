@@ -4,6 +4,8 @@ appended to the system prompt in sorted order.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from kbcode.prompts import build_system_prompt, load_prompt_fragments
 
 
@@ -45,3 +47,17 @@ def test_build_system_prompt_includes_extra_prompts_section():
 def test_build_system_prompt_omits_section_when_no_extra_prompts():
     system = build_system_prompt(kb_text="", skills=[], memories=[], extra_prompts="")
     assert "## Additional instructions" not in system
+
+
+def test_build_system_prompt_includes_current_date_and_web_search_rule():
+    system = build_system_prompt(
+        kb_text="", skills=[], memories=[], now=datetime(2026, 7, 1, 9, 30)
+    )
+    assert "## Current date & time" in system
+    assert "Wednesday, July 01, 2026" in system
+    assert "web_search" in system
+
+
+def test_build_system_prompt_defaults_now_when_omitted():
+    system = build_system_prompt(kb_text="", skills=[], memories=[])
+    assert "## Current date & time" in system
