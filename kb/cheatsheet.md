@@ -1,15 +1,28 @@
 # Cheatsheet — commands and snippets you reach for most.
 
 ## Run / build / test
-- `pip install -e .` — editable dev install
+- `pip install -e .` — editable dev install; `[project.scripts]` puts both
+  `kbcode` and the shorter `kb` alias on PATH (equivalent to `python -m kbcode`)
 - `kbcode` or `kb` — start interactive chat
-- `kbcode "do something"` — one-shot task
-- `kbcode model` — setup wizard (provider + key + model)
+- `kbcode "do something"` — one-shot task (`-y`/`--yes` auto-approves writes/commands)
+- `kbcode -C "<path>"` — work on a different project without `cd` (folder must exist)
+- `kbcode model` — setup wizard (provider + key + model); auto-fetches model
+  list, saves **globally** to `~/.kbcode/settings.json` + `~/.kbcode/.env`
 - `kbcode init` — scaffold project (AGENT.md + kb/ + .kbcode/)
 - `kbcode -c` — continue most recent saved session
 - `kbcode --resume` — pick from past sessions
-- `kbcode update` — upgrade from GitHub
-- `kbcode --version` — show version
+- `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:45`)
+- `kbcode --version` — show version; single source is `kbcode.__version__`
+  (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
+- `pytest` — run the test suite (`tests/`, 22 files); `python -m py_compile
+  kbcode/*.py` for a fast syntax-only check
+
+## Windows / PowerShell (this is the dev environment)
+- Set `PYTHONIOENCODING=utf-8` before running anything that prints the UI —
+  the terminal uses emoji/box-drawing chars the default cp1252 console can't
+  encode (raw `print()` breaks; output through `rich` is fine)
+- Running `python -m kbcode` from another directory needs `PYTHONPATH` pointed
+  at the repo root (the package isn't installed there)
 
 ## Chat commands (type in chat)
 - `/mode code|architect|ask|debug` — switch personality
@@ -26,10 +39,6 @@
 - `/image [path]` or Alt+V — attach image
 - `/video <path>` — describe video via vision fallback
 
-## Common tasks
-- Add a tool → `tools.py` (schema in `_base_schemas` + `_tool_<name>` method)
-- Add a provider → `provider.py` (new `LLMProvider` subclass + update `get_provider()`)
-- Add a mode → `.kbcode/modes/<name>.md` with frontmatter
-- Add a subagent → `.kbcode/agents/<name>.md` with frontmatter
-
-See [[overview]] for first-time setup and [[gotchas]] for what to avoid.
+See [[conventions]] "When adding things" for how to add a tool/provider/mode/
+subagent/slash-command. [[overview]] has first-time setup, [[gotchas]] has what
+to avoid.

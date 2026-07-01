@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# claude-kb sample pre-commit hook — block the commit if any KB pointer is broken.
+# Install (pick one):
+#   cp tools/hooks/pre-commit .git/hooks/pre-commit   # copy it in
+#   git config core.hooksPath tools/hooks             # or point git at this dir
+exec bash tools/kb-check.sh

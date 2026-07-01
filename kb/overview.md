@@ -1,26 +1,35 @@
 # Overview
 
-**kbcode** is a terminal-based AI coding agent (v1.4.2) that blends five ideas:
+**kbcode** is a terminal-based AI coding agent (v1.6.1) that blends five ideas
+(cloned for study, gitignored, into `references/`):
 1. **Hands** (Claude Code) — reads/writes files, runs commands
 2. **Memory + skills** (Hermes) — persistent SQLite memory across sessions
 3. **Knowledge base** (claude-kb) — token-cheap `kb/` notes about the project
 4. **Modes** (Kilo Code) — code/architect/ask/debug personalities with tool guardrails
 5. **Tool-call repair** (openclaw) — fixes malformed calls from weaker models
 
-Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom).
+Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, Ollama, custom).
 
 ## Key entry points
-- `kbcode/cli.py:797` — `main()` entry point, parses args, dispatches to wizard/init/REPL
-- `kbcode/cli.py:380` — `_repl()` the interactive chat loop
-- `kbcode/agent.py:37` — `Agent` class, the core tool-using loop
-- `kbcode/tools.py:48` — `Tools` class, all tool implementations + schemas
+- `kbcode/cli.py:327` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/repl.py:151` — `repl()` the interactive chat loop
+- `kbcode/agent.py:60` — `Agent` class, the core tool-using loop
+- `kbcode/tools/core.py:19` — `ToolsCore`/`Tools`, all tool implementations + schemas
+
+See [[architecture]] for the full component map and its "Deep dives" links into
+the `kb/features/` notes.
 
 ## How to run
 - `pip install -e .` (editable dev install) or `pip install git+https://github.com/johnmungandiall/kbcode.git`
 - `kbcode init` then `kbcode model` then `kbcode` (or `kb`)
-- Tests: no test suite found in repo
+- Tests: `pytest` (22 files under `tests/`, CI in `.github/workflows/ci.yml`)
+
+See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.4.2"`
+- `kbcode/__init__.py:9` — `__version__ = "1.6.1"`; release history in [[changelog]]
 
-See [[architecture]] for how the pieces fit, [[conventions]] for structure rules.
+last indexed: 2026-07-01
+
+See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
+[[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

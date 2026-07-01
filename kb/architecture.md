@@ -1,39 +1,49 @@
 # Architecture — the main pieces and how they fit.
 
 A single Python package (`kbcode/`) with one module per concern. The flow is:
-CLI → Config → Agent loop ↔ Provider ↔ Tools → project files.
+CLI → Config → Agent loop ↔ Provider ↔ Tools → project files. The design goal is
+**provider-agnostic**: one agent loop drives Claude or any OpenAI-compatible
+model unchanged (see [[providers]]).
 
 ## Components
 
 - `cli.py` — entry point + chat REPL + slash commands + `-C` / `init` / `/open`
 - `agent.py` — the agent loop (`Agent.run`), subagent delegation, `/insights`
-- `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC
-- `tools.py` — 12 tools (read/write/edit/list/search/run + kb/memory/todos/subagent)
-- `config.py` — `Config` dataclass, `load_config()`, provider presets, `~/.kbcode` settings
-- `modes.py` — `Mode` dataclass + 4 builtins + custom mode loader from `.kbcode/modes/`
-- `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md`
-- `knowledge_base.py` — `KnowledgeBase` class, scaffold templates, `check_pointers()` + `fix_pointers()`
+- `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC ([[providers]])
+- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `schemas.py` ([[tools-and-repair]])
+- `config.py` — `Config` dataclass, `load_config()`, provider presets, `~/.kbcode` settings ([[config]])
+- `modes.py` — `Mode` dataclass + 4 builtins + custom mode loader from `.kbcode/modes/` ([[modes-subagents]])
+- `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md` ([[modes-subagents]])
+- `knowledge_base.py` — `KnowledgeBase` class, scaffold templates, `check_pointers()` + `fix_pointers()` ([[context-management]])
 - `memory.py` — `Memory` class (SQLite), `remember`/`recall`/`save_skill`
 - `prompts.py` — `build_system_prompt()` assembles system message from base + standing orders + AGENT.md + kb + skills + memories
-- `sessions.py` — `SessionRecorder` (JSONL per chat), `list_sessions`, `load_session`, `lifetime_stats`
-- `compaction.py` — `compact()` summarizes old turns to stay within context window
-- `repair.py` — `promote()` recovers tool calls written as plain text
+- `sessions.py` — `SessionRecorder` (JSONL per chat), `list_sessions`, `load_session`, `lifetime_stats` ([[sessions]])
+- `compaction.py` — `compact()` summarizes old turns to stay within context window ([[context-management]])
+- `repair.py` — `promote()` recovers tool calls written as plain text ([[tools-and-repair]])
 - `pricing.py` — per-model USD cost tables for `/insights`
-- `permissions.py` — approval gating (Yes/Always/No menu)
-- `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback`
+- `permissions.py` — approval gating (Yes/Always/No menu) ([[safety]])
+- `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus)
 - `prompt_input.py` — `/` autocomplete + arrow-key menus (prompt_toolkit)
-- `images.py` — clipboard/file image loading + base64 encoding
-- `videos.py` — video file loading for auxiliary vision fallback
-- `vision_fallback.py` — describes images/video with a separate vision model
-- `redact.py` — regex secret redaction for tool output
-- `interrupt.py` — Esc key interrupt watcher (Windows + POSIX)
+- `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
+- `redact.py` — regex secret redaction for tool output ([[safety]])
+- `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` → `load_config()` → `_build_agent()` → `_repl()`
-2. User types a message → `Agent.run()` → `Agent._complete()` calls provider
-3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()`
+1. `main()` (`kbcode/cli.py:327`) → `load_config()` → `_build_agent()` → `_repl()` (`kbcode/repl.py:151`)
+2. User types a message → `Agent.run()` (`kbcode/agent.py:182`) → `Agent._complete()` (`kbcode/agent.py:102`) calls provider
+3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()` (`kbcode/tools/core.py:76`)
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 
-See [[overview]] for setup; [[conventions]] for structure rules.
+## Key invariant
+`Agent.messages` is normalized, never a provider's native shape (`raw` replays
+the native payload losslessly). Round-trip + alternating-turns must hold after
+any message-list surgery (compaction, subagent delegation) — see [[providers]].
+
+## Deep dives
+[[providers]] · [[vision]] · [[modes-subagents]] · [[sessions]] · [[config]] ·
+[[context-management]] · [[tools-and-repair]] · [[safety]]
+
+See [[overview]] for setup, [[conventions]] for structure rules, [[about-kb]]
+for how this KB is maintained.
