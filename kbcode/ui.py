@@ -129,7 +129,8 @@ def _describe_list_dir(a, g, full):
 
 def _describe_search_code(a, g, full):
     where = f"  in {g('path')}" if g("path") else ""
-    return "Search", f'"{g("pattern")}"{where}'
+    pat = _short(g("pattern"), 70)
+    return "Search", f'"{pat}"{where}'
 
 
 def _describe_run_command(a, g, full):
@@ -141,7 +142,8 @@ def _describe_kb_read(a, g, full):
 
 
 def _describe_kb_search(a, g, full):
-    return "KB search", f'"{g("query")}"'
+    q = _short(g("query"), 70)
+    return "KB search", f'"{q}"'
 
 
 def _describe_kb_write(a, g, full):
@@ -214,13 +216,21 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
         return str(a.get(key, "")).strip()
 
     def full(path: str) -> str:
-        """Resolve a path to its full location so the user sees *where* a file
-        actually is (the model usually passes a bare relative name)."""
+        """Resolve a path for display. Prefer a short relative path (cleaner
+        in the activity log); fall back to absolute only when outside root or
+        on error. Long absolutes (esp. on Windows) make actions hard to scan."""
         if not path or root is None:
             return path
         try:
             p = Path(path)
-            return str((p if p.is_absolute() else root / p).resolve())
+            base = root.resolve()
+            cand = p if p.is_absolute() else (base / p)
+            cand = cand.resolve()
+            try:
+                rel = cand.relative_to(base)
+                return str(rel)
+            except ValueError:
+                return str(cand)
         except (OSError, ValueError):
             return path
 
@@ -495,16 +505,48 @@ class TerminalUI:
             parts.append((f"  {detail}", "dim"))
         self.console.print(Text.assemble(*parts))
 
-    def tool_result(self, content: object, is_error: bool) -> None:
-        text = str(content).strip()
-        first = text.splitlines()[0] if text else ""
+    def tool_result(self, content: object, is_error: bool, *, name: str = "") -> None:
+        """Render a short summary of a tool's output.
+
+        For data tools (search/read/list) we show a clean count instead of
+        leaking the first raw code line or match into the activity log.
+        This keeps the visible action trace understandable to the user
+        ("agent searched 3 files, read 120 lines") without exposing internal
+        snippets that only the model needs.
+        """
+        text = str(content or "").strip()
         if is_error:
+            first = text.splitlines()[0] if text else ""
             self.console.print(Text("    ✗ " + _short(first, 160), style="red"))
             return
-        extra = text.count("\n")
-        summary = _short(first, 160) or "(done)"
-        if extra:
-            summary += f"   +{extra} more line{'s' if extra != 1 else ''}"
+
+        n = name or ""
+        if ":" in n:
+            n = n.rsplit(":", 1)[-1]
+        if n in ("search_code", "kb_search"):
+            # hits are "path:ln: text" lines; ignore notes
+            hits = [ln for ln in text.splitlines() if ln.strip() and not ln.strip().startswith("[")]
+            count = len(hits)
+            summary = f"{count} match{'es' if count != 1 else ''}" if count else "no matches"
+        elif n == "read_file":
+            count = text.count("\n") + 1 if text else 0
+            summary = f"{count} line{'s' if count != 1 else ''}"
+        elif n == "list_dir":
+            if "(empty)" in text or not text:
+                summary = "empty"
+            else:
+                count = text.count("\n") + 1
+                summary = f"{count} entr{'ies' if count != 1 else 'y'}"
+        elif n == "repo_map":
+            count = text.count("\n") + 1 if text else 0
+            summary = f"~{count} symbols"
+        else:
+            # write/edit/run/memory etc. — their returns are status messages
+            first = text.splitlines()[0] if text else ""
+            extra = text.count("\n")
+            summary = _short(first, 140) or "(done)"
+            if extra and n == "run_command":
+                summary += f"  (+{extra} lines)"
         self.console.print(Text("    ↳ " + summary, style="green dim"))
 
     def turn_summary(self, elapsed: float, actions: int, in_tokens: int, out_tokens: int) -> None:

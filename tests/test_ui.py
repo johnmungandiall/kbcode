@@ -152,3 +152,51 @@ def test_stream_chunk_from_worker_thread_stops_spinner():
         threading.Thread(target=stream, daemon=True).start()
         assert done.wait(2.0), "streaming worker deadlocked stopping the spinner"
         assert ui._active_status is None
+
+
+# -- tool_result summaries (UX clarity for "what is the agent doing?") ---------
+# Recent change: tool_result no longer leaks raw code / match lines.
+# It produces clean counts for data tools so the activity log is user-readable.
+
+def test_tool_result_search_shows_match_count():
+    ui = _silent_ui()
+    # normal hits
+    ui.tool_result("broker/k.py:10: foo\nsvc/s.py:22: bar\nnote", False, name="search_code")
+    # namespaced subagent
+    ui.tool_result("a:1: x\nb:2: y", False, name="code-explorer:search_code")
+    # no matches
+    ui.tool_result("(no matches)", False, name="kb_search")
+
+
+def test_tool_result_read_shows_line_count():
+    ui = _silent_ui()
+    # typical read_file return format (numbered\tlines)
+    content = "11\tdef foo():\n12\t    pass\n13\t# end"
+    ui.tool_result(content, False, name="read_file")
+
+
+def test_tool_result_list_and_repo_map():
+    ui = _silent_ui()
+    ui.tool_result("file1.py\nsubdir/\nfile2.py", False, name="list_dir")
+    ui.tool_result("header\nsym1\nsym2\nsym3", False, name="repo_map")
+    ui.tool_result("(empty)", False, name="list_dir")
+
+
+def test_tool_result_fallback_and_errors():
+    ui = _silent_ui()
+    # non-special tool shows first line of its status
+    ui.tool_result("wrote x.py (42 chars)\nextra", False, name="write_file")
+    ui.tool_result("Command output line 1\nline 2", False, name="run_command")
+    # error path
+    ui.tool_result("boom", True, name="search_code")
+
+
+def test_describe_search_truncates_long_patterns():
+    verb, target = _describe_tool(
+        "search_code",
+        {"pattern": "tok|trdSym|exSeg|prod|avgnetprice|buyAmt|sellAmt|flBuyQty|flSellQty|cfBuyQty|cfSellQty|lotSz|prc|qty|OrdNo|fldQty|trnsTp", "path": "broker/kotak"},
+        None,
+    )
+    assert verb == "Search"
+    assert len(target) < 120  # truncated
+    assert "…" in target or target.endswith('" in broker/kotak') or "in broker" in target

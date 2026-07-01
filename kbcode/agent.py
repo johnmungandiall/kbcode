@@ -334,7 +334,7 @@ class Agent:
                     else:
                         with self.ui.tool_running():
                             content, is_error = self._dispatch_tool(call.name, dict(call.input))
-                    self.ui.tool_result(content, is_error)
+                    self.ui.tool_result(content, is_error, name=call.name)
                     content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                     results.append({"id": call.id, "content": content, "is_error": is_error})
                     i += 1
@@ -380,7 +380,7 @@ class Agent:
                     f"Switch to a mode that allows it (e.g. /mode code) or use a read-only tool.",
                     True,
                 )
-            self.ui.tool_result(content, is_error)
+            self.ui.tool_result(content, is_error, name=call.name)
             content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
             results.append({"id": call.id, "content": content, "is_error": is_error})
         return results
@@ -431,7 +431,7 @@ class Agent:
                     f"Tool '{call.name}' is not available in {self.mode.name} mode.",
                     True,
                 )
-            self.ui.tool_result(content, is_error)
+            self.ui.tool_result(content, is_error, name=call.name)
             self.ui.notice(f"↳ subagent '{agent_name}' done.", style="cyan")
             results.append({"id": call.id, "content": content, "is_error": is_error})
         return results
@@ -486,7 +486,7 @@ class Agent:
             else:
                 with self.ui.tool_running():
                     content, is_error = self._dispatch_tool(name, dict(args))
-            self.ui.tool_result(content, is_error)
+            self.ui.tool_result(content, is_error, name=name)
             content = self._with_kb_reminder(name, dict(args), content, is_error)
             feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
         self._append({"role": "user", "content": "\n".join(feedback)})
@@ -672,7 +672,7 @@ class Agent:
                             with self.ui.tool_running():
                                 content, is_error = self._dispatch_tool(tname, dict(targs))
                         if not quiet:
-                            self.ui.tool_result(content, is_error)
+                            self.ui.tool_result(content, is_error, name=tname)
                         feedback.append(f"\n## {tname} [{'error' if is_error else 'ok'}]\n{content}")
                     messages.append({"role": "user", "content": "\n".join(feedback)})
                     continue
@@ -714,7 +714,7 @@ class Agent:
                     with self.ui.tool_running():
                         content, is_error = self._dispatch_tool(call.name, dict(call.input))
                 if not quiet:
-                    self.ui.tool_result(content, is_error)
+                    self.ui.tool_result(content, is_error, name=call.name)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
                 i += 1
             messages.append({"role": "tool_results", "results": results})
@@ -764,7 +764,7 @@ class Agent:
                     True,
                 )
             if not quiet:
-                self.ui.tool_result(content, is_error)
+                self.ui.tool_result(content, is_error, name=call.name)
             results.append({"id": call.id, "content": content, "is_error": is_error})
         return results
 

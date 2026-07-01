@@ -2,8 +2,16 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.11 (current)
+## v1.9.12
+- Release prep + polish:
+  - Added unit tests covering the new high-level `tool_result` summaries (search/read/list/repo_map) and long-pattern truncation in `_describe_tool`.
+  - Fixed stale version strings across docs (overview intro, README badge, KB pointers) for release hygiene.
+  - Direct execution verification + import smoke of UI/agent/tools for the recent changes.
+- **UX (from 1.9.11 carried)**: Agent activity log is now user-friendly: clean counts instead of raw internal code/match lines. Paths relative, patterns truncated. Users can finally tell what the agent is doing ("Search ... ↳ 7 matches", "Read foo.py:11+ ↳ 42 lines").
+
+## v1.9.11
 - `read_file` now supports `offset` (1-based) + `limit` for reading slices of large files. Range reads use efficient line-by-line streaming (no full file load) to avoid the old shell-chunking pattern (`powershell Get-Content | Select -Skip`). Still respects context budget and preserves original line numbers in output. Directly addresses step-limit issues on huge files (e.g. 2000+ line main.dart). UI display updated, tests added.
+- **UX: agent actions are now understandable at a glance**. Tool result lines no longer leak raw code snippets or match lines (`↳ def foo()...`). `search_code`/`read_file`/`list_dir` etc. now render high-level counts ("12 matches", "87 lines", "3 entries"). Long search patterns are truncated. Paths prefer relative (cleaner logs on Windows). The visible activity trace (`⏺ Search ... ↳ N matches`) now clearly communicates what the agent is exploring without exposing internal data.
 - Updated documentation in tools-and-repair.md, changelog, and overview.
 
 ## v1.9.10

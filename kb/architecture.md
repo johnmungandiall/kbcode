@@ -25,7 +25,7 @@ model unchanged (see [[providers]]).
 - `permissions.py` — approval gating (Yes/Always/No menu) ([[safety]])
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `hooks.py` — `HooksRunner`, user-scriptable PreToolUse/PostToolUse/Stop hooks from `settings.json` ([[safety]])
-- `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus)
+- `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus). Tool activity now uses clean high-level summaries (e.g. "Search ... → 5 matches", relative paths) so users can follow what the agent is doing without seeing raw code in the log.
 - `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video`, `PATH_COMMANDS`) + arrow-key menus (prompt_toolkit)
 - `logs.py` — `setup_logging()`: quiet rotating file log at `.kbcode/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
 - `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
