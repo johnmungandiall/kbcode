@@ -38,7 +38,14 @@ def interrupt_on_escape(enabled: bool = True):
     try:
         yield
     finally:
+        # Join, don't just signal: the watcher reads the console (Windows
+        # msvcrt.getwch) / holds the tty in cbreak mode (POSIX). If we returned
+        # while it's still alive, it would race the *next* prompt for stdin —
+        # stealing the first keystrokes so the user "can't type" after a reply,
+        # or leaving the terminal in cbreak. Its loop wakes every ~50ms, so a
+        # short join reliably lets it exit and release the terminal first.
         stop.set()
+        thread.join(timeout=0.5)
 
 
 def _make_watcher():

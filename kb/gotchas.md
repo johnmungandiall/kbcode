@@ -37,17 +37,29 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:225`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:226`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:124`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:413`) calls `_active_status.stop()`
-  (`kbcode/ui.py:238`, idempotent + thread-safe) on the first token, so from then on
-  only the worker thread prints. Don't re-introduce a spinner that stays live during
-  streaming.
+- Fix: `stream_chunk` (`kbcode/ui.py:415`) calls `_active_status.stop()`
+  (`kbcode/ui.py:239`) on the first token, so from then on only the worker thread
+  prints. Don't re-introduce a spinner that stays live during streaming.
+- `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
+  thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
+  `self._stop_lock` — without it both callers can pass the `_stopped` check and
+  tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:405`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:407`) is not used on the streaming path.
+
+## The Esc watcher must be JOINED at turn end, not just signalled
+- `interrupt_on_escape()` (`kbcode/interrupt.py:26`) runs a daemon thread that reads
+  the console (Windows `msvcrt.getwch`) / holds the tty in cbreak (POSIX). Its
+  `finally` does `stop.set()` **and** `thread.join(timeout=0.5)` (`kbcode/interrupt.py:47-48`).
+- The join is load-bearing: without it the watcher outlives the turn and races the
+  *next* prompt for stdin — stealing the user's first keystrokes so they "can't type
+  after a reply" (intermittent, ~50ms poll window), or leaving POSIX in cbreak. Don't
+  drop the join back to a bare `stop.set()`. Regression test: `tests/test_interrupt.py`.
 
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's

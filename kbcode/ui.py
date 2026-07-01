@@ -212,6 +212,7 @@ class _TickingStatus:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._stopped = False
+        self._stop_lock = threading.Lock()  # so worker + main thread can't tear down at once
 
     def _render(self, elapsed: float) -> str:
         text = f"[dim]{self._label}… {elapsed:.1f}s[/dim]"
@@ -242,15 +243,16 @@ class _TickingStatus:
         token arrives. If it didn't, the ticker's Rich ``Live`` redraw (every
         100ms) would race the raw streamed prints and shred the reply into
         trailing line-fragments (see [[gotchas]] streaming note)."""
-        if self._stopped:
-            return
-        self._stopped = True
-        self._stop.set()
-        if self._thread is not None:
-            self._thread.join(timeout=0.2)
-        self._status.__exit__(None, None, None)
-        if self._ui is not None and self._ui._active_status is self:
-            self._ui._active_status = None
+        with self._stop_lock:  # check-and-tear-down must be atomic across threads
+            if self._stopped:
+                return
+            self._stopped = True
+            self._stop.set()
+            if self._thread is not None:
+                self._thread.join(timeout=0.2)
+            self._status.__exit__(None, None, None)
+            if self._ui is not None and self._ui._active_status is self:
+                self._ui._active_status = None
 
     def __exit__(self, *exc):
         self.stop()

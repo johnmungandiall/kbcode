@@ -129,6 +129,15 @@ def _with_retry(fn, ui=None):
 
 
 class LLMProvider:
+    def _client_kwargs(self) -> dict:
+        """Shared constructor kwargs for the underlying SDK client. Adds an
+        explicit request timeout so a stalled model can't freeze the agent for
+        the SDK's ~10-minute default; 0 (KBCODE_REQUEST_TIMEOUT=0) opts out and
+        restores that default. Both the Anthropic and OpenAI SDK clients accept
+        a ``timeout`` kwarg (seconds)."""
+        timeout = getattr(self.config, "request_timeout", 0)
+        return {"timeout": timeout} if timeout and timeout > 0 else {}
+
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         raise NotImplementedError
 
@@ -163,7 +172,10 @@ class AnthropicProvider(LLMProvider):
                 import anthropic
             except ImportError as exc:  # pragma: no cover
                 raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
-            self._client = anthropic.Anthropic(api_key=self.config.api_key or None)
+            self._client = anthropic.Anthropic(
+                api_key=self.config.api_key or None,
+                **self._client_kwargs(),
+            )
         return self._client
 
     def _to_native(self, messages: list[dict]) -> list[dict]:
@@ -312,7 +324,11 @@ class OpenAICompatibleProvider(LLMProvider):
                 from openai import OpenAI
             except ImportError as exc:  # pragma: no cover
                 raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
-            self._client = OpenAI(api_key=self.config.api_key or "missing", base_url=self.config.base_url)
+            self._client = OpenAI(
+                api_key=self.config.api_key or "missing",
+                base_url=self.config.base_url,
+                **self._client_kwargs(),
+            )
         return self._client
 
     @staticmethod

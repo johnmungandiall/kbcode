@@ -11,6 +11,21 @@ the component list (existed in code, missing from the map) and documented the
 new `.claude/hooks/kb_*.py` enforcement hooks in `about-kb.md` (committed this
 session, undocumented). No other drift found.
 
+## Unreleased
+- Fix "agent freezes for minutes" on slow/stalled providers (esp. MiMo + a
+  subagent making many calls): the SDK clients were built with no request
+  timeout, so a stalled call inherited the SDK's ~600s default. Added
+  `Config.request_timeout` (default 120s, `KBCODE_REQUEST_TIMEOUT`, 0 = off),
+  passed to both provider clients via `LLMProvider._client_kwargs()`; the
+  resulting timeout is transient so `_with_retry` backs off and retries.
+- Fix "can't type after a reply" (intermittent, Windows-visible): the Esc
+  watcher (`interrupt_on_escape`) only signalled its daemon thread at turn end
+  without joining it, so the watcher kept reading the console and raced the next
+  prompt for stdin, eating the first keystrokes (POSIX: could leave cbreak). Now
+  it `thread.join()`s before returning. Also made `_TickingStatus.stop()`
+  lock-guarded so the worker + main thread can't tear the spinner's Rich `Live`
+  down at once. Regression test: `tests/test_interrupt.py`.
+
 ## v1.6.2 (current)
 - Fix streamed replies rendering as shredded line-fragments (only the tail of
   each line survived — hit tables and plain prose alike). The thinking spinner

@@ -1,16 +1,26 @@
 # Config — precedence, presets, project retargeting.
 
 ## Precedence
-`load_config()` (`kbcode/config.py:195`) resolves provider/model/base_url and the API
+`load_config()` (`kbcode/config.py:202`) resolves provider/model/base_url and the API
 key (via `.env`) as: **env vars > the project's `.kbcode`/.env > the launch
-folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:174`) > preset
+folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:181`) > preset
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
 never overrides an already-set value; `settings.json` is merged the opposite
-way (low->high, `kbcode/config.py:216-220`). The launch-folder and global fallbacks are
+way (low->high, `kbcode/config.py:224-227`). The launch-folder and global fallbacks are
 what let you configure kbcode once (`python -m kbcode model`, which saves to
 `~/.kbcode`) and then `-C` it at any project without re-entering the key there.
-`PRESETS` (`kbcode/config.py:26`) is the source of truth for built-in providers
+`PRESETS` (`kbcode/config.py:32`) is the source of truth for built-in providers
 (anthropic, openai, gemini, deepseek, openrouter, mimo, ollama, custom).
+
+## Tuning knobs (int env vars, via `_int()`)
+`KBCODE_MAX_TOKENS`, `KBCODE_COMPACT_TOKENS` (0 disables auto-compaction), and
+`KBCODE_REQUEST_TIMEOUT` — the per-request HTTP timeout in seconds
+(`DEFAULT_REQUEST_TIMEOUT = 120`, `kbcode/config.py:22`). Without it the SDK
+default (~600s) lets a stalled model freeze the whole turn for ten minutes —
+especially visible when a subagent makes many calls. `Config.request_timeout`
+(`kbcode/config.py:98`) flows into both provider clients via
+`LLMProvider._client_kwargs()` (see [[providers]]); set `KBCODE_REQUEST_TIMEOUT=0`
+to opt out and restore the SDK default.
 
 ## Project retargeting
 `Config` (`kbcode/config.py:87`) derives every path (`kbcode_dir`, `kb_dir`,

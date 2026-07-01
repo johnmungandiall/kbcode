@@ -19,6 +19,12 @@ DEFAULT_EFFORT = "high"
 # Auto-compact the chat once its history crosses this rough token estimate.
 # 0 disables it. Override with KBCODE_COMPACT_TOKENS.
 DEFAULT_COMPACT_TOKENS = 12000
+# Per-request HTTP timeout (seconds) for the provider call. Without this the
+# SDK default (~600s) lets a stalled model freeze the agent for ten minutes —
+# painfully visible when a subagent makes many calls. On timeout the request
+# fails fast and _with_retry backs off and retries. Override with
+# KBCODE_REQUEST_TIMEOUT; 0 restores the SDK default (no explicit timeout).
+DEFAULT_REQUEST_TIMEOUT = 120
 
 # Built-in providers. "anthropic" uses the Anthropic SDK; every other entry is
 # an OpenAI-compatible endpoint (so OpenAI, Gemini, DeepSeek, OpenRouter, etc.
@@ -97,6 +103,7 @@ class Config:
     max_tokens: int = DEFAULT_MAX_TOKENS
     effort: str = DEFAULT_EFFORT
     compact_threshold: int = DEFAULT_COMPACT_TOKENS
+    request_timeout: int = DEFAULT_REQUEST_TIMEOUT
     auto_approve: bool = False
 
     # --- derived paths -------------------------------------------------
@@ -240,6 +247,7 @@ def load_config(project_dir: Path | None = None) -> Config:
         max_tokens=_int("KBCODE_MAX_TOKENS", DEFAULT_MAX_TOKENS),
         effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
         compact_threshold=_int("KBCODE_COMPACT_TOKENS", DEFAULT_COMPACT_TOKENS),
+        request_timeout=_int("KBCODE_REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
     )
     config.use_provider(provider, model=model, base_url=base_url)
     return config
