@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.4.2-2ea44f)
+![Version](https://img.shields.io/badge/version-1.5.0-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 
@@ -130,7 +130,7 @@ without re-entering your key there. A project can still override with its own
 
 kbcode runs as a chat terminal in the style of Claude Code / Hermes: a header
 banner with your provider and model, and answers rendered as markdown. Tool
-calls show live as a readable verb + target — `⏺ Read kbcode/agent.py`,
+calls show live as a readable verb + the full resolved path — `⏺ Read D:\proj\kbcode\agent.py`,
 `⏺ Run $ pytest`, `⏺ Delegate → code-explorer` — each with an indented `↳`
 result preview (or a red `✗` on error). After every turn a dim footer reports
 `3 actions · ~1.5k tokens · 4.5s`, and `/status` shows a context-fullness bar
@@ -138,8 +138,10 @@ versus the auto-compact threshold. Approval prompts for risky actions are a
 **selectable Yes / Always / No menu** (↑/↓ + Enter, or press 1/2/3) — Claude Code
 style — falling back to a typed `y/N/a` prompt where no interactive menu is available.
 
-While a turn is running you can press **Esc** (or Ctrl-C) to interrupt it and drop
-back to the prompt — the spinner shows an `(Esc to interrupt)` hint.
+While a step is running, its spinner counts up so a slow tool call or model
+reply never looks stalled — e.g. `running… 3.2s  (total 8.1s)  (Esc to interrupt)` —
+showing both the current step's elapsed time and a running total for the whole
+turn. Press **Esc** (or Ctrl-C) any time to interrupt and drop back to the prompt.
 
 Type `/` and a **popup menu of commands** appears and filters as you type
 (arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names,
