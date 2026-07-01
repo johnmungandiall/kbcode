@@ -2,6 +2,18 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## v1.9.4 (current)
+- **Cursor-like speed improvements** (make kbcode feel much faster):
+  - `_PARALLEL_MAX_WORKERS` increased 8 → 16 (more concurrent reads).
+  - Added explicit "batch many tools together in one response" rule to the
+    core system prompt so the model uses parallelism aggressively.
+  - Rewrote the `code-explorer` subagent to be a fast parallel explorer
+    (strongly tells it to call 4-10 tools at once, Cursor-style).
+  - Documentation updated.
+
+  Result: fewer slow LLM round-trips during exploration and reading. Works
+  best with fast models (Claude, Gemini Flash, etc.).
+
 ## v1.9.3 (current)
 - **Parallel reads inside subagents + faster code-explorer** — subagents now
   batch consecutive `parallel_safe` tools (`read_file` + `list_dir` + `search_code`

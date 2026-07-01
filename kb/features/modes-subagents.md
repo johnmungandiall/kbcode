@@ -38,20 +38,18 @@ NOT qualify, since it also includes `recall`/`manage_todos`. This is the same
 path — see [[tools-and-repair]] for the full dispatch mechanics
 (`_run_subagents_parallel_batch`, `_quiet_dispatch`, the quiet-UI thread-local).
 
-**Making explorer subagents fast (e.g. code-explorer).** Subagents that do
-heavy listing/reading (like code exploration) still pay one full model
-round-trip per batch of tool calls. Inside `_run_subagent`, consecutive
-`parallel_safe` tools (read_file, list_dir, search_code, etc.) are already
-dispatched concurrently via `_run_subagent_parallel_batch`. To benefit:
+**Making explorer subagents Cursor-fast.** Subagents that explore pay one
+model round-trip per batch. Inside `_run_subagent`, consecutive parallel_safe
+tools are batched and run concurrently (up to 16 at a time with
+_PARALLEL_MAX_WORKERS). To achieve high speed:
 
-- Declare a narrow `tools:` list using only parallel-safe tools
-  (`tools: read_file, list_dir, search_code, kb_read, kb_search`).
-- In the instructions, explicitly tell the subagent to request several
-  reads together in one step ("call multiple tools in a single response").
-  Default `tools: read` includes `recall`/`manage_todos` and does not
-  encourage batching.
+- Use a narrow `tools:` list limited to parallel-safe tools only.
+- In the subagent instructions, *explicitly* tell it to batch many reads in
+  a single response (e.g. "call 5-10 tools together in one step").
+- The built-in `code-explorer` now does this aggressively.
 
-See the built-in `.kbcode/agents/code-explorer.md` as the recommended pattern.
+Higher parallelism (16 workers) + strong batching instructions = much fewer
+slow LLM turns, closer to Cursor responsiveness on the same model.
 
 ## Standing orders
 `build_system_prompt()` (`kbcode/prompts.py:41`) injects an optional `standing_orders`

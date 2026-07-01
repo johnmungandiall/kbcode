@@ -14,6 +14,8 @@
 - `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:47`)
 - `kbcode --version` — show version; single source is `kbcode.__version__`
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
+- For maximum speed (Cursor-like): use a fast model + give narrow tasks.
+  kbcode now aggressively batches parallel reads (16 workers + prompt rules).
 - `pytest` — run the test suite (`tests/`, 22 files); `python -m py_compile
   kbcode/*.py` for a fast syntax-only check
 

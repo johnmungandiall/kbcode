@@ -57,7 +57,7 @@ _EMERGENCY_STOP_MULTIPLIER = 3
 # which touch Memory's connection / todos state), so a subagent must be
 # authored with an explicit, narrow tool list to opt in. Anything broader
 # (any write/exec tool, or `tools: None` = every tool) stays sequential.
-_PARALLEL_MAX_WORKERS = 8
+_PARALLEL_MAX_WORKERS = 16
 
 # KB lifecycle hooks (the claude-kb idea): distinct from the general,
 # user-configurable PreToolUse/PostToolUse/Stop hooks in hooks.py — these two

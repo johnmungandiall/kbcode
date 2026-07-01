@@ -104,10 +104,11 @@
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
 - Inside subagents, consecutive parallel-safe reads are now batched too
-  (`_run_subagent_parallel_batch`). Explorer subagents should declare narrow
-  `tools:` lists (no `recall`/`manage_todos`) + be told to emit multiple reads
-  per step, otherwise they still do many slow sequential LLM calls. See
-  updated `code-explorer.md` and [[modes-subagents]].
+  (`_run_subagent_parallel_batch`, up to 16 workers). To get Cursor-like speed,
+  explorer subagents must declare narrow parallel-only `tools:` lists and be
+  strongly instructed to batch many reads per LLM response (see updated
+  `code-explorer.md` and [[modes-subagents]]). The system prompt now tells the
+  main agent the same rule.
 
 ## Displaying a path relative to root breaks outside the project
 - `kbcode/tools/file.py:255` — `_tool_search_code` formats each hit through
