@@ -9,6 +9,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   - `code-explorer` subagent now explicitly includes `repo_map` and stronger instructions.
   - More examples and emphasis in core system prompt for scoped, efficient searches (e.g., broker comparisons).
   - Updated documentation in gotchas and tools-and-repair.
+- `read_file` now accepts optional `offset` (1-based line) and `limit` (line count). This lets agents read slices of huge files (e.g. 2000+ line main.dart) directly instead of resorting to `run_command` + `Get-Content | Select -Skip`. Still respects the shrinking context budget. Updated UI display and tests.
 
 - Previous anti-loop and interrupt fixes from 1.9.9 carried forward.
 

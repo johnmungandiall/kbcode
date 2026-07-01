@@ -110,17 +110,57 @@ class FileToolsMixin:
 
     # --- file tools ----------------------------------------------------
     def _tool_read_file(self, inp: dict) -> str:
-        """Return the file as ``line\\ttext``, redacted and truncated to the current read budget."""
+        """Return the file as ``line\\ttext``.
+
+        Supports optional 'offset' (1-based) and 'limit' (line count) for
+        reading only a slice of large files. The char budget still applies to
+        the final returned text (range reads are preferred for huge files).
+        Original line numbers are preserved in the output.
+
+        When a range is requested, lines are read incrementally without loading
+        the entire file (avoids OOM / waste on giant files + Skip 1950 style reads).
+        """
         p = self._resolve(inp["path"])
         if not p.exists():
             raise ValueError(f"No such file: {inp['path']}")
-        text = p.read_text(encoding="utf-8", errors="replace")
-        limit = self._read_limit()
-        if len(text) > limit:
-            text = text[:limit] + "\n[...file truncated...]"
-        text, redacted = redact_with_count(text, code_file=True)
-        lines = text.splitlines()
-        out = "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
+
+        offset = inp.get("offset")
+        line_limit = inp.get("limit")  # lines to read, not char limit
+        char_limit = self._read_limit()
+
+        if offset is not None or line_limit is not None:
+            # Efficient range read: stream lines, skip prefix, stop early.
+            # This directly solves the previous "powershell Get-Content -Skip 1950" pattern.
+            start_line = max(1, (offset or 1))
+            max_lines = line_limit if line_limit is not None else None
+
+            numbered_parts = []
+            try:
+                with open(p, "r", encoding="utf-8", errors="replace") as f:
+                    for i, raw in enumerate(f, 1):
+                        if i < start_line:
+                            continue
+                        if max_lines is not None and len(numbered_parts) >= max_lines:
+                            break
+                        line = raw.rstrip("\n\r")
+                        numbered_parts.append(f"{i}\t{line}")
+            except OSError as exc:
+                raise ValueError(f"Failed to read {inp['path']}: {exc}") from exc
+
+            out = "\n".join(numbered_parts)
+        else:
+            # Full file path (kept for small files and simplicity)
+            text = p.read_text(encoding="utf-8", errors="replace")
+            lines = text.splitlines()
+            out = "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
+
+        # Apply char budget truncation (on the produced output)
+        truncated = False
+        if len(out) > char_limit:
+            out = out[:char_limit] + "\n[...file truncated...]"
+            truncated = True
+
+        out, redacted = redact_with_count(out, code_file=True)
         return self._note_redactions(out, redacted)
 
     def _tool_write_file(self, inp: dict) -> str:

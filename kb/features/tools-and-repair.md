@@ -39,6 +39,8 @@ raise `ValueError`, which would abort the tool (search hits used to do this; see
 Tools: `read/write/edit/edit_files/list/search/run` + `kb_read/kb_write` +
 `remember/recall/save_skill` + `manage_todos` + `web_search` + `repo_map`
 
+`read_file` supports optional `offset` (1-based) + `limit` (lines) for reading slices of large files without shell chunking or full loads.
+
 New tools `repo_map` (structural overview) and `edit_files` (multi-file edits) were added inspired by Aider and Zed after studying their references. Use `repo_map` early for exploration and `edit_files` for coordinated changes across files.
 
 `edit_files` allows the agent to propose coordinated changes across several files
@@ -49,8 +51,8 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:171`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:153`).
+directly; `_describe_tool()` (`kbcode/ui.py:197`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:176`).
 
 ## Parallel-safe tools (#4.3)
 Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batch`,
@@ -96,7 +98,7 @@ since it can now be called from multiple subagent pool threads at once — see
 [[modes-subagents]].
 
 ## Date-awareness for `web_search`
-`build_system_prompt()` (`kbcode/prompts.py:41`) stamps a `## Current date &
+`build_system_prompt()` (`kbcode/prompts.py:42`) stamps a `## Current date &
 time` section with `datetime.now()` (injectable via a `now:` kwarg for tests)
 and tells the model its training data can be stale — don't guess a
 training-cutoff-era date, and use `web_search` for anything time-sensitive

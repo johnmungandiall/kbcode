@@ -11,7 +11,7 @@
 - `kbcode init` — scaffold project (AGENT.md + kb/ + .kbcode/)
 - `kbcode -c` — continue most recent saved session
 - `kbcode --resume` — pick from past sessions
-- `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:47`)
+- `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:48`)
 - `kbcode --version` — show version; single source is `kbcode.__version__`
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.

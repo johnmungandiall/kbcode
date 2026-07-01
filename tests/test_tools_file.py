@@ -189,3 +189,89 @@ def test_list_dir_on_a_file_raises(tmp_path):
     (tools.root / "a.txt").write_text("x", encoding="utf-8")
     with pytest.raises(ValueError, match="Not a directory"):
         tools._tool_list_dir({"path": "a.txt"})
+
+
+# --- read_file with offset/limit (range reads for large files) ------------
+
+def test_read_file_with_offset_and_limit(tmp_path):
+    perm = _RecordingPermissions()
+    tools = _make_tools(tmp_path, perm)
+    content = "\n".join(f"line{i}" for i in range(1, 21))  # 20 lines
+    (tools.root / "big.py").write_text(content, encoding="utf-8")
+
+    out = tools._tool_read_file({"path": "big.py", "offset": 5, "limit": 3})
+
+    # Should show original line numbers
+    assert "5\tline5" in out
+    assert "6\tline6" in out
+    assert "7\tline7" in out
+    assert "4\t" not in out
+    assert "8\t" not in out
+
+
+def test_read_file_offset_only(tmp_path):
+    perm = _RecordingPermissions()
+    tools = _make_tools(tmp_path, perm)
+    content = "\n".join(f"L{i}" for i in range(1, 11))
+    (tools.root / "f.txt").write_text(content, encoding="utf-8")
+
+    out = tools._tool_read_file({"path": "f.txt", "offset": 8})
+
+    lines = out.splitlines()
+    assert lines[0].startswith("8\tL8")
+    assert lines[-1].startswith("10\tL10")
+
+
+def test_read_file_limit_only(tmp_path):
+    perm = _RecordingPermissions()
+    tools = _make_tools(tmp_path, perm)
+    content = "\n".join(f"row{i}" for i in range(1, 21))
+    (tools.root / "data.txt").write_text(content, encoding="utf-8")
+
+    out = tools._tool_read_file({"path": "data.txt", "limit": 4})
+
+    lines = out.splitlines()
+    assert len(lines) == 4
+    assert lines[0].startswith("1\trow1")
+    assert lines[3].startswith("4\trow4")
+
+
+def test_read_file_offset_beyond_end(tmp_path):
+    perm = _RecordingPermissions()
+    tools = _make_tools(tmp_path, perm)
+    (tools.root / "short.txt").write_text("a\nb\nc", encoding="utf-8")
+
+    out = tools._tool_read_file({"path": "short.txt", "offset": 100, "limit": 5})
+
+    # Should return empty or just marker, but not crash
+    assert out.strip() == "" or "[...truncated...]" in out or "100\t" not in out
+
+
+def test_read_file_range_respects_budget(tmp_path):
+    """Range read should still be truncated by the active context budget."""
+    tools = _make_tools(tmp_path)  # uses Permissions(auto_approve=True)
+    # 10 lines of 200 chars each = ~2000 chars + line nums
+    lines = ["x" * 200 for _ in range(10)]
+    (tools.root / "large.txt").write_text("\n".join(lines), encoding="utf-8")
+
+    # Set a tight budget
+    tools.context_budget_chars = 300
+    out = tools._tool_read_file({"path": "large.txt", "offset": 2, "limit": 8})
+
+    assert "[...truncated...]" in out
+    # Should have started from original line 2
+    assert out.startswith("2\t") or "\n2\t" in out
+
+
+def test_read_file_range_and_full_have_consistent_line_numbers(tmp_path):
+    perm = _RecordingPermissions()
+    tools = _make_tools(tmp_path, perm)
+    (tools.root / "nums.txt").write_text("one\ntwo\nthree\nfour\nfive", encoding="utf-8")
+
+    full = tools._tool_read_file({"path": "nums.txt"})
+    part = tools._tool_read_file({"path": "nums.txt", "offset": 3, "limit": 2})
+
+    assert "3\tthree" in part
+    assert "4\tfour" in part
+    # Full file also has correct numbers
+    assert full.splitlines()[2].startswith("3\tthree")

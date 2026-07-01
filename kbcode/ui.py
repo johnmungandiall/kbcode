@@ -93,7 +93,26 @@ def _context_bar(tokens: int, limit: int, segments: int = 5) -> str:
 # `g(key)` reads a stringified/stripped arg; `full(path)` resolves it to where
 # the file actually lives (the model usually passes a bare relative name).
 def _describe_read_file(a, g, full):
-    return "Read", full(g("path"))
+    path = full(g("path"))
+    off = a.get("offset")
+    lim = a.get("limit")
+    if off or lim:
+        try:
+            o = int(off) if off else None
+            l = int(lim) if lim else None
+        except (TypeError, ValueError):
+            o = l = None
+        if o and l:
+            rng = f"{o}-{o + l - 1}"
+        elif o:
+            rng = f"{o}+"
+        elif l:
+            rng = f"1-{l}"
+        else:
+            rng = None
+        if rng:
+            path = f"{path}:{rng}"
+    return "Read", path
 
 
 def _describe_write_file(a, g, full):

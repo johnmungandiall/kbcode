@@ -20,7 +20,7 @@ BASE_SCHEMAS: list[dict] = [
     {
         "name": "read_file",
         "parallel_safe": True,
-        "description": "Read a text file from the project. Use this before editing a file.",
+        "description": "Read a text file from the project. Use this before editing a file. For large files, use 'offset' (1-based starting line) and 'limit' (number of lines) to read only a portion instead of the whole file.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -30,7 +30,17 @@ BASE_SCHEMAS: list[dict] = [
                         "Relative paths are anchored to the project root; absolute "
                         "paths are honored as given."
                     ),
-                }
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "1-based line number to start reading from. Optional. Use with 'limit' for large files.",
+                    "minimum": 1,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to read (after offset). Optional. Use with 'offset' for large files.",
+                    "minimum": 1,
+                },
             },
             "required": ["path"],
         },

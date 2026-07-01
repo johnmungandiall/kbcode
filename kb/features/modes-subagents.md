@@ -12,7 +12,7 @@ notes), `ask` (read-only). Custom modes load from `.kbcode/modes/*.md` via
 `load_custom_modes()` (`kbcode/modes.py:102`).
 
 ## Subagents delegate into a fresh context
-`load_subagents()` (`kbcode/subagents.py:52`) reads `.kbcode/agents/*.md` (same
+`load_subagents()` (`kbcode/subagents.py:53`) reads `.kbcode/agents/*.md` (same
 frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:42`).
 `Agent.__init__` (`kbcode/agent.py:73`) wires `tools.subagents` and `tools.delegate = self
 ._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:48`) conditionally
@@ -52,7 +52,7 @@ Higher parallelism (16 workers) + strong batching instructions = much fewer
 slow LLM turns, closer to Cursor responsiveness on the same model.
 
 ## Standing orders
-`build_system_prompt()` (`kbcode/prompts.py:41`) injects an optional `standing_orders`
+`build_system_prompt()` (`kbcode/prompts.py:42`) injects an optional `standing_orders`
 string (from `.kbcode/standing-orders.md`) right after the base rules, so it
 takes priority. `cli._build_agent` (`kbcode/cli.py:111`) ignores the untouched scaffold
 template (`_STANDING_ORDERS_TEMPLATE`, `kbcode/cli.py:81`) so its examples never become

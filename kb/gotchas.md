@@ -175,7 +175,7 @@
   the env var name alone would silently 401 — see [[vision]]
 
 ## `kbcode update` needs force-reinstall; bump `__version__` every release
-- `kbcode/cli.py:47` — `_self_update()` installs from a moving git branch, not a
+- `kbcode/cli.py:48` — `_self_update()` installs from a moving git branch, not a
   pinned commit. A bare `pip install --upgrade git+URL` is a **silent no-op**
   when `__version__` is unchanged: pip sees the same version already installed
   and skips, so a fix pushed to GitHub without a version bump never reaches
