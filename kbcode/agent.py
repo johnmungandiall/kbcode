@@ -24,6 +24,14 @@ from .ui import TerminalUI
 _MAX_STEPS = 50  # safety cap on tool round-trips per user message
 _SUBAGENT_MAX_STEPS = 30  # a delegated task gets its own, smaller budget
 
+# KB lifecycle hooks (the claude-kb idea): kbcode has no external hook-config
+# file, so the two hooks claude-kb installs into .claude/settings.json —
+# PostToolUse (remind to update kb/ after an edit) and Stop (block once on kb/
+# drift) — are baked in here as default agent-loop behavior instead.
+_KB_WRITE_TOOLS = {"write_file", "edit_file"}
+_KB_REMINDER_SKIP_DIRS = ("/kb/", "/.kbcode/", "/.git/", "/node_modules/")
+_KB_REMINDER_SKIP_NAMES = {"agent.md", "memory.md", "readme.md"}
+
 
 class Agent:
     def __init__(
@@ -46,6 +54,12 @@ class Agent:
         self.messages: list[dict] = []
         # Cumulative token spend this run, for /insights.
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
+        # KB lifecycle hooks state: the reminder fires once per session (like
+        # claude-kb's session-scoped marker file); the drift check resets every
+        # turn (see run()).
+        self._kb_reminder_done = False
+        self._kb_touched_this_run = False
+        self._kb_drift_checked = False
         # Subagent delegation (Claude Code idea): expose it to the tools layer.
         self.subagents = subagents or {}
         self.tools.subagents = self.subagents
@@ -102,6 +116,8 @@ class Agent:
         start = time.perf_counter()
         before = dict(self.usage)
         actions = 0
+        self._kb_touched_this_run = False
+        self._kb_drift_checked = False
 
         for _ in range(_MAX_STEPS):
             with self.ui.thinking():
@@ -127,6 +143,8 @@ class Agent:
                     actions += self._run_promoted(promoted)
                     continue
                 self.ui.assistant_text(resp.text)
+                if self._kb_drift_feedback():
+                    continue
                 self._turn_summary(start, actions, before)
                 return
 
@@ -145,6 +163,7 @@ class Agent:
                 else:
                     content, is_error = self.tools.execute(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
+                content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
             self.messages.append({"role": "tool_results", "results": results})
 
@@ -179,9 +198,64 @@ class Agent:
             else:
                 content, is_error = self.tools.execute(name, dict(args))
             self.ui.tool_result(content, is_error)
+            content = self._with_kb_reminder(name, dict(args), content, is_error)
             feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
         self.messages.append({"role": "user", "content": "\n".join(feedback)})
         return len(promoted)
+
+    def _with_kb_reminder(self, name: str, args: dict, content: str, is_error: bool) -> str:
+        """PostToolUse idea (claude-kb): after a successful edit outside kb/,
+        remind the model (once per session) to keep the affected kb/ note in
+        sync — instead of relying on it to remember the auto-maintain rule."""
+        if is_error or name not in _KB_WRITE_TOOLS:
+            return content
+        path_arg = args.get("path")
+        if not path_arg:
+            return content
+        # Track "touched" independently of whether the reminder already fired
+        # this session — the drift check (below) must still run every turn.
+        self._kb_touched_this_run = True
+        if self._kb_reminder_done:
+            return content
+        norm = "/" + path_arg.replace("\\", "/").lower().lstrip("/")
+        base = norm.rsplit("/", 1)[-1]
+        if any(d in norm for d in _KB_REMINDER_SKIP_DIRS) or base in _KB_REMINDER_SKIP_NAMES:
+            return content
+        self._kb_reminder_done = True
+        reminder = (
+            f"[kb reminder] You just changed `{path_arg}`. Before finishing this turn, "
+            "update the affected kb/ note(s) — refresh any path:line pointers and changed "
+            "behavior — so the knowledge base doesn't drift from the code."
+        )
+        self.ui.notice(reminder, style="yellow")
+        return f"{content}\n\n{reminder}"
+
+    def _kb_drift_feedback(self) -> bool:
+        """Stop idea (claude-kb): before a turn that touched files actually
+        ends, verify kb/ pointers still resolve. Nudges back into the loop
+        ONCE per turn on drift (never loops, and never fires on turns that
+        didn't touch files) so the model fixes it before finishing.
+        """
+        if self._kb_drift_checked or not self._kb_touched_this_run:
+            return False
+        self._kb_drift_checked = True
+        problems = self.tools.kb.check_pointers(self.tools.root)
+        if not problems:
+            return False
+        detail = "\n".join(f"- {p}" for p in problems)
+        self.ui.notice("kb/ drift detected before finishing — asking the model to fix it.", style="yellow")
+        self.messages.append(
+            {
+                "role": "user",
+                "content": (
+                    "KB drift detected before you finish: some kb/ pointers no longer resolve.\n"
+                    f"{detail}\n"
+                    "Fix the affected kb/ note(s) now (or run kb tools to relocate the pointer), "
+                    "then finish."
+                ),
+            }
+        )
+        return True
 
     def _turn_summary(self, start: float, actions: int, before: dict) -> None:
         self.ui.turn_summary(
@@ -282,6 +356,7 @@ class Agent:
 
     def reset(self) -> None:
         self.messages.clear()
+        self._kb_reminder_done = False
 
     def _maybe_compact(self) -> None:
         """Auto-summarize old turns once the transcript crosses the threshold."""
