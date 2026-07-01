@@ -2,7 +2,15 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.6.0 (current)
+## v1.6.1 (current)
+- Fix packaging: `pyproject.toml` only declared the top-level `kbcode`
+  package, so the `tools/` subpackage (split out of `tools.py` in v1.6.0)
+  was silently missing from every `pip install`, making `kbcode`/`kb` crash
+  on launch with `ModuleNotFoundError: No module named 'kbcode.tools'`.
+  Switched to `[tool.setuptools.packages.find]` so all `kbcode*` subpackages
+  are always included.
+
+## v1.6.0
 - pytest suite (~211 tests) + GitHub Actions CI across Python 3.10/3.12 on
   Ubuntu/Windows.
 - Streaming responses for both Anthropic and OpenAI-compatible providers

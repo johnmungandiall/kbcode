@@ -38,8 +38,8 @@ Issues = "https://github.com/johnmungandiall/kbcode/issues"
 kbcode = "kbcode.cli:main"
 kb = "kbcode.cli:main"
 
-[tool.setuptools]
-packages = ["kbcode"]
+[tool.setuptools.packages.find]
+include = ["kbcode*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "kbcode.__version__" }
