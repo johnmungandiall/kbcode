@@ -13,6 +13,7 @@ from kbcode.config import Config
 from kbcode.knowledge_base import KnowledgeBase
 from kbcode.memory import Memory
 from kbcode.tools import Tools
+from kbcode.tools.file import _MAX_COMMANDS_PER_TURN
 
 
 class _RecordingPermissions:
@@ -81,7 +82,7 @@ def test_execute_surfaces_dangerous_command_as_tool_error(tmp_path):
 def test_run_command_rate_limit_allows_up_to_the_cap(tmp_path):
     perm = _RecordingPermissions(allow=True)
     tools = _make_tools(tmp_path, perm)
-    for _ in range(10):
+    for _ in range(_MAX_COMMANDS_PER_TURN):
         out = tools._tool_run_command({"command": "echo hi"})
         assert "exit code: 0" in out
 
@@ -89,7 +90,7 @@ def test_run_command_rate_limit_allows_up_to_the_cap(tmp_path):
 def test_run_command_rate_limit_blocks_beyond_the_cap(tmp_path):
     perm = _RecordingPermissions(allow=True)
     tools = _make_tools(tmp_path, perm)
-    for _ in range(10):
+    for _ in range(_MAX_COMMANDS_PER_TURN):
         tools._tool_run_command({"command": "echo hi"})
     with pytest.raises(ValueError, match="safety limit"):
         tools._tool_run_command({"command": "echo hi"})
@@ -98,7 +99,7 @@ def test_run_command_rate_limit_blocks_beyond_the_cap(tmp_path):
 def test_run_command_rate_limit_resets_on_new_turn(tmp_path):
     perm = _RecordingPermissions(allow=True)
     tools = _make_tools(tmp_path, perm)
-    for _ in range(10):
+    for _ in range(_MAX_COMMANDS_PER_TURN):
         tools._tool_run_command({"command": "echo hi"})
     tools.new_turn()
     out = tools._tool_run_command({"command": "echo hi"})  # doesn't raise

@@ -2,7 +2,23 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.1 (current)
+## v1.9.2 (current)
+- **Parallel reads inside subagents + faster code-explorer** — subagents now
+  batch consecutive `parallel_safe` tools (`read_file` + `list_dir` + `search_code`
+  etc.) using `_run_subagent_parallel_batch`, the same way the main loop does.
+  Updated default `.kbcode/agents/code-explorer.md` to use a narrow parallel-safe
+  tool list and explicit instructions to request multiple reads together. This
+  greatly reduces LLM round-trips for exploration tasks on slow models.
+  Documentation updated in [[modes-subagents]] and `subagents.py`.
+- **Higher `run_command` safety cap** (`kbcode/tools/file.py`) — raised
+  `_MAX_COMMANDS_PER_TURN` from 10 to 25 so realistic build/check/fix
+  workflows ("flutter analyze", multi-step verification, logs + retries, etc.)
+  no longer immediately hit the "runaway loop guard" and force an early turn
+  wrap-up. The guard and the "wrap up and continue in next message" message
+  remain for true loops. Tests now import the constant to avoid drift; README
+  and [[gotchas]] updated. (User-visible fix → version bump per rules.)
+
+## v1.9.1
 - **`kbcode update` now actually delivers new code** (`kbcode/cli.py`
   `_self_update`) — the old command ran a bare `pip install --upgrade
   git+URL`, which pip treats as "already satisfied" (a silent no-op) whenever

@@ -366,7 +366,7 @@ your request
 > `[kbcode redacted 1 likely secret from this output]`. Turn redaction off with
 > `KBCODE_REDACT_SECRETS=false` if you need raw values. Commands matching an
 > outright destructive pattern (`rm -rf /`, a fork bomb, `format C:`, …) are
-> **refused outright**, no prompt; a run-away loop is also capped at 10
+> **refused outright**, no prompt; a run-away loop is also capped at 25
 > `run_command` calls per turn. Writing to somewhere that looks like an OS
 > directory (`C:\Windows`, `/etc`, …) still asks, but the prompt flags it in
 > **bold** so it's hard to miss. And before it edits or runs anything, it

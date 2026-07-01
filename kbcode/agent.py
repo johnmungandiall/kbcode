@@ -672,7 +672,24 @@ class Agent:
                 return resp.text or "(subagent returned no text)", False
 
             results = []
-            for call in resp.tool_calls:
+            calls = resp.tool_calls
+            parallel_safe = self.tools.parallel_safe_tools
+            i = 0
+            while i < len(calls):
+                call = calls[i]
+                # A run of 2+ consecutive read-safe calls runs concurrently —
+                # the same #4.3 batch Agent.run does at the top level, now
+                # scoped to a subagent turn too (via _run_subagent_parallel_batch).
+                # Critical for slow models: a code-explorer can now read many
+                # files/directories in one model round-trip instead of one-by-one.
+                # See also the narrow tools: list + instructions in code-explorer.md.
+                if call.name in parallel_safe and i + 1 < len(calls) and calls[i + 1].name in parallel_safe:
+                    j = i + 1
+                    while j < len(calls) and calls[j].name in parallel_safe:
+                        j += 1
+                    results.extend(self._run_subagent_parallel_batch(sub, name, calls[i:j], quiet))
+                    i = j
+                    continue
                 if not quiet:
                     self.ui.tool_call(f"{name}:{call.name}", dict(call.input))
                 if call.name == "run_subagent":
@@ -690,9 +707,57 @@ class Agent:
                 if not quiet:
                     self.ui.tool_result(content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
+                i += 1
             messages.append({"role": "tool_results", "results": results})
 
         return f"Subagent '{name}' hit its step limit before finishing.", True
+
+    def _run_subagent_parallel_batch(self, sub: Subagent, name: str, calls: list, quiet: bool) -> list[dict]:
+        """Run a run of consecutive read-safe tool calls from *inside* a
+        subagent concurrently — the same #4.3 batch _run_parallel_batch does
+        at the top level, scoped to one subagent turn. Only parallel_safe
+        tools reach here (no writes / Memory / todos touched off-thread), so
+        it carries the same thread-safety guarantee. Call/result lines render
+        afterward in the model's original order.
+
+        When ``quiet`` (this subagent is itself running inside a parallel
+        subagent batch — see _run_subagents_parallel_batch), it must NOT open
+        its own ui.working() spinner: a second Rich Live region can't coexist
+        with the parent batch's. It runs the pool silently instead, like the
+        rest of the quiet path.
+        """
+        allowed = [c for c in calls if sub.allows(c.name)]
+        outcomes: dict[str, tuple[str, bool]] = {}
+        if allowed:
+            def _pool() -> None:
+                with ThreadPoolExecutor(max_workers=min(_PARALLEL_MAX_WORKERS, len(allowed))) as pool:
+                    future_to_call = {
+                        pool.submit(self._dispatch_tool, c.name, dict(c.input)): c for c in allowed
+                    }
+                    for future, call in future_to_call.items():
+                        outcomes[call.id] = future.result()
+
+            if quiet:
+                _pool()
+            else:
+                with self.ui.working(f"{name}: running {len(allowed)} reads in parallel"):
+                    _pool()
+
+        results = []
+        for call in calls:
+            if not quiet:
+                self.ui.tool_call(f"{name}:{call.name}", dict(call.input))
+            if call.id in outcomes:
+                content, is_error = outcomes[call.id]
+            else:
+                content, is_error = (
+                    f"Tool '{call.name}' is not allowed for the '{name}' subagent.",
+                    True,
+                )
+            if not quiet:
+                self.ui.tool_result(content, is_error)
+            results.append({"id": call.id, "content": content, "is_error": is_error})
+        return results
 
     def reset(self) -> None:
         self.messages.clear()

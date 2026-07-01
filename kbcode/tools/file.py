@@ -39,7 +39,7 @@ _SYSTEM_PATH_PREFIXES = (
 
 # Safety rail (#6.1/#6.4): a runaway loop firing dozens of shell commands in one
 # turn, or an outright destructive one, should be caught before it runs.
-_MAX_COMMANDS_PER_TURN = 10
+_MAX_COMMANDS_PER_TURN = 25
 _DANGEROUS_COMMAND_PATTERNS = [
     re.compile(r"\brm\s+(-\w*r\w*f\w*|-\w*f\w*r\w*)\s+/(\s|$)"),  # rm -rf /
     re.compile(r"\brm\s+(-\w*r\w*f\w*|-\w*f\w*r\w*)\s+/\*"),  # rm -rf /*

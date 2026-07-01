@@ -25,9 +25,10 @@ schema-declared parallel-safe tools (``read_file``, ``list_dir``,
 ``tools/schemas.py``). The default ``tools: read`` shown above does NOT
 qualify, since it also includes ``recall``/``manage_todos``, which touch
 state that isn't thread-safe to share. Narrow a subagent's ``tools:`` to
-just the read-only tools it needs (e.g. ``tools: read_file, search_code``)
-to make it eligible for concurrent dispatch; see
-:meth:`Agent._subagent_parallel_safe`.
+just the read-only tools it needs (e.g. ``tools: read_file, list_dir, search_code``)
+to make it eligible for concurrent dispatch *and* for fast internal batching of
+reads inside its own loop (see `_run_subagent_parallel_batch` in agent.py).
+See :meth:`Agent._subagent_parallel_safe`.
 """
 
 from __future__ import annotations

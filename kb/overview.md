@@ -1,6 +1,6 @@
 # Overview
 
-**kbcode** is a terminal-based AI coding agent (v1.9.1) that blends five ideas
+**kbcode** is a terminal-based AI coding agent (v1.9.2) that blends five ideas
 (cloned for study, gitignored, into `references/`):
 1. **Hands** (Claude Code) — reads/writes files, runs commands
 2. **Memory + skills** (Hermes) — persistent SQLite memory across sessions
@@ -27,11 +27,10 @@ the `kb/features/` notes.
 See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.9.1"`; release history in [[changelog]]
+- `kbcode/__init__.py:9` — `__version__ = "1.9.2"`; release history in [[changelog]]
 
-last indexed: 2026-07-01 (v1.9.1: `kbcode update` force-reinstalls so pushed
-fixes actually reach installed users — a plain `pip install --upgrade git+URL`
-is a no-op when the version is unchanged)
+last indexed: 2026-07-01 (v1.9.2: run_command per-turn cap raised 10→25 to support
+build/debug cycles; v1.9.1 introduced force-reinstall in `kbcode update`)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

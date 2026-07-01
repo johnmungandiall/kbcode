@@ -103,6 +103,11 @@
   `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
+- Inside subagents, consecutive parallel-safe reads are now batched too
+  (`_run_subagent_parallel_batch`). Explorer subagents should declare narrow
+  `tools:` lists (no `recall`/`manage_todos`) + be told to emit multiple reads
+  per step, otherwise they still do many slow sequential LLM calls. See
+  updated `code-explorer.md` and [[modes-subagents]].
 
 ## Displaying a path relative to root breaks outside the project
 - `kbcode/tools/file.py:255` — `_tool_search_code` formats each hit through
@@ -139,6 +144,20 @@
   `len(batch)` per loop iteration (`kbcode/agent.py:305`), and the turn-summary
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
+
+## run_command per-turn limit (runaway guard)
+- `kbcode/tools/file.py:42` — `_MAX_COMMANDS_PER_TURN = 25` (raised from 10) is a
+  safety rail inside `_tool_run_command`. It increments a per-turn counter (reset
+  in `ToolsCore.new_turn`, called at start of every `Agent.run`). Exceeding it
+  raises the exact message the user saw: "Refused: hit the safety limit of 25
+  run_command calls in one turn (a runaway loop guard)..."
+- Intended to stop infinite `ls` / `echo` / pointless loops. Real tasks (e.g.
+  "check for compilation errors", analyze + build + targeted checks + logs +
+  retries) legitimately need more than a tiny budget inside one user message.
+  When hit, the model is told to wrap up the turn; user can continue in next
+  message. The count is shared with any `run_subagent` (they use the same
+  `Tools` instance). Related to (and can combine with) the `_MAX_STEPS` cap.
+  See [[safety]], [[tools-and-repair]].
 
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
