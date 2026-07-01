@@ -96,7 +96,15 @@ class Tools:
                 "description": "Read a text file from the project. Use this before editing a file.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {"path": {"type": "string", "description": "Path relative to the project root."}},
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": (
+                                "Relative paths are anchored to the project root; absolute "
+                                "paths are honored as given."
+                            ),
+                        }
+                    },
                     "required": ["path"],
                 },
             },
@@ -109,9 +117,10 @@ class Tools:
                         "path": {
                             "type": "string",
                             "description": (
-                                "Where to create the file, relative to the project root (e.g. "
-                                "'src/utils.py'). Files can only be created inside the project "
-                                "folder — an absolute path outside it will be refused."
+                                "Where to create the file. A relative path (e.g. 'src/utils.py') "
+                                "is anchored to the project root. An absolute path is honored "
+                                "exactly as given, even outside the project — use one when the "
+                                "user names a specific location."
                             ),
                         },
                         "content": {"type": "string"},
@@ -127,7 +136,10 @@ class Tools:
                     "properties": {
                         "path": {
                             "type": "string",
-                            "description": "Path to the existing file, relative to the project root.",
+                            "description": (
+                                "Path to the existing file. Relative paths are anchored to the "
+                                "project root; absolute paths are honored as given."
+                            ),
                         },
                         "old_string": {"type": "string"},
                         "new_string": {"type": "string"},
@@ -287,23 +299,21 @@ class Tools:
 
     # --- helpers -------------------------------------------------------
     def _resolve(self, path: str) -> Path:
+        """Resolve a tool-supplied path. Relative paths are anchored to the
+        project root; absolute paths are honored as given — kbcode is not
+        confined to the project folder, so ``_protected_reason`` below is the
+        only thing standing between a tool call and the rest of the disk."""
         candidate = Path(path)
-        p = (candidate if candidate.is_absolute() else self.root / candidate).resolve()
-        if self.root not in p.parents and p != self.root:
-            raise ValueError(
-                f"Refused: '{path}' resolves to {p}, which is outside the project folder "
-                f"({self.root}). kbcode can only read/write inside the project. Use a path "
-                "relative to the project root, or tell the user this location is out of reach."
-            )
-        return p
+        return (candidate if candidate.is_absolute() else self.root / candidate).resolve()
+
+    def _is_outside_project(self, p: Path) -> bool:
+        return self.root not in p.parents and p != self.root
 
     def _protected_reason(self, p: Path) -> str | None:
         """Return *why* writing to ``p`` is refused (a safety rail), or None if
-        it's fine. ``p`` is already resolved and confined to the project root."""
-        try:
-            parts = p.relative_to(self.root).parts
-        except ValueError:
-            return None  # outside the root is already handled by _resolve
+        it's fine. Checked against the full resolved path, not just relative to
+        the project root, since ``p`` may now be anywhere on disk."""
+        parts = p.parts
         if any(part in _PROTECTED_DIRS for part in parts):
             hit = next(part for part in parts if part in _PROTECTED_DIRS)
             return f"inside the protected '{hit}/' directory"
@@ -345,7 +355,11 @@ class Tools:
             )
         # Show the full resolved path (not the model's bare relative name) so the
         # user always knows exactly where the file lands — and what they're approving.
-        if not self.perm.check("write_file", f"write {p} ({n} chars)"):
+        # Flag it when that's outside the project, since it's easy to miss otherwise.
+        detail = f"write {p} ({n} chars)"
+        if self._is_outside_project(p):
+            detail += " -- OUTSIDE the project folder"
+        if not self.perm.check("write_file", detail):
             raise PermissionError("User denied permission to write the file.")
         self.checkpoints.ensure_checkpoint("before write_file")
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -368,7 +382,10 @@ class Tools:
             raise ValueError("old_string not found in file.")
         if count > 1:
             raise ValueError(f"old_string appears {count} times; make it unique.")
-        if not self.perm.check("edit_file", f"edit {p}"):
+        detail = f"edit {p}"
+        if self._is_outside_project(p):
+            detail += " -- OUTSIDE the project folder"
+        if not self.perm.check("edit_file", detail):
             raise PermissionError("User denied permission to edit the file.")
         self.checkpoints.ensure_checkpoint("before edit_file")
         p.write_text(text.replace(inp["old_string"], inp["new_string"], 1), encoding="utf-8")
