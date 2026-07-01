@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased — since v1.7.0
+## v1.8.0 (current)
 - **`web_search` tool** (`kbcode/tools/web.py`) — the Hermes web-search idea,
   right-sized to one backend instead of its multi-provider plugin registry.
   DuckDuckGo search via the free `ddgs` package, no API key needed.
@@ -11,7 +11,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   `ddgs` can't be cancelled mid-call (see [[gotchas]]). `ddgs>=9.0` is now a
   hard dependency.
 
-## v1.7.0 (current)
+## v1.7.0
 Three review-driven improvements (none is a bug fix; the "bug" findings they came
 with were verified false against the code):
 - **#6 parallel-safe tools are now schema-declared.** Each pure-read tool carries
