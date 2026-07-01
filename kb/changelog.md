@@ -2,7 +2,15 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.4 (current)
+## v1.9.5 (current)
+- **Better `kb update` on Windows** — added clear guidance when running `kb update`.
+  If the update fails with "file is being used by another process" (common on
+  Windows because `kb.exe` is locked while the command runs), it now prints
+  instructions to close the window and retry in a fresh Command Prompt, plus
+  a ready-to-paste manual pip command. This helps users successfully get
+  the latest version.
+
+## v1.9.4
 - **Cursor-like speed improvements** (make kbcode feel much faster):
   - `_PARALLEL_MAX_WORKERS` increased 8 → 16 (more concurrent reads).
   - Added explicit "batch many tools together in one response" rule to the

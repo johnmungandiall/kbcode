@@ -11,6 +11,7 @@ own top level.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -60,6 +61,19 @@ def _self_update() -> int:
     lands regardless of the version string.
     """
     console.print(f"[cyan]Updating kbcode from {_REPO_URL} …[/cyan]")
+
+    if os.name == "nt":
+        console.print(
+            "[yellow]Windows note: If you get 'file is being used by another process' error, "
+            "completely close this Command Prompt and run 'kb update' again in a fresh window.[/yellow]"
+        )
+        console.print(
+            "[yellow]You can also try this command in a new window:[/yellow]"
+        )
+        console.print(
+            f"[cyan]python -m pip install --upgrade --force-reinstall --no-deps --no-cache-dir {_GIT_TARGET}[/cyan]"
+        )
+
     steps = (
         [sys.executable, "-m", "pip", "install", "--upgrade", _GIT_TARGET],
         [sys.executable, "-m", "pip", "install", "--upgrade",

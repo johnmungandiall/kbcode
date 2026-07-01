@@ -27,10 +27,10 @@ the `kb/features/` notes.
 See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.9.4"`; release history in [[changelog]]
+- `kbcode/__init__.py:9` — `__version__ = "1.9.5"`; release history in [[changelog]]
 
-last indexed: 2026-07-01 (v1.9.4: Cursor-style speed (16 workers + aggressive batching in prompts & code-explorer);
-v1.9.3 subagent parallel + run_command limit)
+last indexed: 2026-07-01 (v1.9.5: Windows update guidance added to prevent 'file in use' errors during kb update;
+v1.9.4 speed improvements)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.
