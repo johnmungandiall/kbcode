@@ -10,13 +10,14 @@ from rich.console import Console
 
 from . import __version__
 from .agent import Agent
+from .checkpoints import format_checkpoints
 from .config import PRESETS, Config, global_dir, load_config, save_settings
 from .interrupt import interrupt_on_escape
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
 from .memory import Memory
 from .modes import load_modes
 from .permissions import Permissions
-from .prompt_input import make_input
+from .prompt_input import make_input, select
 from .prompts import build_system_prompt
 from .provider import ProviderError, get_provider
 from .subagents import load_subagents
@@ -117,6 +118,54 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
         modes=load_modes(config.kbcode_dir / "modes"),
         subagents=load_subagents(config.kbcode_dir / "agents"),
     )
+
+
+def _rollback_menu(cps, rows: list[dict]) -> bool:
+    """Arrow-key checkpoint picker for `/rollback` with no arguments.
+
+    Basic users shouldn't have to remember `/rollback <n> <file>` syntax — this
+    walks them through it with the same selectable-menu UI Permissions uses.
+    Returns True if it handled the flow, False if no interactive menu is
+    available here (no TTY / prompt_toolkit missing) so the caller can fall
+    back to printing the plain numbered list.
+    """
+    labels = [f"{r['short']}  {r['when'][:16].replace('T', ' ')}  {r['reason']}" for r in rows]
+    available, idx = select(labels, header="  pick a checkpoint  (↑/↓ then Enter, Esc to cancel):")
+    if not available:
+        return False
+    if idx is None:
+        return True  # cancelled
+    chosen = rows[idx]
+
+    action_labels = [
+        "Restore the whole project",
+        "Restore a single file",
+        "Preview what changed first (diff)",
+        "Cancel",
+    ]
+    _, action = select(action_labels, header=f"  checkpoint {chosen['short']} — {chosen['reason']}:")
+    if action is None or action == 3:
+        return True
+
+    if action == 2:  # preview, then ask again
+        ui.print(cps.diff(chosen["hash"]))
+        _, confirm = select(["Restore now", "Cancel"], header="  ")
+        if confirm != 0:
+            return True
+        action = 0
+
+    file_arg = None
+    if action == 1:
+        try:
+            file_arg = ui.console.input("  which file (relative path)?  › ").strip()
+        except (EOFError, KeyboardInterrupt):
+            return True
+        if not file_arg:
+            return True
+
+    msg = cps.restore(chosen["hash"], file_arg)
+    ui.notice(msg, style="green" if msg.startswith("Restored") else "yellow")
+    return True
 
 
 def _list_models(config: Config) -> None:
@@ -373,6 +422,29 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             continue
         if user == "/compact":
             agent.compact_now()
+            continue
+        if user.split() and user.split()[0] == "/rollback":
+            cps = agent.tools.checkpoints
+            parts = user.split()
+            rows = cps.list_checkpoints()
+            if len(parts) == 1:
+                if not rows:
+                    ui.notice("No checkpoints yet — they're taken automatically before file edits.", style="yellow")
+                elif not _rollback_menu(cps, rows):
+                    ui.print(format_checkpoints(rows))  # no interactive menu here (no TTY)
+                continue
+            if parts[1] == "diff":
+                if len(parts) < 3 or not parts[2].isdigit() or not (1 <= int(parts[2]) <= len(rows)):
+                    ui.error(f"usage: /rollback diff <n>  (1-{len(rows)})" if rows else "no checkpoints yet")
+                    continue
+                ui.print(cps.diff(rows[int(parts[2]) - 1]["hash"]))
+                continue
+            if not parts[1].isdigit() or not (1 <= int(parts[1]) <= len(rows)):
+                ui.error(f"usage: /rollback <n> [file]  (1-{len(rows)})" if rows else "no checkpoints yet")
+                continue
+            file_arg = parts[2] if len(parts) > 2 else None
+            msg = cps.restore(rows[int(parts[1]) - 1]["hash"], file_arg)
+            ui.notice(msg, style="green" if msg.startswith("Restored") else "yellow")
             continue
         if user.split() and user.split()[0] == "/kb-check":
             if "--fix" in user.split() or "fix" in user.split()[1:]:

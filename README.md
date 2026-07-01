@@ -282,7 +282,8 @@ your request
 > it stumbles into — API keys, auth headers, private keys, DB passwords — out
 > of command output and file reads before they ever reach the model or the
 > transcript. Turn it off with `KBCODE_REDACT_SECRETS=false` if you need raw
-> values.
+> values. And before it edits or runs anything, it **auto-saves a checkpoint**
+> — if it makes a mess, `/rollback` puts your files back exactly how they were.
 
 ## 🗂️ Project layout
 

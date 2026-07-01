@@ -103,6 +103,11 @@ class Config:
         return self.kbcode_dir / "memory.db"
 
     @property
+    def checkpoints_dir(self) -> Path:
+        # Hermes idea: a hidden shadow git store for auto pre-edit snapshots.
+        return self.kbcode_dir / "checkpoints"
+
+    @property
     def agent_md(self) -> Path:
         return self.project_dir / "AGENT.md"
 

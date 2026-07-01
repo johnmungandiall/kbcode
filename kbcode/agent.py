@@ -118,6 +118,7 @@ class Agent:
         actions = 0
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
+        self.tools.checkpoints.new_turn()
 
         for _ in range(_MAX_STEPS):
             with self.ui.thinking():

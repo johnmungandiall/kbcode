@@ -45,6 +45,7 @@ COMMANDS = [
     ("/insights", "show tokens used and estimated cost this session"),
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
     ("/compact", "summarize earlier chat to free up context"),
+    ("/rollback", "undo AI edits — pick a checkpoint from a menu (auto-saved before every edit)"),
     ("/reset", "forget this chat (memory + kb are kept)"),
     ("/exit", "quit"),
 ]
@@ -160,7 +161,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/reset", "/exit"]),
+            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/rollback", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),

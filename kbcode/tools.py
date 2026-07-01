@@ -14,6 +14,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from .checkpoints import Checkpoints
 from .config import Config
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
@@ -51,6 +52,7 @@ class Tools:
         self.memory = memory
         self.kb = kb
         self.perm = perm
+        self.checkpoints = Checkpoints(self.root, config.checkpoints_dir)
         self.todos: list[dict] = []  # the agent's task checklist for the current job
         # Subagent delegation is wired up by the Agent (see agent.py).
         self.subagents: dict = {}
@@ -331,6 +333,7 @@ class Tools:
         # user always knows exactly where the file lands — and what they're approving.
         if not self.perm.check("write_file", f"write {p} ({n} chars)"):
             raise PermissionError("User denied permission to write the file.")
+        self.checkpoints.ensure_checkpoint("before write_file")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(inp["content"], encoding="utf-8")
         return f"wrote {p} ({n} chars)"
@@ -353,6 +356,7 @@ class Tools:
             raise ValueError(f"old_string appears {count} times; make it unique.")
         if not self.perm.check("edit_file", f"edit {p}"):
             raise PermissionError("User denied permission to edit the file.")
+        self.checkpoints.ensure_checkpoint("before edit_file")
         p.write_text(text.replace(inp["old_string"], inp["new_string"], 1), encoding="utf-8")
         return f"edited {p}"
 
@@ -392,6 +396,7 @@ class Tools:
         command = inp["command"]
         if not self.perm.check("run_command", f"$ {command}"):
             raise PermissionError("User denied permission to run the command.")
+        self.checkpoints.ensure_checkpoint("before run_command")
         try:
             proc = subprocess.run(
                 command,
