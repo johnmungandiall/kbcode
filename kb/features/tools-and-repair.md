@@ -39,6 +39,8 @@ raise `ValueError`, which would abort the tool (search hits used to do this; see
 Tools: `read/write/edit/edit_files/list/search/run` + `kb_read/kb_write` +
 `remember/recall/save_skill` + `manage_todos` + `web_search` + `repo_map`
 
+New tools `repo_map` (structural overview) and `edit_files` (multi-file edits) were added inspired by Aider and Zed after studying their references. Use `repo_map` early for exploration and `edit_files` for coordinated changes across files.
+
 `edit_files` allows the agent to propose coordinated changes across several files
 in a single step (with one permission dialog showing diffs), similar to how
 advanced AI-native editors like Zed let their agents perform multi-file refactors

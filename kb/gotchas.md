@@ -109,6 +109,10 @@
   strongly instructed to batch many reads per LLM response (see updated
   `code-explorer.md` and [[modes-subagents]]). The system prompt now tells the
   main agent the same rule.
+- search_code now supports optional "limit" (default 50) and the prompts strongly
+  require using "path" scoping + repo_map first for any cross-directory work
+  (e.g. broker comparisons) to prevent loops. repo_map improved to use rg when
+  available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
 - `kbcode/tools/file.py:255` — `_tool_search_code` formats each hit through

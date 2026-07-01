@@ -112,12 +112,13 @@ BASE_SCHEMAS: list[dict] = [
     {
         "name": "search_code",
         "parallel_safe": True,
-        "description": "Search the project (or a subdirectory via 'path') for a regular expression. Returns matching path:line: text. ALWAYS use the 'path' parameter to scope searches narrowly (e.g. 'broker/kotak' or 'broker/zerodha') when comparing across directories – this prevents broad loops and makes searches efficient. Batch multiple scoped searches in one step.",
+        "description": "Search the project (or a subdirectory via 'path') for a regular expression. Returns matching path:line: text (limited by 'limit'). ALWAYS use the 'path' parameter to scope searches narrowly (e.g. 'broker/kotak' or 'broker/zerodha') when comparing across directories – this prevents broad loops and makes searches efficient. Batch multiple scoped searches in one step.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "pattern": {"type": "string"},
                 "path": {"type": "string", "description": "Subdirectory to search. Optional."},
+                "limit": {"type": "integer", "description": "Maximum number of matches to return. Defaults to 50.", "default": 50},
             },
             "required": ["pattern"],
         },
@@ -126,9 +127,10 @@ BASE_SCHEMAS: list[dict] = [
         "name": "repo_map",
         "parallel_safe": True,
         "description": (
-            "Get a structural map of the codebase showing the most important files, "
-            "classes, functions and their signatures. Helps understand large projects "
-            "cheaply without reading full files. Use before exploring with read_file."
+            "Get a structural map of the codebase showing key files, classes, functions "
+            "and signatures (limited per file). Start with this for any exploration or "
+            "comparison task (e.g. across brokers) before using search_code or read_file. "
+            "Use 'path' to focus on subdirs like 'broker'."
         ),
         "input_schema": {
             "type": "object",

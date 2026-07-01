@@ -304,10 +304,11 @@ class FileToolsMixin:
                 yield Path(dirpath) / fn
 
     def _tool_search_code(self, inp: dict) -> str:
-        """Regex-search the project (ripgrep-accelerated when available), capped at 100 hits."""
+        """Regex-search the project (ripgrep-accelerated when available). Supports 'path' for scoping and 'limit' (default 50, max 100) to keep results manageable and avoid loops."""
         pattern = inp["pattern"]
         regex = re.compile(pattern)
         base = self._resolve(inp.get("path", "."))
+        limit = min(inp.get("limit", 50), 100)
         candidates = self._rg_candidate_files(pattern, base)
         files = candidates if candidates is not None else self._walk_files(base)
 
@@ -322,9 +323,9 @@ class FileToolsMixin:
                             snippet, n = redact_with_count(line.rstrip()[:200], code_file=True)
                             redacted += n
                             hits.append(f"{rel}:{i}: {snippet}")
-                            if len(hits) >= 100:
+                            if len(hits) >= limit:
                                 return self._note_redactions(
-                                    "\n".join(hits) + "\n[...stopped at 100 matches...]", redacted
+                                    "\n".join(hits) + f"\n[...stopped at {limit} matches...]", redacted
                                 )
             except (UnicodeDecodeError, OSError):
                 continue  # skip binary/unreadable files
@@ -368,32 +369,67 @@ class FileToolsMixin:
     def _tool_repo_map(self, inp: dict) -> str:
         """Return a concise structural map of key symbols (classes, functions, etc.)
         across the project or a subdirectory. Inspired by advanced repo mapping
-        techniques to help understand large codebases cheaply."""
+        techniques (like Aider) to help understand large codebases cheaply.
+        Limits to ~5 symbols per file for readability."""
         base = self._resolve(inp.get("path", "."))
         if not base.is_dir():
             base = base.parent if base.parent.exists() else self.root
 
         symbols = []
-        max_symbols = 400
+        max_symbols = 300
+        max_per_file = 5
         files_scanned = 0
 
+        # Prefer ripgrep for speed and accuracy if available
+        if self._ripgrep_available():
+            try:
+                # Search for common definition patterns
+                rg_cmd = ["rg", "--no-heading", "-n", "-e", r"^\s*(def |class |async def |function |func |const \w+\s*=|let \w+\s*=)", str(base), "--glob", "!*.min.*", "--max-columns", "150"]
+                proc = subprocess.run(rg_cmd, capture_output=True, text=True, timeout=30)
+                if proc.returncode in (0, 1):
+                    lines = proc.stdout.strip().splitlines()
+                    per_file = {}
+                    for line in lines:
+                        if ":" not in line:
+                            continue
+                        parts = line.split(":", 2)
+                        if len(parts) < 3:
+                            continue
+                        fpath, lineno, content = parts[0], parts[1], parts[2].strip()[:150]
+                        rel = self._display_path(Path(fpath))
+                        if rel not in per_file:
+                            per_file[rel] = []
+                        if len(per_file[rel]) < max_per_file:
+                            per_file[rel].append(f"{rel}:{lineno}: {content}")
+                            symbols.append(f"{rel}:{lineno}: {content}")
+                            if len(symbols) >= max_symbols:
+                                break
+                    files_scanned = len(per_file)
+                    if symbols:
+                        header = f"Repository map (rg-based, {files_scanned} files, limited to {max_per_file} symbols/file):\n"
+                        return header + "\n".join(symbols[:max_symbols])
+            except Exception:
+                pass  # fallback to python
+
+        # Fallback: python walk
         for fp in self._walk_files(base):
             files_scanned += 1
             if len(symbols) >= max_symbols:
                 break
+            per_file_count = 0
             try:
-                # Limit file size for speed
-                text = fp.read_text(encoding="utf-8", errors="ignore")[:50000]
+                text = fp.read_text(encoding="utf-8", errors="ignore")[:30000]
                 rel = self._display_path(fp)
                 for i, line in enumerate(text.splitlines(), 1):
+                    if per_file_count >= max_per_file:
+                        break
                     s = line.strip()
                     if not s or s.startswith(("#", "//", "/*", "*")):
                         continue
-                    # Heuristic for definitions in many languages
                     if any(kw in s for kw in ("def ", "class ", "function ", "async def ", "func ", "const ", "let ", "var ")):
-                        # Capture the signature-ish part
                         snippet = s[:150]
                         symbols.append(f"{rel}:{i}: {snippet}")
+                        per_file_count += 1
                         if len(symbols) >= max_symbols:
                             break
             except (UnicodeDecodeError, OSError, PermissionError):
@@ -402,6 +438,6 @@ class FileToolsMixin:
         if not symbols:
             return "(no code symbols found — try a specific path or ensure project has source files)"
 
-        header = f"Repository map ({files_scanned} files scanned, showing up to {max_symbols} key symbols):\n"
-        footer = "\n[...truncated...]" if len(symbols) == max_symbols else ""
+        header = f"Repository map ({files_scanned} files scanned, ~{max_per_file} symbols per file):\n"
+        footer = "\n[...truncated...]" if len(symbols) >= max_symbols else ""
         return header + "\n".join(symbols) + footer
