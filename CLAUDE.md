@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - Install deps: `python -m pip install -r requirements.txt`
-- Install as a command: `pip install -e .` (uses `pyproject.toml`; the `[project.scripts]` entry point `kbcode = "kbcode.cli:main"` puts a real `kbcode` on PATH, so `kbcode …` works anywhere — equivalent to `python -m kbcode …`). Version is `dynamic` from `kbcode.__version__`.
+- Install as a command: `pip install -e .` (uses `pyproject.toml`; the `[project.scripts]` entries `kbcode = "kbcode.cli:main"` and `kb = "kbcode.cli:main"` put both `kbcode` and the shorter `kb` alias on PATH, so either works anywhere — equivalent to `python -m kbcode …`). Version is `dynamic` from `kbcode.__version__`.
 - End users install/update from GitHub: `pip install git+https://github.com/johnmungandiall/kbcode.git`; in-app `kbcode update` (`_self_update` in cli.py) shells out to `pip install --upgrade` on the same target.
 - Show version: `kbcode --version` / `-v` / `-V` (handled before config/key load in `main`), the `/version` chat command, and the banner title. Single source: `kbcode.__version__`. A release = bump `__version__`, then tag `vX.Y.Z` + push.
 - Run the chat REPL: `python -m kbcode`

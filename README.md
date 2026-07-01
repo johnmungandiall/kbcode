@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.1.1-2ea44f)
+![Version](https://img.shields.io/badge/version-1.4.1-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 
@@ -36,7 +36,8 @@ Install Python 3.10+, then:
 pip install git+https://github.com/johnmungandiall/kbcode.git
 ```
 
-That gives you a real `kbcode` command you can run from any folder. Check it:
+That gives you a real `kbcode` command you can run from any folder (also
+aliased as the shorter `kb`). Check it:
 
 ```bash
 kbcode --version
@@ -87,8 +88,9 @@ kbcode             # start chatting
 
 ### ⌨️ All terminal commands
 
-Run these in your shell. (Use `python -m kbcode` instead of `kbcode` if you
-chose the no-install option.)
+Run these in your shell. (`kb` works everywhere `kbcode` does — it's the same
+command under a shorter name. Use `python -m kbcode` instead if you chose the
+no-install option.)
 
 | Command | What it does |
 |---|---|
