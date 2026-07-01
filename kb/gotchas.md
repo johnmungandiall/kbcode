@@ -87,6 +87,23 @@
   `.kbcode/settings.json` can do anything a shell can do (no allowlist, no
   sandbox). See [[safety]].
 
+## `_run_subagent`'s inline UI calls must stay quiet-flag-gated
+- `kbcode/agent.py:615` — `_run_subagent()` is used both sequentially (main
+  thread, normal path) and concurrently, one call per pool worker thread, from
+  `_run_subagents_parallel_batch()` (`kbcode/agent.py:391`) via
+  `_quiet_dispatch()` (`kbcode/agent.py:379`), which sets the per-thread
+  `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
+  `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
+  `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
+  two open at once, so an unguarded UI call added later will corrupt the
+  terminal when multiple subagents run in parallel. If you add a new inline
+  UI call inside `_run_subagent()`, gate it on `quiet` too. See
+  [[tools-and-repair]], [[modes-subagents]].
+- Related: `Agent._record_usage()` (`kbcode/agent.py:570`) is guarded by
+  `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
+  multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
+  mutation elsewhere.
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains
