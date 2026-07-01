@@ -97,6 +97,24 @@ BASE_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "repo_map",
+        "parallel_safe": True,
+        "description": (
+            "Get a structural map of the codebase showing the most important files, "
+            "classes, functions and their signatures. Helps understand large projects "
+            "cheaply without reading full files. Use before exploring with read_file."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Optional subdirectory to map (defaults to whole project)."
+                }
+            },
+        },
+    },
+    {
         "name": "web_search",
         "parallel_safe": True,
         "description": (

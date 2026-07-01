@@ -298,3 +298,44 @@ class FileToolsMixin:
         err, n2 = redact_terminal_output_with_count((proc.stderr or "")[-4000:], command)
         result = f"exit code: {proc.returncode}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
         return self._note_redactions(result, n1 + n2)
+
+    def _tool_repo_map(self, inp: dict) -> str:
+        """Return a concise structural map of key symbols (classes, functions, etc.)
+        across the project or a subdirectory. Inspired by advanced repo mapping
+        techniques to help understand large codebases cheaply."""
+        base = self._resolve(inp.get("path", "."))
+        if not base.is_dir():
+            base = base.parent if base.parent.exists() else self.root
+
+        symbols = []
+        max_symbols = 400
+        files_scanned = 0
+
+        for fp in self._walk_files(base):
+            files_scanned += 1
+            if len(symbols) >= max_symbols:
+                break
+            try:
+                # Limit file size for speed
+                text = fp.read_text(encoding="utf-8", errors="ignore")[:50000]
+                rel = self._display_path(fp)
+                for i, line in enumerate(text.splitlines(), 1):
+                    s = line.strip()
+                    if not s or s.startswith(("#", "//", "/*", "*")):
+                        continue
+                    # Heuristic for definitions in many languages
+                    if any(kw in s for kw in ("def ", "class ", "function ", "async def ", "func ", "const ", "let ", "var ")):
+                        # Capture the signature-ish part
+                        snippet = s[:150]
+                        symbols.append(f"{rel}:{i}: {snippet}")
+                        if len(symbols) >= max_symbols:
+                            break
+            except (UnicodeDecodeError, OSError, PermissionError):
+                continue
+
+        if not symbols:
+            return "(no code symbols found — try a specific path or ensure project has source files)"
+
+        header = f"Repository map ({files_scanned} files scanned, showing up to {max_symbols} key symbols):\n"
+        footer = "\n[...truncated...]" if len(symbols) == max_symbols else ""
+        return header + "\n".join(symbols) + footer

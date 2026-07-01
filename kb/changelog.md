@@ -2,7 +2,16 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.6 (current)
+## v1.9.7 (current)
+- **New `repo_map` tool** — added a structural codebase map tool (inspired by
+  Aider's excellent repository map after studying the cloned reference).
+  Returns key files, classes, functions, and signatures to help the agent
+  understand large projects efficiently without reading every file.
+  - Updated system prompt and `code-explorer` subagent to use `repo_map`
+    first for smarter, faster exploration.
+  - Tool is parallel-safe and works well with batching.
+
+## v1.9.6
 - **Auto-compaction now works better** — default raised from 12k to 80k tokens
   (more sensible for modern large-context models like Claude/Gemini). Also
   loads "compact_tokens" from .kbcode/settings.json (env var still wins if set).
