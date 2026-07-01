@@ -51,8 +51,10 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:197`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:176`).
+directly; `_describe_tool()` (`kbcode/ui.py:209`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:188`). Every describer
+entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
+a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 
 ## Parallel-safe tools (#4.3)
 Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batch`,

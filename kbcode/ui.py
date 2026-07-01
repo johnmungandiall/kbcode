@@ -173,14 +173,26 @@ def _describe_web_search(a, g, full):
     return "Web search", f'"{g("query")}"'
 
 
+def _describe_edit_files(a, g, full):
+    edits = a.get("edits") or []
+    files = [e.get("path") for e in edits if isinstance(e, dict) and e.get("path")]
+    n = len(edits)
+    where = full(files[0]) if len(set(files)) == 1 and files else f"{len(set(files))} files"
+    return "Edit", f"{where}  ({n} edit{'s' if n != 1 else ''})"
+
+
+def _describe_repo_map(a, g, full):
+    return "Map", g("path") or "project"
+
+
 _TOOL_DESCRIBERS = {
     "read_file": _describe_read_file,
     "write_file": _describe_write_file,
     "edit_file": _describe_edit_file,
-    "edit_files": "edit multiple files",
+    "edit_files": _describe_edit_files,
     "list_dir": _describe_list_dir,
     "search_code": _describe_search_code,
-    "repo_map": "get codebase structure map",
+    "repo_map": _describe_repo_map,
     "run_command": _describe_run_command,
     "kb_read": _describe_kb_read,
     "kb_search": _describe_kb_search,
@@ -215,6 +227,11 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
     describer = _TOOL_DESCRIBERS.get(name)
     if describer is None:
         return name, (_short(a) if a else "")
+    if not callable(describer):
+        # A static label was registered instead of a describer fn — degrade
+        # gracefully rather than crash the whole tool-call render with
+        # 'str' object is not callable.
+        return str(describer), (_short(a) if a else "")
     return describer(a, g, full)
 
 
