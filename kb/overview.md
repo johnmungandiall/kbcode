@@ -27,10 +27,10 @@ the `kb/features/` notes.
 See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.9.2"`; release history in [[changelog]]
+- `kbcode/__init__.py:9` — `__version__ = "1.9.3"`; release history in [[changelog]]
 
-last indexed: 2026-07-01 (v1.9.2: run_command per-turn cap raised 10→25 to support
-build/debug cycles; v1.9.1 introduced force-reinstall in `kbcode update`)
+last indexed: 2026-07-01 (v1.9.3: subagent parallel reads + code-explorer batching;
+v1.9.2 run_command limit + earlier fixes)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

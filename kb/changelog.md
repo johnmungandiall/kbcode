@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.2 (current)
+## v1.9.3 (current)
 - **Parallel reads inside subagents + faster code-explorer** — subagents now
   batch consecutive `parallel_safe` tools (`read_file` + `list_dir` + `search_code`
   etc.) using `_run_subagent_parallel_batch`, the same way the main loop does.
