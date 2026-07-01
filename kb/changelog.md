@@ -11,7 +11,7 @@ the component list (existed in code, missing from the map) and documented the
 new `.claude/hooks/kb_*.py` enforcement hooks in `about-kb.md` (committed this
 session, undocumented). No other drift found.
 
-## Unreleased
+## v1.6.3 (current)
 - Fix "agent freezes for minutes" on slow/stalled providers (esp. MiMo + a
   subagent making many calls): the SDK clients were built with no request
   timeout, so a stalled call inherited the SDK's ~600s default. Added
@@ -26,7 +26,7 @@ session, undocumented). No other drift found.
   lock-guarded so the worker + main thread can't tear the spinner's Rich `Live`
   down at once. Regression test: `tests/test_interrupt.py`.
 
-## v1.6.2 (current)
+## v1.6.2
 - Fix streamed replies rendering as shredded line-fragments (only the tail of
   each line survived — hit tables and plain prose alike). The thinking spinner
   is a Rich `Live` region redrawn from a background ticker thread; leaving it
