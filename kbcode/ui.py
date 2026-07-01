@@ -79,8 +79,7 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
 
     def full(path: str) -> str:
         """Resolve a path to its full location so the user sees *where* a file
-        lands (the model usually passes a bare relative name). Reads/search keep
-        the short form; only writes/edits use this."""
+        actually is (the model usually passes a bare relative name)."""
         if not path or root is None:
             return path
         try:
@@ -90,7 +89,7 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
             return path
 
     if name == "read_file":
-        return "Read", g("path")
+        return "Read", full(g("path"))
     if name == "write_file":
         return "Write", f"{full(g('path'))}  ({len(str(a.get('content', ''))):,} chars)"
     if name == "edit_file":
