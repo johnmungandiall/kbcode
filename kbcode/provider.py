@@ -83,6 +83,14 @@ def _classify(exc: Exception) -> tuple[bool, str, str | None]:
     # Transport problems (no status code): connection refused, DNS, timeout.
     if any(s in blob for s in ("connection", "timeout", "timed out", "temporarily")):
         return True, "Network problem reaching the provider.", "Check your internet connection."
+    # The current model/route has no vision-capable endpoint — surfaced by
+    # OpenRouter and others as a plain 400/404 with "image" in the message.
+    if "image" in blob and any(s in blob for s in ("endpoint", "support", "multimodal", "vision")):
+        return (
+            False,
+            "This model doesn't support image input.",
+            "Switch to a vision-capable model (Claude, GPT-4o, Gemini, ...) with  python -m kbcode model  , or continue without attaching an image.",
+        )
     # Bad request (400/404/422) and anything else: don't retry blindly.
     if isinstance(status, int):
         return False, f"Provider rejected the request (HTTP {status}): {exc}", None

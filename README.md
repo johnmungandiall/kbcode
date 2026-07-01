@@ -160,7 +160,12 @@ Show the agent a screenshot or a picture:
 - **⚡ One-shot — `--image`:** `kbcode --image error.png "what's wrong here?"`
 
 > [!IMPORTANT]
-> Use a **vision-capable model** (Claude, GPT-4o, Gemini…). Clipboard paste needs
+> Best on a **vision-capable model** (Claude, GPT-4o, Gemini…) — the image is sent
+> straight into your conversation. On a model without vision (e.g. many MiMo /
+> OpenRouter routes), kbcode automatically **falls back**: it describes the image
+> with an auxiliary vision model (the Hermes idea) and hands your model that
+> description as text instead of failing outright. This needs `OPENROUTER_API_KEY`
+> (or `KBCODE_VISION_API_KEY`) set — see `.env.example`. Clipboard paste needs
 > Pillow — it's installed automatically with kbcode, or `pip install Pillow`.
 
 > [!WARNING]
@@ -168,6 +173,22 @@ Show the agent a screenshot or a picture:
 > (`kbcode update`, then `kbcode --version` should show ≥ 1.1.1). When it fires
 > you'll see `📎 image attached`. If your terminal swallows Alt+V (some consoles
 > do), just use **`/image`** instead — it always works.
+
+### 🎬 Video
+
+None of kbcode's providers accept video natively, so `/video` always routes
+through the same auxiliary vision fallback used for non-vision images above —
+it describes the video as text, then that description (not the raw video) is
+what your model actually sees:
+
+```text
+/video C:\clips\demo.mp4
+what's going wrong in this recording?
+```
+
+- **⚡ One-shot — `--video`:** `kbcode --video demo.mp4 "what's wrong here?"`
+- Supports mp4, webm, mov, avi, mkv, mpeg (≤ 30 MB). Needs `OPENROUTER_API_KEY`
+  (or `KBCODE_VISION_API_KEY`) — same as the image fallback above.
 
 ### 🎭 Modes (the Kilo Code idea)
 

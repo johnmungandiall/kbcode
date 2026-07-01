@@ -12,10 +12,11 @@ from __future__ import annotations
 import threading
 import time
 
+from . import vision_fallback
 from .compaction import compact, estimate_tokens
 from .modes import DEFAULT_MODE, Mode, builtin_modes
 from .pricing import estimate_cost
-from .provider import LLMProvider
+from .provider import LLMProvider, ProviderError
 from .repair import promote
 from .subagents import Subagent
 from .tools import Tools
@@ -103,6 +104,36 @@ class Agent:
             raise box["err"]
         return box["resp"]
 
+    def _try_vision_fallback(self, exc: ProviderError) -> bool:
+        """When the active model can't accept the attached image (see
+        provider._classify's vision hint), describe it with an auxiliary
+        vision model instead of failing the turn outright (the Hermes
+        auxiliary-vision idea). Mutates the pending user message in place so
+        the image isn't resent — and doesn't fail the same way again — on any
+        later turn. Returns True if the caller should retry the request.
+        """
+        if "doesn't support image input" not in str(exc):
+            return False
+        last = self.messages[-1] if self.messages else None
+        if not last or last.get("role") != "user" or not last.get("images"):
+            return False
+        with self.ui.working("describing image with an auxiliary vision model…"):
+            description = vision_fallback.describe_images(last["images"], last.get("content") or "")
+        if not description:
+            return False
+        self.ui.notice(
+            "This model can't see images directly — described it with an "
+            "auxiliary vision model instead.",
+            style="yellow",
+        )
+        note = (
+            "\n\n[Image attached — described by an auxiliary vision model, "
+            f"since the active model doesn't support image input]\n{description}"
+        )
+        last["content"] = (last.get("content") or "") + note
+        del last["images"]
+        return True
+
     def _append(self, message: dict) -> None:
         self.messages.append(message)
         if self.session:
@@ -129,10 +160,15 @@ class Agent:
         self.tools.checkpoints.new_turn()
 
         for _ in range(_MAX_STEPS):
-            with self.ui.thinking():
-                resp = self._complete(
-                    self._system_for_mode(), self.messages, self._mode_schemas()
-                )
+            try:
+                with self.ui.thinking():
+                    resp = self._complete(
+                        self._system_for_mode(), self.messages, self._mode_schemas()
+                    )
+            except ProviderError as exc:
+                if self._try_vision_fallback(exc):
+                    continue
+                raise
             self._record_usage(resp.usage)
 
             self._append(

@@ -392,6 +392,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None
         ui.notice("type / for commands · Alt+V attaches an image")
 
     pending_images: list[dict] = []  # vision attachments waiting for the next turn
+    pending_notes: list[str] = []  # e.g. /video descriptions, prepended to the next turn
 
     while True:
         try:
@@ -590,6 +591,36 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None
                     "Clipboard paste needs Pillow:  pip install Pillow"
                 )
             continue
+        if user.split() and user.split()[0] == "/video":
+            from . import vision_fallback
+            from .videos import load_video_file
+
+            parts = user.split(maxsplit=1)
+            rest = parts[1].strip() if len(parts) > 1 else ""
+            if not rest:
+                ui.error('usage: /video "<path>" [question]')
+                continue
+            path, question = _split_path_and_rest(rest)
+            vid = load_video_file(path)
+            if not vid:
+                ui.error(f"couldn't read a video at: {path} (check the path, format, or size)")
+                continue
+            with ui.working("🎬 describing video with an auxiliary vision model…"):
+                description = vision_fallback.describe_video(vid, question)
+            if description is None:
+                ui.error(
+                    "No auxiliary vision model configured for video analysis — none of "
+                    "kbcode's providers accept video natively. Set OPENROUTER_API_KEY "
+                    "(or KBCODE_VISION_API_KEY / KBCODE_VISION_MODEL / KBCODE_VISION_BASE_URL) "
+                    "to enable it."
+                )
+                continue
+            pending_notes.append(f"[video: {path}]\n{description}")
+            ui.notice(
+                f"🎬 video described ({len(pending_notes)} pending) — type your question and it'll be sent.",
+                style="green",
+            )
+            continue
         if user.split() and user.split()[0] in ("/open", "/cd"):
             parts = user.split(maxsplit=1)
             if len(parts) < 2 or not parts[1].strip():
@@ -632,9 +663,10 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None
                 ui.print("To change the model, use  [bold]/model[/bold]  here, or  [bold]python -m kbcode model[/bold]  in the terminal.")
             continue
 
+        turn_input = "\n\n".join(pending_notes + [user]) if pending_notes else user
         try:
             with interrupt_on_escape():  # press Esc (or Ctrl-C) to stop this turn
-                agent.run(user, images=pending_images or None)
+                agent.run(turn_input, images=pending_images or None)
         except KeyboardInterrupt:
             ui.notice("interrupted — back to the prompt.", style="yellow")
         except ProviderError as exc:
@@ -645,6 +677,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None
             ui.error(str(exc))
         finally:
             pending_images.clear()  # consumed by this turn (or dropped on error)
+            pending_notes.clear()
 
 
 def _take_dir(argv: list[str]) -> Path | None:
@@ -707,6 +740,60 @@ def _take_images(argv: list[str]) -> list[dict]:
     return images
 
 
+def _split_path_and_rest(text: str) -> tuple[str, str]:
+    """Split ``"<path>" [rest]`` into ``(path, rest)`` — the path may be quoted
+    (to allow spaces) or bare (split on the first whitespace)."""
+    text = text.strip()
+    if text[:1] in "\"'":
+        quote = text[0]
+        end = text.find(quote, 1)
+        if end != -1:
+            return text[1:end], text[end + 1 :].strip()
+    parts = text.split(maxsplit=1)
+    return parts[0], parts[1] if len(parts) > 1 else ""
+
+
+def _take_video(argv: list[str]) -> list[str]:
+    """Pull every ``--video <path>`` option out of argv (one-shot). Returns the
+    paths — call ``_describe_videos`` on them once ``load_config`` has loaded
+    any ``.env``, since the auxiliary vision fallback needs its key visible."""
+    paths: list[str] = []
+    while "--video" in argv:
+        i = argv.index("--video")
+        if i + 1 >= len(argv):
+            argv.remove("--video")
+            break
+        paths.append(argv[i + 1])
+        del argv[i : i + 2]
+    return paths
+
+
+def _describe_videos(paths: list[str]) -> list[str]:
+    """Load + describe each video path via the auxiliary vision fallback —
+    kbcode has no native video path, so this always resolves straight to
+    text. Returns the description notes."""
+    from . import vision_fallback
+    from .videos import load_video_file
+
+    notes: list[str] = []
+    for path in paths:
+        vid = load_video_file(path)
+        if not vid:
+            console.print(f"[yellow]Skipped (not a readable video):[/yellow] {path}")
+            continue
+        console.print(f"[dim]🎬 describing video with an auxiliary vision model: {path}[/dim]")
+        description = vision_fallback.describe_video(vid, "")
+        if description is None:
+            console.print(
+                "[yellow]No auxiliary vision model configured — set OPENROUTER_API_KEY "
+                "(or KBCODE_VISION_API_KEY/KBCODE_VISION_MODEL/KBCODE_VISION_BASE_URL) "
+                f"to analyze video.[/yellow] Skipped: {path}"
+            )
+            continue
+        notes.append(f"[video: {path}]\n{description}")
+    return notes
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
 
@@ -728,6 +815,7 @@ def main(argv: list[str] | None = None) -> int:
     want_resume, resume_id = _take_resume(argv)  # --resume [id] -> a specific or picked session
 
     images = _take_images(argv)  # one-shot vision attachments: --image/-i <path>
+    video_paths = _take_video(argv)  # one-shot video attachments: --video <path>
 
     # Which project to work on: -C <path>, else `init <path>`, else the cwd.
     project_dir = _take_dir(argv)
@@ -761,6 +849,10 @@ def main(argv: list[str] | None = None) -> int:
     if not _require_key(config):
         return 1
 
+    # Describe any --video attachments now that .env (KBCODE_VISION_*/
+    # OPENROUTER_API_KEY) has been loaded by load_config above.
+    video_notes = _describe_videos(video_paths) if video_paths else []
+
     memory = Memory(config.memory_db)
     agent: Agent | None = None
     try:
@@ -782,10 +874,11 @@ def main(argv: list[str] | None = None) -> int:
                     return 0
                 agent = _resume_agent(config, kb, memory, row)
 
-        if argv or images:  # one-shot: kbcode "do something" [--image pic.png]
+        if argv or images or video_notes:  # one-shot: kbcode "do something" [--image pic.png]
             agent = agent or _build_agent(config, kb, memory)
+            prompt_text = "\n\n".join(video_notes + [" ".join(argv)]) if video_notes else " ".join(argv)
             with interrupt_on_escape():  # Esc / Ctrl-C stops the run
-                agent.run(" ".join(argv), images=images or None)
+                agent.run(prompt_text, images=images or None)
         else:  # interactive chat
             _repl(config, kb, memory, agent=agent)
     except KeyboardInterrupt:
