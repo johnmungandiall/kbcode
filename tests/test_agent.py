@@ -6,6 +6,7 @@ these run offline and instantly.
 
 from __future__ import annotations
 
+import sys
 import time
 import uuid
 
@@ -64,10 +65,10 @@ def _assistant(text: str = "ok") -> dict:
     return {"role": "assistant", "text": text, "tool_calls": [], "raw": {}}
 
 
-def _make_agent(tmp_path, provider, compact_threshold: int = 0) -> tuple[Agent, Tools]:
+def _make_agent(tmp_path, provider, compact_threshold: int = 0, hooks: dict | None = None) -> tuple[Agent, Tools]:
     project = tmp_path / "project"
     project.mkdir()
-    config = Config(project_dir=project, compact_threshold=compact_threshold)
+    config = Config(project_dir=project, compact_threshold=compact_threshold, hooks=hooks or {})
     config.ensure_dirs()
     memory = Memory(config.memory_db)
     kb = KnowledgeBase(config.kb_dir)
@@ -495,3 +496,43 @@ def test_disabled_compaction_never_triggers(tmp_path):
         agent.run(f"question {i}")
 
     assert not any("Recap of earlier conversation" in m.get("content", "") for m in agent.messages if m["role"] == "user")
+
+
+# --- hooks (PreToolUse/PostToolUse/Stop, see kbcode/hooks.py) --------------
+
+
+def _blocking_hook_command(tmp_path, message: str) -> str:
+    script = tmp_path / "block_hook.py"
+    script.write_text(f"import sys; sys.stderr.write({message!r}); sys.exit(2)", encoding="utf-8")
+    return f'"{sys.executable}" "{script}"'
+
+
+def test_pretooluse_hook_blocks_call_without_running_the_tool(tmp_path):
+    cmd = _blocking_hook_command(tmp_path, "blocked: no writes allowed")
+    hooks = {"PreToolUse": [{"matcher": "write_file", "hooks": [{"type": "command", "command": cmd}]}]}
+    provider = FakeProvider(
+        [
+            LLMResponse(text="", tool_calls=[_call("write_file", {"path": "hello.txt", "content": "hi"})], raw={}),
+            _final("ok, I won't write it."),
+        ]
+    )
+    agent, tools = _make_agent(tmp_path, provider, hooks=hooks)
+    agent.run("create hello.txt")
+
+    assert not (tools.root / "hello.txt").exists()
+    tool_results = [m for m in agent.messages if m["role"] == "tool_results"]
+    result = tool_results[0]["results"][0]
+    assert result["is_error"] is True
+    assert "blocked: no writes allowed" in result["content"]
+
+
+def test_no_hooks_configured_leaves_tool_dispatch_unaffected(tmp_path):
+    provider = FakeProvider(
+        [
+            LLMResponse(text="", tool_calls=[_call("write_file", {"path": "hello.txt", "content": "hi"})], raw={}),
+            _final("done."),
+        ]
+    )
+    agent, tools = _make_agent(tmp_path, provider)
+    agent.run("create hello.txt")
+    assert (tools.root / "hello.txt").read_text(encoding="utf-8") == "hi"

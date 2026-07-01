@@ -10,12 +10,14 @@ bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.p
 (`kbcode/agent.py:350`) runs them and feeds outputs back as a plain `user` turn (no
 native tool ids to replay) with a nudge to use the real format.
 
-*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:87`) runs `_repair()`
-(`kbcode/tools/core.py:106`) first — unknown tool name -> closest match via
-`difflib`; missing required args -> names them.
+*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:89`) runs `_repair()`
+(`kbcode/tools/core.py:108`) first — unknown tool name -> closest match via
+`difflib`; missing required args -> names them. Every call site wraps
+`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:178`), which runs
+configured PreToolUse/PostToolUse hooks around it — see [[safety]].
 
 ## Path resolution & protected files
-`_resolve()` (`kbcode/tools/core.py:126`) anchors a relative path to the
+`_resolve()` (`kbcode/tools/core.py:128`) anchors a relative path to the
 project root but honors an absolute path exactly as given, even outside the
 project — kbcode is not sandboxed to the project folder. `_protected_reason()`
 (`kbcode/tools/file.py:88`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
@@ -43,7 +45,7 @@ Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batc
 `kbcode/agent.py`); mutating tools stay sequential. Which tools are safe is
 declared per-tool by a `"parallel_safe": True` key on the schema
 (`kbcode/tools/schemas.py`) — the single source of truth. `Agent.run` reads the
-set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:79`, a comprehension
+set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:81`, a comprehension
 over `schemas`), never a hardcoded list, so a new read-only tool opts in just by
 carrying the flag and can't silently fall back to sequential. `parallel_safe` is
 kbcode-only metadata: the OpenAI path rebuilds tool payloads (`_tools`), and the

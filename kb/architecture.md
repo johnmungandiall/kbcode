@@ -24,6 +24,7 @@ model unchanged (see [[providers]]).
 - `pricing.py` — per-model USD cost tables for `/insights`
 - `permissions.py` — approval gating (Yes/Always/No menu) ([[safety]])
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
+- `hooks.py` — `HooksRunner`, user-scriptable PreToolUse/PostToolUse/Stop hooks from `settings.json` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus)
 - `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video`, `PATH_COMMANDS`) + arrow-key menus (prompt_toolkit)
 - `logs.py` — `setup_logging()`: quiet rotating file log at `.kbcode/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
@@ -34,7 +35,7 @@ model unchanged (see [[providers]]).
 ## Data / control flow
 1. `main()` (`kbcode/cli.py:329`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:151`)
 2. User types a message → `Agent.run()` (`kbcode/agent.py:186`) → `Agent._complete()` (`kbcode/agent.py:104`) calls provider
-3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()` (`kbcode/tools/core.py:87`)
+3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:178`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:89`) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 

@@ -2,6 +2,17 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased
+- **Hooks system** (`kbcode/hooks.py`, the Claude Code idea) —
+  PreToolUse/PostToolUse/Stop tool-call interception via a `"hooks"` key in
+  `.kbcode/settings.json`, reimplementing Claude Code's public documented
+  hooks contract (JSON-over-stdin, exit-code protocol: 0 allow / 2 block /
+  other non-fatal) from scratch. `ToolsCore` builds a `HooksRunner` per
+  project; `Agent._dispatch_tool()` wraps every tool call (5 call sites,
+  including subagent delegation) with Pre/PostToolUse, and
+  `Agent._stop_hook_feedback()` lets a `Stop` hook veto ending a turn. See
+  [[safety]].
+
 ## v1.8.0 (current)
 - **`web_search` tool** (`kbcode/tools/web.py`) — the Hermes web-search idea,
   right-sized to one backend instead of its multi-provider plugin registry.

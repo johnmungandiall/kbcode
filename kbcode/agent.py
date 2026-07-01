@@ -50,10 +50,11 @@ _EMERGENCY_STOP_MULTIPLIER = 3
 # can't silently fall back to sequential.
 _PARALLEL_MAX_WORKERS = 8
 
-# KB lifecycle hooks (the claude-kb idea): kbcode has no external hook-config
-# file, so the two hooks claude-kb installs into .claude/settings.json —
-# PostToolUse (remind to update kb/ after an edit) and Stop (block once on kb/
-# drift) — are baked in here as default agent-loop behavior instead.
+# KB lifecycle hooks (the claude-kb idea): distinct from the general,
+# user-configurable PreToolUse/PostToolUse/Stop hooks in hooks.py — these two
+# are baked-in default agent-loop behavior (not scriptable) that mirror the
+# two hooks claude-kb installs into .claude/settings.json: PostToolUse
+# (remind to update kb/ after an edit) and Stop (block once on kb/ drift).
 _KB_WRITE_TOOLS = {"write_file", "edit_file"}
 _KB_REMINDER_SKIP_DIRS = ("/kb/", "/.kbcode/", "/.git/", "/node_modules/")
 _KB_REMINDER_SKIP_NAMES = {"agent.md", "memory.md", "readme.md"}
@@ -89,6 +90,8 @@ class Agent:
         self._kb_reminder_done = False
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
+        # Stop hook state (Claude Code idea): checked once per turn, reset in run().
+        self._stop_hook_checked = False
         # Subagent delegation (Claude Code idea): expose it to the tools layer.
         self.subagents = subagents or {}
         self.tools.subagents = self.subagents
@@ -172,6 +175,21 @@ class Agent:
         del last["images"]
         return True
 
+    def _dispatch_tool(self, name: str, args: dict) -> tuple[str, bool]:
+        """Run one tool call through PreToolUse/PostToolUse hooks (the Claude
+        Code idea) around the actual execution — see hooks.py. Every call site
+        that would otherwise call ``self.tools.execute`` directly goes through
+        here instead, so a configured hook sees every tool call, including
+        ones made by a delegated subagent."""
+        pre = self.tools.hooks.run("PreToolUse", name, args)
+        if pre.blocked:
+            return pre.message or f"Tool '{name}' blocked by a PreToolUse hook.", True
+        content, is_error = self.tools.execute(name, args)
+        post = self.tools.hooks.run("PostToolUse", name, args, tool_output=content, is_error=is_error)
+        if post.message:
+            content = f"{content}\n\n[hook: {post.message}]"
+        return content, is_error
+
     def _append(self, message: dict) -> None:
         self.messages.append(message)
         if self.session:
@@ -197,6 +215,7 @@ class Agent:
         promoted_recoveries = 0
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
+        self._stop_hook_checked = False
         self.tools.checkpoints.new_turn()
         self.tools.new_turn()
 
@@ -246,6 +265,8 @@ class Agent:
                     continue
                 if self._kb_drift_feedback():
                     continue
+                if self._stop_hook_feedback():
+                    continue
                 self._turn_summary(start, actions, before)
                 return
 
@@ -277,7 +298,7 @@ class Agent:
                     )
                 else:
                     with self.ui.tool_running():
-                        content, is_error = self.tools.execute(call.name, dict(call.input))
+                        content, is_error = self._dispatch_tool(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
                 content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
@@ -304,7 +325,7 @@ class Agent:
             with self.ui.working(label):
                 with ThreadPoolExecutor(max_workers=min(_PARALLEL_MAX_WORKERS, len(allowed))) as pool:
                     future_to_call = {
-                        pool.submit(self.tools.execute, c.name, dict(c.input)): c for c in allowed
+                        pool.submit(self._dispatch_tool, c.name, dict(c.input)): c for c in allowed
                     }
                     for future, call in future_to_call.items():
                         outcomes[call.id] = future.result()
@@ -374,7 +395,7 @@ class Agent:
                 )
             else:
                 with self.ui.tool_running():
-                    content, is_error = self.tools.execute(name, dict(args))
+                    content, is_error = self._dispatch_tool(name, dict(args))
             self.ui.tool_result(content, is_error)
             content = self._with_kb_reminder(name, dict(args), content, is_error)
             feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
@@ -432,6 +453,23 @@ class Agent:
                     "then finish."
                 ),
             }
+        )
+        return True
+
+    def _stop_hook_feedback(self) -> bool:
+        """Stop hook (the Claude Code idea): let a configured script veto
+        ending the turn — e.g. to demand a missing test run. Fires once per
+        turn (never loops) even if the hook keeps blocking.
+        """
+        if self._stop_hook_checked:
+            return False
+        self._stop_hook_checked = True
+        outcome = self.tools.hooks.run("Stop", "Stop", {})
+        if not outcome.blocked:
+            return False
+        self.ui.notice("Stop hook blocked the turn from ending — asking the model to continue.", style="yellow")
+        self._append(
+            {"role": "user", "content": outcome.message or "Continue: a Stop hook blocked ending this turn."}
         )
         return True
 
@@ -509,7 +547,7 @@ class Agent:
                             )
                         else:
                             with self.ui.tool_running():
-                                content, is_error = self.tools.execute(tname, dict(targs))
+                                content, is_error = self._dispatch_tool(tname, dict(targs))
                         self.ui.tool_result(content, is_error)
                         feedback.append(f"\n## {tname} [{'error' if is_error else 'ok'}]\n{content}")
                     messages.append({"role": "user", "content": "\n".join(feedback)})
@@ -529,7 +567,7 @@ class Agent:
                     )
                 else:
                     with self.ui.tool_running():
-                        content, is_error = self.tools.execute(call.name, dict(call.input))
+                        content, is_error = self._dispatch_tool(call.name, dict(call.input))
                 self.ui.tool_result(content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
             messages.append({"role": "tool_results", "results": results})

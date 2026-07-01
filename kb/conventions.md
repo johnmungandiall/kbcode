@@ -8,7 +8,7 @@
 - Tool methods follow `_tool_<name>(self, inp: dict) -> str` pattern
 
 ## Module organization
-- Tools register via `_base_schemas` property (`kbcode/tools/core.py:75`) +
+- Tools register via `_base_schemas` property (`kbcode/tools/core.py:77`) +
   `_tool_*` methods across `kbcode/tools/{file,kb,memory,planning,subagent,web}.py`
 - Provider dispatch: `get_provider()` returns `AnthropicProvider` or `OpenAICompatibleProvider` (`kbcode/provider.py:489`) — see [[providers]]
 - Mode/subagent definitions: YAML frontmatter between `---` fences + markdown body — see [[modes-subagents]]

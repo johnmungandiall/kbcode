@@ -340,6 +340,10 @@ your request
 - **`.kbcode/standing-orders.md`** — always-on instructions added to every session.
 - **`.kbcode/agents/`** — your subagent definitions (`*.md`).
 - **`.kbcode/modes/`** — your custom modes (`*.md`), if any.
+- **`.kbcode/settings.json`**'s `"hooks"` key — optional `PreToolUse`/`PostToolUse`/`Stop`
+  scripts that can inspect or block a tool call before/after it runs, same shape and
+  exit-code contract as real Claude Code's hooks (`0` allow, `2` block + message), e.g.
+  `{"PreToolUse": [{"matcher": "run_command", "hooks": [{"type": "command", "command": "..."}]}]}`.
 - **`AGENT.md`** — a short pointer file telling the agent how to work here.
 
 > [!CAUTION]
@@ -400,6 +404,7 @@ kbcode/
   memory.py         persistent memory + skills (SQLite)
   knowledge_base.py kb/ notes + path:line checker & auto-fix (claude-kb idea)
   permissions.py    approval menu for risky actions
+  hooks.py          PreToolUse/PostToolUse/Stop hook runner (Claude Code idea, see settings.json)
   config.py         paths + settings
 ```
 

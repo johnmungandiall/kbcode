@@ -11,6 +11,7 @@ from pathlib import Path
 
 from ..checkpoints import Checkpoints
 from ..config import Config
+from ..hooks import HooksRunner
 from ..knowledge_base import KnowledgeBase
 from ..memory import Memory
 from ..permissions import Permissions
@@ -27,6 +28,7 @@ class ToolsCore:
         self.kb = kb
         self.perm = perm
         self.checkpoints = Checkpoints(self.root, config.checkpoints_dir)
+        self.hooks = HooksRunner(config.hooks, self.root)
         self.todos: list[dict] = []  # the agent's task checklist for the current job
         # Subagent delegation is wired up by the Agent (see agent.py).
         self.subagents: dict = {}

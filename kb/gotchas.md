@@ -80,6 +80,13 @@
   thread is abandoned (leaked, not killed — Python can't kill threads) instead
   of blocking the tool call. Don't switch this to a shared/module-level pool.
 
+## Hook commands run with full shell privileges, unsandboxed
+- `kbcode/hooks.py:84` — `HooksRunner._run_one()` runs a configured hook's
+  `command` via `subprocess.run(shell=True, ...)` — same trust model as
+  Claude Code's own hooks. A malicious or careless hook script in
+  `.kbcode/settings.json` can do anything a shell can do (no allowlist, no
+  sandbox). See [[safety]].
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains

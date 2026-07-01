@@ -1,9 +1,9 @@
 # Config — precedence, presets, project retargeting.
 
 ## Precedence
-`load_config()` (`kbcode/config.py:202`) resolves provider/model/base_url and the API
+`load_config()` (`kbcode/config.py:203`) resolves provider/model/base_url and the API
 key (via `.env`) as: **env vars > the project's `.kbcode`/.env > the launch
-folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:181`) > preset
+folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:182`) > preset
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
 never overrides an already-set value; `settings.json` is merged the opposite
 way (low->high, `kbcode/config.py:224-227`). The launch-folder and global fallbacks are

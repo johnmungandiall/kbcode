@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 try:
@@ -105,6 +105,7 @@ class Config:
     compact_threshold: int = DEFAULT_COMPACT_TOKENS
     request_timeout: int = DEFAULT_REQUEST_TIMEOUT
     auto_approve: bool = False
+    hooks: dict = field(default_factory=dict)  # PreToolUse/PostToolUse/Stop config, from settings.json (see hooks.py)
 
     # --- derived paths -------------------------------------------------
     @property
@@ -248,6 +249,7 @@ def load_config(project_dir: Path | None = None) -> Config:
         effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
         compact_threshold=_int("KBCODE_COMPACT_TOKENS", DEFAULT_COMPACT_TOKENS),
         request_timeout=_int("KBCODE_REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
+        hooks=settings.get("hooks") or {},
     )
     config.use_provider(provider, model=model, base_url=base_url)
     return config

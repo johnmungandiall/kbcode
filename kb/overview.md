@@ -13,8 +13,8 @@ Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemin
 ## Key entry points
 - `kbcode/cli.py:329` — `main()` entry point, parses args, dispatches to wizard/init/REPL
 - `kbcode/repl.py:151` — `repl()` the interactive chat loop
-- `kbcode/agent.py:62` — `Agent` class, the core tool-using loop
-- `kbcode/tools/core.py:22` — `ToolsCore`/`Tools`, all tool implementations + schemas
+- `kbcode/agent.py:63 — `Agent` class, the core tool-using loop
+- `kbcode/tools/core.py:23 — `ToolsCore`/`Tools`, all tool implementations + schemas
 
 See [[architecture]] for the full component map and its "Deep dives" links into
 the `kb/features/` notes.

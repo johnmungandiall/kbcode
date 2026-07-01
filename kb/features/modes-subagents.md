@@ -18,7 +18,7 @@ frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:30`).
 ._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:46`) conditionally
 appends the `run_subagent` schema (`_subagent_schema`, `kbcode/tools/core.py:49`)
 only when subagents exist, roster baked into its description. `_run_subagent()`
-(`kbcode/agent.py:475`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
+(`kbcode/agent.py:513`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
 `kbcode/agent.py:27`) with the subagent's own system prompt + filtered schemas, shares
 the same `Tools` instance (file/KB side-effects land in the same project),
 blocks nested delegation, and returns only the final text. Token usage still
