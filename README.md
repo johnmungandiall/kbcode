@@ -162,11 +162,13 @@ Show the agent a screenshot or a picture:
 > [!IMPORTANT]
 > Best on a **vision-capable model** (Claude, GPT-4o, Gemini…) — the image is sent
 > straight into your conversation. On a model without vision (e.g. many MiMo /
-> OpenRouter routes), kbcode automatically **falls back**: it describes the image
-> with an auxiliary vision model (the Hermes idea) and hands your model that
-> description as text instead of failing outright. This needs `OPENROUTER_API_KEY`
-> (or `KBCODE_VISION_API_KEY`) set — see `.env.example`. Clipboard paste needs
-> Pillow — it's installed automatically with kbcode, or `pip install Pillow`.
+> custom-endpoint routes), kbcode automatically **falls back**: it describes the
+> image with an auxiliary vision model (the Hermes idea) and hands your model
+> that description as text instead of failing outright. It auto-detects a route
+> from `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY` (or a genuinely
+> OpenRouter-routed main provider) — set `KBCODE_VISION_API_KEY` to override —
+> see `.env.example`. Clipboard paste needs Pillow — it's installed automatically
+> with kbcode, or `pip install Pillow`.
 
 > [!WARNING]
 > **Alt+V does nothing?** First make sure you're on the latest version
@@ -187,8 +189,10 @@ what's going wrong in this recording?
 ```
 
 - **⚡ One-shot — `--video`:** `kbcode --video demo.mp4 "what's wrong here?"`
-- Supports mp4, webm, mov, avi, mkv, mpeg (≤ 30 MB). Needs `OPENROUTER_API_KEY`
-  (or `KBCODE_VISION_API_KEY`) — same as the image fallback above.
+- Supports mp4, webm, mov, avi, mkv, mpeg (≤ 30 MB). Same auto-detected fallback
+  route as images above — except Claude/Anthropic can't do video at all, so
+  video specifically needs `GEMINI_API_KEY` / `OPENAI_API_KEY` / a genuinely
+  OpenRouter-routed provider / `KBCODE_VISION_API_KEY`.
 
 ### 🎭 Modes (the Kilo Code idea)
 

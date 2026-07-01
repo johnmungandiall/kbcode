@@ -117,8 +117,9 @@ class Agent:
         last = self.messages[-1] if self.messages else None
         if not last or last.get("role") != "user" or not last.get("images"):
             return False
+        cfg = getattr(self.provider, "config", None)
         with self.ui.working("describing image with an auxiliary vision model…"):
-            description = vision_fallback.describe_images(last["images"], last.get("content") or "")
+            description = vision_fallback.describe_images(last["images"], last.get("content") or "", config=cfg)
         if not description:
             return False
         self.ui.notice(

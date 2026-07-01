@@ -606,13 +606,13 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None
                 ui.error(f"couldn't read a video at: {path} (check the path, format, or size)")
                 continue
             with ui.working("🎬 describing video with an auxiliary vision model…"):
-                description = vision_fallback.describe_video(vid, question)
+                description = vision_fallback.describe_video(vid, question, config=config)
             if description is None:
                 ui.error(
                     "No auxiliary vision model configured for video analysis — none of "
-                    "kbcode's providers accept video natively. Set OPENROUTER_API_KEY "
-                    "(or KBCODE_VISION_API_KEY / KBCODE_VISION_MODEL / KBCODE_VISION_BASE_URL) "
-                    "to enable it."
+                    "kbcode's providers accept video natively, and no ANTHROPIC_API_KEY / "
+                    "GEMINI_API_KEY / OPENAI_API_KEY / KBCODE_VISION_API_KEY was usable "
+                    "(Anthropic can't do video — set one of the others)."
                 )
                 continue
             pending_notes.append(f"[video: {path}]\n{description}")
@@ -768,7 +768,7 @@ def _take_video(argv: list[str]) -> list[str]:
     return paths
 
 
-def _describe_videos(paths: list[str]) -> list[str]:
+def _describe_videos(paths: list[str], config: Config) -> list[str]:
     """Load + describe each video path via the auxiliary vision fallback —
     kbcode has no native video path, so this always resolves straight to
     text. Returns the description notes."""
@@ -782,12 +782,12 @@ def _describe_videos(paths: list[str]) -> list[str]:
             console.print(f"[yellow]Skipped (not a readable video):[/yellow] {path}")
             continue
         console.print(f"[dim]🎬 describing video with an auxiliary vision model: {path}[/dim]")
-        description = vision_fallback.describe_video(vid, "")
+        description = vision_fallback.describe_video(vid, "", config=config)
         if description is None:
             console.print(
-                "[yellow]No auxiliary vision model configured — set OPENROUTER_API_KEY "
-                "(or KBCODE_VISION_API_KEY/KBCODE_VISION_MODEL/KBCODE_VISION_BASE_URL) "
-                f"to analyze video.[/yellow] Skipped: {path}"
+                "[yellow]No auxiliary vision model configured — set ANTHROPIC_API_KEY / "
+                "GEMINI_API_KEY / OPENAI_API_KEY / KBCODE_VISION_API_KEY (Anthropic can't "
+                f"do video — set one of the others).[/yellow] Skipped: {path}"
             )
             continue
         notes.append(f"[video: {path}]\n{description}")
@@ -849,9 +849,9 @@ def main(argv: list[str] | None = None) -> int:
     if not _require_key(config):
         return 1
 
-    # Describe any --video attachments now that .env (KBCODE_VISION_*/
-    # OPENROUTER_API_KEY) has been loaded by load_config above.
-    video_notes = _describe_videos(video_paths) if video_paths else []
+    # Describe any --video attachments now that .env has been loaded by
+    # load_config above (the fallback needs its key visible).
+    video_notes = _describe_videos(video_paths, config) if video_paths else []
 
     memory = Memory(config.memory_db)
     agent: Agent | None = None
