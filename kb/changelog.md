@@ -2,7 +2,14 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.5 (current)
+## v1.9.6 (current)
+- **Auto-compaction now works better** — default raised from 12k to 80k tokens
+  (more sensible for modern large-context models like Claude/Gemini). Also
+  loads "compact_tokens" from .kbcode/settings.json (env var still wins if set).
+  Auto now triggers for realistic conversation sizes instead of too early or
+  never. Also added proactive check before each model call in long turns.
+
+## v1.9.5
 - **Better `kb update` on Windows** — added clear guidance when running `kb update`.
   If the update fails with "file is being used by another process" (common on
   Windows because `kb.exe` is locked while the command runs), it now prints
@@ -22,7 +29,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   Result: fewer slow LLM round-trips during exploration and reading. Works
   best with fast models (Claude, Gemini Flash, etc.).
 
-## v1.9.3 (current)
+## v1.9.3
 - **Parallel reads inside subagents + faster code-explorer** — subagents now
   batch consecutive `parallel_safe` tools (`read_file` + `list_dir` + `search_code`
   etc.) using `_run_subagent_parallel_batch`, the same way the main loop does.
