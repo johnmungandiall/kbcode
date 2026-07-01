@@ -26,12 +26,14 @@ Homepage = "https://github.com/johnmungandiall/kbcode"
 Repository = "https://github.com/johnmungandiall/kbcode"
 Issues = "https://github.com/johnmungandiall/kbcode/issues"
 
-# This is what makes `kbcode` a real command after `pip install`:
+# This is what makes `kbcode` (and the shorter `kb` alias) real commands after
+# `pip install`:
 #   pip install -e .      (from this folder, during development)
 #   pip install .         (a normal install)
-# then just run:  kbcode
+# then just run:  kbcode   (or  kb)
 [project.scripts]
 kbcode = "kbcode.cli:main"
+kb = "kbcode.cli:main"
 
 [tool.setuptools]
 packages = ["kbcode"]

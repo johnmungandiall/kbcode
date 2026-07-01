@@ -139,7 +139,7 @@ class TerminalUI:
         info.add_row("folder", str(cwd))
 
         body = Table.grid(padding=(0, 0))
-        body.add_row(Text("your local AI coding agent", style="dim italic"))
+        body.add_row(Text("kbcode by John Mungandi", style="dim italic"))
         body.add_row("")
         body.add_row(info)
         body.add_row("")
