@@ -20,8 +20,11 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from typing import Callable, TypeVar
 
 from .config import Config
+
+_T = TypeVar("_T")
 
 
 @dataclass
@@ -97,7 +100,7 @@ def _classify(exc: Exception) -> tuple[bool, str, str | None]:
     return False, f"Provider error: {exc}", None
 
 
-def _with_retry(fn, ui=None):
+def _with_retry(fn: Callable[[], _T], ui=None) -> _T:
     """Call ``fn`` and retry transient provider failures with exponential
     backoff. Raises :class:`ProviderError` (clean, user-facing) when it finally
     gives up. ``ui`` (optional) gets a yellow "retrying…" notice between tries.

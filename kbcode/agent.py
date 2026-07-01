@@ -17,7 +17,7 @@ from . import vision_fallback
 from .compaction import compact, estimate_tokens
 from .modes import DEFAULT_MODE, Mode, builtin_modes
 from .pricing import estimate_cost
-from .provider import LLMProvider, ProviderError
+from .provider import LLMProvider, LLMResponse, ProviderError
 from .repair import promote
 from .subagents import Subagent
 from .tools import Tools
@@ -121,7 +121,7 @@ class Agent:
         self.mode = mode
         return True
 
-    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None):
+    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None) -> LLMResponse:
         """Call the provider off the main thread so Esc / Ctrl-C stay responsive.
 
         A blocking HTTP request holds the socket deep in C, so a pending

@@ -28,7 +28,7 @@ path, which otherwise forwards `tools` verbatim, keeps only name/description/
 (see [[gotchas]]).
 
 Both SDK clients are built lazily with a shared timeout from
-`LLMProvider._client_kwargs()` (`kbcode/provider.py:132`): it passes
+`LLMProvider._client_kwargs()` (`kbcode/provider.py:135`): it passes
 `timeout=config.request_timeout` (default 120s) so a stalled model fails fast
 instead of freezing on the SDK's ~600s default; `KBCODE_REQUEST_TIMEOUT=0` opts
 out (see [[config]]). The resulting timeout error is transient, so `_with_retry`

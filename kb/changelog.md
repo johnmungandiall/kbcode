@@ -3,6 +3,13 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **Configurable hooks timeout** (`kbcode/hooks.py`) — `HooksRunner`'s
+  per-command `subprocess` timeout (30s default) can now be overridden via a
+  `"timeout"` key in the `"hooks"` block of `.kbcode/settings.json` (e.g.
+  `"hooks": {"timeout": 60, "PreToolUse": [...]}`); an explicit constructor
+  arg still wins (used by tests). No caller changes needed since
+  `ToolsCore.__init__` already builds `HooksRunner(config.hooks, self.root)`
+  without passing a timeout. See [[safety]].
 - **Concurrent `run_subagent` dispatch** (#4.3 extension, `kbcode/agent.py`) —
   a run of 2+ consecutive `run_subagent` calls now dispatches concurrently
   (same `ThreadPoolExecutor`/`_PARALLEL_MAX_WORKERS` mechanism as the

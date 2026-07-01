@@ -22,14 +22,14 @@ the `kb/features/` notes.
 ## How to run
 - `pip install -e .` (editable dev install) or `pip install git+https://github.com/johnmungandiall/kbcode.git`
 - `kbcode init` then `kbcode model` then `kbcode` (or `kb`)
-- Tests: `pytest` (23 files under `tests/`, CI in `.github/workflows/ci.yml`)
+- Tests: `pytest` (30 files under `tests/`, CI in `.github/workflows/ci.yml`)
 
 See [[cheatsheet]] for the full command list.
 
 ## Version
 - `kbcode/__init__.py:9` — `__version__ = "1.8.0"`; release history in [[changelog]]
 
-last indexed: 2026-07-01
+last indexed: 2026-07-01 (hooks timeout now settings-configurable, +5 test files)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

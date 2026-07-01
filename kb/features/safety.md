@@ -47,11 +47,11 @@ Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 settings merge as everything else (`load_config()`,
 `kbcode/config.py:252`) — no new file or precedence rule.
 
-`HooksRunner.run()` (`kbcode/hooks.py:48`) looks up `config[event]`, matches
+`HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty
 = match-all), and for each matching `{"type": "command", ...}` runs the
-command via `subprocess.run(shell=True, cwd=root, timeout=30)`
-(`_run_one()`, `kbcode/hooks.py:82`) with a JSON payload (`hook_event_name`,
+command via `subprocess.run(shell=True, cwd=root, timeout=self.timeout)`
+(`_run_one()`, `kbcode/hooks.py:85`) with a JSON payload (`hook_event_name`,
 `tool_name`, `tool_input`, `tool_output`, `is_error`) piped to stdin.
 Exit-code contract: `0` = allow silently; `2` = block, stderr becomes
 `HookOutcome.message` (fed back to the model on PreToolUse, appended as a
@@ -59,8 +59,16 @@ note on PostToolUse/Stop); anything else is non-fatal (logged, run
 continues). A broken hook — missing binary, timeout, crash — is swallowed,
 never crashes the agent loop (see [[gotchas]]).
 
+`self.timeout` (`HooksRunner.__init__`, `kbcode/hooks.py:43`) defaults to
+30s (`_TIMEOUT`) but is now configurable per project: an explicit
+constructor `timeout` arg wins (used by tests); otherwise it reads
+`config.get("timeout", _TIMEOUT)`, so `.kbcode/settings.json` can set
+`"hooks": {"timeout": N, "PreToolUse": [...], ...}` to change the timeout
+for every hook command in that project.
+
 `ToolsCore.__init__` builds `self.hooks = HooksRunner(config.hooks,
-self.root)` (`kbcode/tools/core.py:31`) right next to `self.checkpoints`.
+self.root)` (`kbcode/tools/core.py:31`) right next to `self.checkpoints` —
+no timeout arg passed, so it always picks up the settings-driven value.
 `Agent._dispatch_tool()` (`kbcode/agent.py:195`) wraps one tool call: runs
 `PreToolUse` (blocks without calling the tool if `HookOutcome.blocked`),
 then `self.tools.execute()`, then `PostToolUse` (appends

@@ -9,7 +9,7 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-except Exception:  # pragma: no cover - dotenv is optional at runtime
+except ImportError:  # pragma: no cover - dotenv is optional at runtime
     def load_dotenv(*_args, **_kwargs):
         return False
 

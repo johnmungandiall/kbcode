@@ -42,7 +42,7 @@
 - Full KB-maintenance rules (auto-update, drift, runbooks, user map): [[about-kb]]
 
 ## Testing
-- `pytest` (`tests/`, 23 files) + `ruff` lint, both run in CI (`.github/workflows/ci.yml`)
+- `pytest` (`tests/`, 30 files) + `ruff` lint, both run in CI (`.github/workflows/ci.yml`)
 - No inline-script fallback needed anymore — write a `tests/test_*.py` case
 
 See [[gotchas]] for what breaks if you ignore these, [[architecture]] for the component map.

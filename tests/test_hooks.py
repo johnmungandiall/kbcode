@@ -94,6 +94,24 @@ def test_timeout_does_not_crash(tmp_path):
     assert outcome.blocked is False
 
 
+def test_timeout_defaults_to_30_seconds_when_unconfigured(tmp_path):
+    runner = HooksRunner({}, tmp_path)
+    assert runner.timeout == 30
+
+
+def test_timeout_configurable_via_settings_hooks_block(tmp_path):
+    # settings.json can set "hooks": {"timeout": N, "PreToolUse": [...]}
+    config = {"timeout": 5, "PreToolUse": [{"matcher": "*", "hooks": []}]}
+    runner = HooksRunner(config, tmp_path)
+    assert runner.timeout == 5
+
+
+def test_explicit_timeout_argument_wins_over_settings_value(tmp_path):
+    config = {"timeout": 5}
+    runner = HooksRunner(config, tmp_path, timeout=1)
+    assert runner.timeout == 1
+
+
 def test_hook_receives_tool_name_and_input_as_json_on_stdin(tmp_path):
     cmd = _write_script(
         tmp_path,

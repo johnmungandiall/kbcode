@@ -40,10 +40,13 @@ class HookOutcome:
 class HooksRunner:
     """Runs the ``hooks`` block of settings.json for one project."""
 
-    def __init__(self, config: dict, root: Path, timeout: int = _TIMEOUT):
+    def __init__(self, config: dict, root: Path, timeout: int | None = None):
         self.config = config or {}
         self.root = root
-        self.timeout = timeout
+        # explicit ``timeout`` arg wins; otherwise settings.json can set
+        # ``"hooks": {"timeout": N, "PreToolUse": [...]}`` to override the
+        # default for every hook command in this project.
+        self.timeout = timeout if timeout is not None else int(self.config.get("timeout", _TIMEOUT))
 
     def run(
         self,
