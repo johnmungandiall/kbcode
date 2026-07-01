@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 from rich.console import Console
@@ -20,6 +22,7 @@ from .permissions import Permissions
 from .prompt_input import make_input, select
 from .prompts import build_system_prompt
 from .provider import ProviderError, get_provider
+from .sessions import SessionRecorder, list_sessions, load_session, lifetime_stats
 from .subagents import load_subagents
 from .tools import Tools
 from .ui import COMMANDS, TerminalUI
@@ -95,7 +98,7 @@ gets your summary, not your steps.
 """
 
 
-def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
+def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id: str | None = None) -> Agent:
     ui.root = config.project_dir  # so file tool-lines show the full path
     perm = Permissions(auto_approve=config.auto_approve, ui=ui)
     tools = Tools(config, memory, kb, perm)
@@ -109,7 +112,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
     system = build_system_prompt(
         kb.read_all(), memory.list_skills(), memory.recent(), agent_md, orders
     )
-    return Agent(
+    agent = Agent(
         system,
         get_provider(config, ui),
         tools,
@@ -118,6 +121,77 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory) -> Agent:
         modes=load_modes(config.kbcode_dir / "modes"),
         subagents=load_subagents(config.kbcode_dir / "agents"),
     )
+    # Claude Code / Hermes idea: persist every chat so it can be picked back up
+    # with --continue / --resume / /resume, and rolled into /insights later.
+    agent.session = SessionRecorder(
+        config.sessions_dir, config.project_dir, config.provider, config.model,
+        agent.mode.name, resume_id=resume_id,
+    )
+    return agent
+
+
+_SESSION_ID_RE = re.compile(r"^\d{8}_\d{6}_[0-9a-f]{6}$")
+
+
+def _resume_agent(config: Config, kb: KnowledgeBase, memory: Memory, row: dict) -> Agent:
+    """Rebuild an Agent from a saved session's transcript (--continue / --resume / /resume)."""
+    meta, messages = load_session(row["path"])
+
+    # "raw" assistant payloads are provider-shaped (see provider.py), so replay
+    # only works cleanly under the same provider/model the session was
+    # recorded with — restore it (Claude Code preserves model across resume),
+    # falling back to the current one if it isn't configured here.
+    recorded_provider = meta.get("provider")
+    if recorded_provider and recorded_provider != config.provider:
+        prev_provider, prev_model = config.provider, config.model
+        config.use_provider(recorded_provider, model=meta.get("model"))
+        if not config.api_key:
+            config.use_provider(prev_provider, model=prev_model)
+            ui.notice(
+                f"Session was recorded with provider '{recorded_provider}', which isn't "
+                f"configured here — resuming under {config.provider}/{config.model} instead; "
+                "older turns may not replay if you send another message.",
+                style="yellow",
+            )
+    elif meta.get("model"):
+        config.model = meta["model"]
+
+    agent = _build_agent(config, kb, memory, resume_id=meta.get("id"))
+    agent.messages = messages
+    if meta.get("mode") in agent.modes:
+        agent.mode = agent.modes[meta["mode"]]
+    turns = row.get("turns", 0)
+    ui.notice(
+        f"↳ resumed session {meta.get('id')} — \"{row.get('title') or '(no messages yet)'}\" "
+        f"({turns} turn{'s' if turns != 1 else ''})",
+        style="cyan",
+    )
+    return agent
+
+
+def _session_picker(rows: list[dict]) -> dict | None:
+    """Arrow-key picker for --resume / /resume with no id given. Returns the
+    chosen row, or None if cancelled / no interactive menu is available here."""
+    labels = [
+        f"{time.strftime('%Y-%m-%d %H:%M', time.localtime(r['started_at'])) if r['started_at'] else '?':<16}  "
+        f"{(r['title'] or '(no messages yet)')[:48]:<48}  {r['turns']} turn(s)"
+        for r in rows
+    ]
+    available, idx = select(labels, header="  pick a session to resume  (↑/↓ then Enter, Esc to cancel):")
+    if not available:
+        ui.sessions(rows)
+        ui.notice("No interactive menu here — use  /resume <n or id>  instead.")
+        return None
+    if idx is None:
+        return None
+    return rows[idx]
+
+
+def _find_session(rows: list[dict], token: str) -> dict | None:
+    """Resolve a /resume argument: a 1-based list index, a full id, or an id prefix."""
+    if token.isdigit() and 1 <= int(token) <= len(rows):
+        return rows[int(token) - 1]
+    return next((r for r in rows if r["id"] == token or r["id"].startswith(token)), None)
 
 
 def _rollback_menu(cps, rows: list[dict]) -> bool:
@@ -303,14 +377,15 @@ def _model_wizard(config: Config) -> int:
     return 0
 
 
-def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
-    agent = _build_agent(config, kb, memory)
+def _repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None = None) -> None:
+    agent = agent or _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
 
     arg_options = {
         "/provider": list(PRESETS),
         "/mode": list(agent.modes),
         "/kb-check": ["--fix"],
+        "/resume": [r["id"] for r in list_sessions(config.sessions_dir)],
     }
     cmd_input = make_input(COMMANDS, arg_options)  # None if no autocomplete available
     if cmd_input:
@@ -326,6 +401,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
                 user = _read(ui.prompt(agent.mode.name))
         except (EOFError, KeyboardInterrupt):
             ui.print("\nbye 👋")
+            agent.close()
             return
         if cmd_input:  # collect any images attached with Alt+V during this prompt
             new_imgs = cmd_input.pop_images()
@@ -340,6 +416,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
 
         if user in ("/exit", "/quit"):
             ui.print("bye 👋")
+            agent.close()
             return
         if user == "/help":
             ui.help()
@@ -379,6 +456,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
                 continue
             if not _require_key(config):
                 continue
+            agent.close()
             agent = _build_agent(config, kb, memory)  # new provider -> fresh chat
             ui.notice(f"switched → {config.provider} / {config.model}", style="green")
             continue
@@ -406,7 +484,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             ui.todos(agent.tools.todos)
             continue
         if user == "/insights":
-            ui.insights(agent.insights())
+            ui.insights(agent.insights(), lifetime_stats(config.sessions_dir))
             continue
         if user in ("/agents", "/subagents"):
             ui.agents(agent.subagents)
@@ -445,6 +523,29 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
             file_arg = parts[2] if len(parts) > 2 else None
             msg = cps.restore(rows[int(parts[1]) - 1]["hash"], file_arg)
             ui.notice(msg, style="green" if msg.startswith("Restored") else "yellow")
+            continue
+        if user == "/sessions":
+            rows = list_sessions(config.sessions_dir)
+            ui.sessions(rows, current_id=agent.session.id if agent.session else None)
+            continue
+        if user.split() and user.split()[0] == "/resume":
+            parts = user.split(maxsplit=1)
+            current_id = agent.session.id if agent.session else None
+            rows = [r for r in list_sessions(config.sessions_dir) if r["id"] != current_id]
+            if len(parts) > 1 and parts[1].strip():
+                chosen = _find_session(rows, parts[1].strip())
+                if chosen is None:
+                    ui.error(f"no saved session matches '{parts[1].strip()}'. Try /sessions to list them.")
+                    continue
+            elif not rows:
+                ui.notice("No other saved sessions yet.", style="yellow")
+                continue
+            else:
+                chosen = _session_picker(rows)
+                if chosen is None:
+                    continue
+            agent.close()
+            agent = _resume_agent(config, kb, memory, chosen)
             continue
         if user.split() and user.split()[0] == "/kb-check":
             if "--fix" in user.split() or "fix" in user.split()[1:]:
@@ -499,6 +600,7 @@ def _repl(config: Config, kb: KnowledgeBase, memory: Memory) -> None:
                 ui.error(f"folder not found: {target}")
                 continue
             config.project_dir = target.resolve()
+            agent.close()
             memory.close()
             kb = KnowledgeBase(config.kb_dir)
             memory = Memory(config.memory_db)
@@ -558,6 +660,32 @@ def _take_dir(argv: list[str]) -> Path | None:
     return None
 
 
+def _take_flag(argv: list[str], names: tuple[str, ...]) -> bool:
+    """Pull a boolean flag (any of its spellings) out of argv."""
+    found = False
+    for flag in names:
+        while flag in argv:
+            argv.remove(flag)
+            found = True
+    return found
+
+
+def _take_resume(argv: list[str]) -> tuple[bool, str | None]:
+    """Pull ``--resume [session-id]`` out of argv (the Claude Code idea).
+
+    The id is only consumed if it looks like one of our generated session ids
+    (``YYYYMMDD_HHMMSS_xxxxxx``) — otherwise ``--resume`` is bare (interactive
+    picker) and the rest of argv is still the one-shot prompt, if any.
+    """
+    if "--resume" not in argv:
+        return False, None
+    i = argv.index("--resume")
+    del argv[i]
+    if i < len(argv) and _SESSION_ID_RE.match(argv[i]):
+        return True, argv.pop(i)
+    return True, None
+
+
 def _take_images(argv: list[str]) -> list[dict]:
     """Pull every ``--image/-i <path>`` option out of argv and load it (one-shot)."""
     from .images import load_image_file
@@ -596,6 +724,9 @@ def main(argv: list[str] | None = None) -> int:
             argv.remove(flag)
             auto = True
 
+    do_continue = _take_flag(argv, ("--continue", "-c"))  # resume the latest saved session
+    want_resume, resume_id = _take_resume(argv)  # --resume [id] -> a specific or picked session
+
     images = _take_images(argv)  # one-shot vision attachments: --image/-i <path>
 
     # Which project to work on: -C <path>, else `init <path>`, else the cwd.
@@ -631,13 +762,32 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     memory = Memory(config.memory_db)
+    agent: Agent | None = None
     try:
+        if do_continue or want_resume:
+            rows = list_sessions(config.sessions_dir)
+            if not rows:
+                console.print("[yellow]No saved sessions yet for this project — starting a new one.[/yellow]")
+            elif resume_id:
+                row = _find_session(rows, resume_id)
+                if row is None:
+                    console.print(f"[red]No saved session matches '{resume_id}'.[/red]")
+                    return 1
+                agent = _resume_agent(config, kb, memory, row)
+            elif do_continue:
+                agent = _resume_agent(config, kb, memory, rows[0])
+            else:  # bare --resume -> interactive picker
+                row = _session_picker(rows)
+                if row is None:
+                    return 0
+                agent = _resume_agent(config, kb, memory, row)
+
         if argv or images:  # one-shot: kbcode "do something" [--image pic.png]
-            agent = _build_agent(config, kb, memory)
+            agent = agent or _build_agent(config, kb, memory)
             with interrupt_on_escape():  # Esc / Ctrl-C stops the run
                 agent.run(" ".join(argv), images=images or None)
         else:  # interactive chat
-            _repl(config, kb, memory)
+            _repl(config, kb, memory, agent=agent)
     except KeyboardInterrupt:
         console.print("\n[yellow]interrupted.[/yellow]")
         return 130
@@ -647,6 +797,8 @@ def main(argv: list[str] | None = None) -> int:
             console.print(f"[dim]{exc.hint}[/dim]")
         return 1
     finally:
+        if agent is not None:
+            agent.close()
         memory.close()
     return 0
 

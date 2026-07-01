@@ -32,7 +32,7 @@ Secondary concepts mined from its plugins (`plugins/`) and `.claude/`:
 | **Skills** | `skills/<name>/SKILL.md` — packaged know-how loaded on demand by trigger phrase. | ✅ kbcode has `save_skill`/`/skills` (simpler form). 🔜 could add the `SKILL.md` + frontmatter format. |
 | **Hooks** | Scripts fired on lifecycle/tool events to inject rules or block actions (`hookify` plugin: regex rule → message). | 🔜 a lightweight `.kbcode/hooks/` (pre-write / pre-command) fits the permission model. |
 | **Output styles** | Swappable response personas (`explanatory`, `learning`). | ⏭️ overlaps with modes; low priority. |
-| **`/insights`-style usage stats** | Token/cost/tool-usage report from session history. | 🔜 (also appears in Hermes) — see §3. |
+| **`/insights`-style usage stats** | Token/cost/tool-usage report from session history. | ✅ done — see #11 below (also appears in Hermes). |
 | **Guided multi-phase commands** | `feature-dev`: Discovery → Explore → Design → Implement, "ask clarifying questions first," TodoWrite throughout. | 🔜 maps onto a richer `architect` mode + a todo tool. |
 | **MCP integration** | External tool servers over a protocol. | ⏭️ heavy; not needed locally yet. |
 
@@ -48,7 +48,7 @@ Secondary concepts mined from `agent/`:
 | Concept | What it is | Status |
 |---|---|---|
 | **Curator** (`curator.py`) | A background, idle-triggered auxiliary-model pass that reviews agent-created skills: archive/pin/consolidate/patch stale ones. The memory **maintains itself**. | 🔜 a `/curate` (or idle) pass over `kb/` + skills is a natural fit. |
-| **Insights engine** (`insights.py`) | Reads the session DB → tokens consumed, cost estimate, tool-usage patterns, per-model breakdown. | 🔜 kbcode already estimates tokens; a `/insights` over saved sessions is low effort. |
+| **Insights engine** (`insights.py`) | Reads the session DB → tokens consumed, cost estimate, tool-usage patterns, per-model breakdown. | ✅ done — see #11 below. `sessions.py` plays the role of Hermes' `SessionDB`, but as plain per-project JSONL files instead of a SQLite store. |
 | **Iteration budget** (`iteration_budget.py`) | Thread-safe per-agent step cap (parent 90, subagent 50) — stops runaway loops. | 🔜 cheap safety rail for `Agent.run`. |
 | **Pluggable context engine** (`context_engine.py`) | Compaction is an abstract, config-selected strategy (`context.engine`), not hardwired. | 🔜 small refactor: make `compaction` swappable; default = current summarizer. |
 | **`/learn`** (`learn_prompt.py`) | Turn "what we just did" / a dir / a URL into one reusable `SKILL.md`. | 🔜 great UX layer over the existing `save_skill`. |
@@ -120,7 +120,7 @@ Secondary concepts mined from `docs/automation/` and `packages/`:
 ## Recommended next features for kbcode (priority order)
 
 Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Each names its source.
-**Status: items 1–6 and 8–10 are now implemented.**
+**Status: items 1–6 and 8–11 are now implemented.**
 
 1. ✅ **Todo tool + `/todo`** *(Kilo Code / Claude Code)* — `manage_todos` tool, shown in the UI;
    allowed in every mode via the READ group. (`tools.py`, `ui.py`, `cli.py`, `modes.py`)
@@ -147,11 +147,24 @@ Ranked by **value ÷ effort** for a small, single-file-per-module local CLI. Eac
    model writes a tool call as text instead of using the function-calling interface, `repair.promote`
    recovers it and `Agent._run_promoted` runs it + nudges the model back to the proper format, so the
    turn no longer stalls at "no tool calls → done". (`repair.py`, `agent.py`)
+11. ✅ **Session history** *(Claude Code `--resume`/`--continue` + Hermes' `SessionDB`/`insights.py`)* —
+   every chat is persisted in real time to `.kbcode/sessions/<id>.jsonl` (one JSON line per message,
+   so a crash loses at most the in-flight one) via `SessionRecorder`. `kbcode -c`/`--continue`,
+   `kbcode --resume [id]`, and the in-chat `/sessions`/`/resume [id]` reopen a past chat — restoring
+   its provider/model/mode — instead of Claude Code's global `~/.claude/projects/`, sessions live
+   per-project like `memory.db`/checkpoints. `/reset` writes a reset marker instead of starting a new
+   file, so `/sessions` and resume only ever see what happened after the last reset, while the file
+   keeps a full audit trail underneath. `/insights` gained a second, all-time panel — `lifetime_stats()`
+   sums every saved session's last known usage and prices each with *its own* recorded model, so a
+   project that switched providers mid-life still gets one honest total (Hermes' insights-across-
+   sessions idea, without needing a database). (`sessions.py`, `agent.py`, `cli.py`, `ui.py`, `config.py`)
 
 Alongside these, a **production pass**: `pyproject.toml` makes `kbcode` a real installable command, and
 write/edit tool-lines now show the **full resolved path** so you always see where a file lands.
 
 **Still open / future:** #7 above, plus an *iteration budget* (per-run step cap — partly covered by the
 existing `_MAX_STEPS`/`_SUBAGENT_MAX_STEPS` caps), the `verify`-style **changelog bump** on KB fixes,
-pre-commit drift hooks, file-based slash commands, and lifecycle hooks.
+pre-commit drift hooks, file-based slash commands, lifecycle hooks, and session TTL/pruning (deliberately
+skipped for now, mirroring Hermes' own "never prune by default" stance — deleting `.kbcode/sessions/`
+is always safe).
 See the per-repo tables for the rest.

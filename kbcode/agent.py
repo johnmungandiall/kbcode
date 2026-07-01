@@ -52,6 +52,9 @@ class Agent:
         self.modes = modes or builtin_modes()
         self.mode = self.modes[DEFAULT_MODE]
         self.messages: list[dict] = []
+        # Persisted transcript for --continue / --resume / /sessions (set by
+        # the CLI right after construction, since it needs self.mode.name).
+        self.session = None
         # Cumulative token spend this run, for /insights.
         self.usage = {"requests": 0, "input_tokens": 0, "output_tokens": 0}
         # KB lifecycle hooks state: the reminder fires once per session (like
@@ -100,6 +103,11 @@ class Agent:
             raise box["err"]
         return box["resp"]
 
+    def _append(self, message: dict) -> None:
+        self.messages.append(message)
+        if self.session:
+            self.session.append(message)
+
     def _system_for_mode(self) -> str:
         return f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
 
@@ -111,7 +119,7 @@ class Agent:
         msg: dict = {"role": "user", "content": user_input}
         if images:  # vision attachments (Alt+V / /image) — see images.py
             msg["images"] = images
-        self.messages.append(msg)
+        self._append(msg)
 
         start = time.perf_counter()
         before = dict(self.usage)
@@ -127,7 +135,7 @@ class Agent:
                 )
             self._record_usage(resp.usage)
 
-            self.messages.append(
+            self._append(
                 {
                     "role": "assistant",
                     "text": resp.text,
@@ -166,7 +174,7 @@ class Agent:
                 self.ui.tool_result(content, is_error)
                 content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
-            self.messages.append({"role": "tool_results", "results": results})
+            self._append({"role": "tool_results", "results": results})
 
         self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
         self._turn_summary(start, actions, before)
@@ -201,7 +209,7 @@ class Agent:
             self.ui.tool_result(content, is_error)
             content = self._with_kb_reminder(name, dict(args), content, is_error)
             feedback.append(f"\n## {name} [{'error' if is_error else 'ok'}]\n{content}")
-        self.messages.append({"role": "user", "content": "\n".join(feedback)})
+        self._append({"role": "user", "content": "\n".join(feedback)})
         return len(promoted)
 
     def _with_kb_reminder(self, name: str, args: dict, content: str, is_error: bool) -> str:
@@ -245,7 +253,7 @@ class Agent:
             return False
         detail = "\n".join(f"- {p}" for p in problems)
         self.ui.notice("kb/ drift detected before finishing — asking the model to fix it.", style="yellow")
-        self.messages.append(
+        self._append(
             {
                 "role": "user",
                 "content": (
@@ -265,6 +273,8 @@ class Agent:
             self.usage["input_tokens"] - before["input_tokens"],
             self.usage["output_tokens"] - before["output_tokens"],
         )
+        if self.session:
+            self.session.record_usage(dict(self.usage))
 
     def context_tokens(self) -> int:
         return estimate_tokens(self.messages)
@@ -358,6 +368,14 @@ class Agent:
     def reset(self) -> None:
         self.messages.clear()
         self._kb_reminder_done = False
+        if self.session:
+            self.session.reset_marker()
+
+    def close(self) -> None:
+        """Flush a final usage snapshot to the transcript. Call once at process
+        exit (and before replacing this Agent with a freshly built one)."""
+        if self.session:
+            self.session.record_usage(dict(self.usage))
 
     def _maybe_compact(self) -> None:
         """Auto-summarize old turns once the transcript crosses the threshold."""

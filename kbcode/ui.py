@@ -11,6 +11,7 @@ back to plain text, so it stays robust on basic Windows consoles.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from rich.console import Console
@@ -42,11 +43,13 @@ COMMANDS = [
     ("/agents", "list available subagents (.kbcode/agents/)"),
     ("/image [path]", "attach an image (clipboard, or a file) for your next message — also Alt+V"),
     ("/learn [topic]", "save what we just did as a reusable skill"),
-    ("/insights", "show tokens used and estimated cost this session"),
+    ("/insights", "show tokens used and estimated cost (this chat + all saved sessions)"),
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/rollback", "undo AI edits — pick a checkpoint from a menu (auto-saved before every edit)"),
-    ("/reset", "forget this chat (memory + kb are kept)"),
+    ("/sessions", "list past chat sessions for this project"),
+    ("/resume [id]", "resume a past session (no id = pick from a list)"),
+    ("/reset", "forget this chat (memory + kb are kept; starts a fresh saved session)"),
     ("/exit", "quit"),
 ]
 
@@ -161,7 +164,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/rollback", "/reset", "/exit"]),
+            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/rollback", "/sessions", "/resume [id]", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
@@ -305,7 +308,7 @@ class TerminalUI:
             table.add_row(marks.get(status, "○"), cell)
         self.console.print(Panel(table, title="todos", border_style="dim", padding=(0, 1)))
 
-    def insights(self, data: dict) -> None:
+    def insights(self, data: dict, lifetime: dict | None = None) -> None:
         info = Table.grid(padding=(0, 2))
         info.add_column(justify="right", style="dim")
         info.add_column(style="bold")
@@ -317,7 +320,40 @@ class TerminalUI:
         info.add_row("context now", f"~{data.get('context_tokens', 0):,}")
         cost = data.get("cost")
         info.add_row("est. cost", f"${cost:.4f}" if cost is not None else "unknown model")
-        self.console.print(Panel(info, title="insights (this session)", border_style="dim", padding=(1, 1)))
+        self.console.print(Panel(info, title="insights (this chat)", border_style="dim", padding=(1, 1)))
+
+        if lifetime and lifetime.get("sessions"):
+            hist = Table.grid(padding=(0, 2))
+            hist.add_column(justify="right", style="dim")
+            hist.add_column(style="bold")
+            hist.add_row("saved sessions", f"{lifetime['sessions']:,}")
+            hist.add_row("total turns", f"{lifetime.get('turns', 0):,}")
+            hist.add_row("total tokens", f"{lifetime.get('total_tokens', 0):,}")
+            lcost = lifetime.get("cost")
+            hist.add_row("est. cost (all-time)", f"${lcost:.4f}" if lcost is not None else "unknown model(s)")
+            self.console.print(Panel(hist, title="insights (all saved sessions)", border_style="dim", padding=(1, 1)))
+
+    def sessions(self, rows: list[dict], current_id: str | None = None) -> None:
+        if not rows:
+            self.notice("No saved sessions yet for this project.")
+            return
+        table = Table.grid(padding=(0, 2))
+        table.add_column(justify="right", style="dim")
+        table.add_column(style="bold cyan")
+        table.add_column(style="dim")
+        table.add_column(overflow="fold")
+        table.add_column(justify="right", style="dim")
+        for i, r in enumerate(rows, 1):
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["started_at"])) if r["started_at"] else "?"
+            mark = "●" if r["id"] == current_id else " "
+            turns = r["turns"]
+            table.add_row(
+                f"{mark}{i}.", r["id"], when,
+                r["title"] or "(no messages yet)",
+                f"{turns} turn{'s' if turns != 1 else ''}",
+            )
+        self.console.print(Panel(table, title="sessions", border_style="dim", padding=(1, 1)))
+        self.console.print("[dim]resume with  /resume <n or id>[/dim]")
 
     def agents(self, items: dict) -> None:
         if not items:

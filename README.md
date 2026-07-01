@@ -95,6 +95,8 @@ chose the no-install option.)
 | `kbcode` | Start the chat on the current folder. |
 | `kbcode "do the thing"` | Run one task and exit (one-shot). |
 | `kbcode -y "do the thing"` | One-shot, but auto-approve every write & command (no y/N prompts). |
+| `kbcode -c` / `kbcode --continue` | Reopen the most recent saved chat for this folder. |
+| `kbcode --resume` | Pick a past chat from a list and reopen it (`--resume <id>` skips the picker). |
 | `kbcode init` | Set up the current folder (`AGENT.md` + `kb/`). Target another with `kbcode init "C:\path"`. |
 | `kbcode model` | Pick provider + key + model interactively; saved globally. |
 | `kbcode -C "C:\path"` | Work on another project folder without `cd` (also `--dir` / `--project`). |
@@ -194,9 +196,12 @@ Session:
 - `/version` — show the kbcode version
 - `/status` — provider, model, mode, and a context-fullness bar
 - `/open <folder>` — switch to working on another project folder
-- `/insights` — tokens used and estimated cost this session
+- `/insights` — tokens used and estimated cost (this chat + all saved sessions)
 - `/compact` — summarize earlier chat to free up context
-- `/reset` — clear the current chat (memory and kb are kept)
+- `/rollback` — undo AI edits from an auto-saved checkpoint
+- `/sessions` — list past chat sessions for this project
+- `/resume [id]` — resume a past session (no id = pick from a list)
+- `/reset` — clear the current chat (memory and kb are kept; starts a fresh saved session)
 - `/exit` — quit
 
 Knowledge & memory:
@@ -237,6 +242,23 @@ instructions at the **start of every session** — e.g. "always run the tests
 after changing code" or "reply in plain language." `init` creates a commented
 template; leave it untouched (or empty) to disable.
 
+### 📜 Session history (the Claude Code + Hermes idea)
+
+Every chat is saved as it happens to `.kbcode/sessions/<id>.jsonl` — one line
+per message, so a crash or a closed terminal loses at most the in-flight one.
+Pick it back up later:
+
+- **`kbcode -c` / `--continue`** — reopen the most recent chat for this folder.
+- **`kbcode --resume`** — pick from a list of past chats (`--resume <id>` jumps
+  straight to one, no picker).
+- **`/sessions`** and **`/resume [id]`** — same thing without leaving the chat.
+
+Resuming restores the provider, model, and mode that chat was using, and
+`/insights` rolls every saved session into an all-time token/cost total —
+not just the one you're in. `/reset` starts a fresh saved session rather than
+erasing history; deleting `.kbcode/sessions/` is always safe, it just forgets
+past chats.
+
 ### 💸 Long sessions stay cheap (auto-compaction)
 
 When a chat grows long, kbcode automatically summarizes the older middle of the
@@ -268,6 +290,8 @@ your request
   session so the agent doesn't re-read everything.
 - **`.kbcode/memory.db`** — a tiny SQLite database of long-term memories and
   skills, kept between sessions. (Git-ignored; it's per-machine.)
+- **`.kbcode/sessions/`** — one JSONL file per chat, for `--continue` / `--resume`
+  and the all-time `/insights` rollup. (Also git-ignored.)
 - **`.kbcode/standing-orders.md`** — always-on instructions added to every session.
 - **`.kbcode/agents/`** — your subagent definitions (`*.md`).
 - **`.kbcode/modes/`** — your custom modes (`*.md`), if any.
@@ -296,6 +320,7 @@ kbcode/
   ui.py             terminal look-and-feel (banner, tool lines, menus, summaries)
   prompt_input.py   "/" command autocomplete + the selectable menu (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
+  sessions.py       persisted chat transcripts — --continue/--resume, /insights rollup
   provider.py       talks to Claude / any OpenAI-compatible model (+ token usage)
   tools.py          the agent's tools (+ execute-time tool-call repair, openclaw idea)
   repair.py         recover tool calls a weak model wrote as plain text (openclaw idea)

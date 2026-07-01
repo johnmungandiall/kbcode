@@ -108,6 +108,12 @@ class Config:
         return self.kbcode_dir / "checkpoints"
 
     @property
+    def sessions_dir(self) -> Path:
+        # Claude Code / Hermes idea: persisted chat transcripts for --continue,
+        # --resume, and cross-session /insights rollups.
+        return self.kbcode_dir / "sessions"
+
+    @property
     def agent_md(self) -> Path:
         return self.project_dir / "AGENT.md"
 
