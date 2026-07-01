@@ -119,6 +119,27 @@
   never a bare `relative_to`. Regression test: `tests/test_tools_search.py`
   (`test_search_code_outside_project_shows_absolute_path`).
 
+## Compaction must shrink the *last* exchange too, not just the middle
+- `kbcode/compaction.py:146` — `_compact_within_last_exchange()` is the second
+  pass of `compact()`. The first pass (`_compact_exchanges`) summarizes whole
+  *middle* exchanges and always protects the most recent one — but a turn that
+  runs many tool round-trips and hits the step limit (`_MAX_STEPS`,
+  `kbcode/agent.py:26`) is a **single** exchange (one user turn + ~50
+  assistant/tool_results pairs). Pass 1 can't touch it, so `/compact`
+  (`Agent.compact_now`) and mid-turn auto-compaction did nothing after a
+  step-limit stop — the classic "`/compact` is broken" report.
+- The within-exchange cut MUST land on an assistant boundary and drop only
+  whole (assistant, tool_results) pairs, or you orphan a `tool_results` (a
+  provider 400: every tool_use needs its matching tool_result, see
+  [[providers]]). Don't "simplify" it into a raw slice. Regression tests:
+  `tests/test_compaction.py` (`test_compact_shrinks_a_single_runaway_exchange`,
+  `test_runaway_compaction_preserves_alternation_and_tool_pairing`).
+- Note the step limit itself is a flat cap: `actions` can read *above*
+  `_MAX_STEPS` in the "hit the step limit" notice because a parallel batch adds
+  `len(batch)` per loop iteration (`kbcode/agent.py:305`), and the turn-summary
+  "~N tokens" is *cumulative* usage across the turn's API calls, not the context
+  size. See [[context-management]].
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains

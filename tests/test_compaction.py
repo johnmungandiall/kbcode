@@ -88,6 +88,67 @@ def test_compact_preserves_user_assistant_alternation():
         assert roles[i + 1] == "assistant"
 
 
+class _FakeToolCall:
+    def __init__(self, id_):
+        self.id = id_
+        self.name = "search_code"
+        self.input = {"pattern": "x"}
+
+
+def _runaway_single_exchange(pairs: int) -> list[dict]:
+    """One user turn followed by `pairs` (assistant tool_call, tool_results)
+    rounds — the shape of a turn that hit the step limit. Exactly what the old
+    exchange-level compaction could not shrink."""
+    messages: list[dict] = [_user("search the whole project for expiry handling")]
+    for i in range(pairs):
+        messages.append({"role": "assistant", "text": "", "tool_calls": [_FakeToolCall(f"c{i}")], "raw": {}})
+        messages.append(
+            {"role": "tool_results", "results": [{"id": f"c{i}", "content": "big match output " * 40, "is_error": False}]}
+        )
+    return messages
+
+
+def test_compact_shrinks_a_single_runaway_exchange():
+    messages = _runaway_single_exchange(pairs=20)
+    provider = _FakeProvider(summary="ran 20 searches across the project")
+    before = compaction.estimate_tokens(messages)
+
+    new_messages, summary = compaction.compact(messages, provider)
+
+    assert summary == "ran 20 searches across the project"
+    assert provider.calls == 1
+    assert compaction.estimate_tokens(new_messages) < before  # actually reduced
+    # the user turn survives, with the recap folded in
+    assert new_messages[0]["role"] == "user"
+    assert "search the whole project" in new_messages[0]["content"]
+    assert "ran 20 searches across the project" in new_messages[0]["content"]
+    # the most recent work is kept verbatim
+    assert new_messages[-1] == messages[-1]
+
+
+def test_runaway_compaction_preserves_alternation_and_tool_pairing():
+    messages = _runaway_single_exchange(pairs=20)
+    new_messages, _ = compaction.compact(messages, _FakeProvider())
+
+    # the kept tail must start on an assistant turn (valid right after the user
+    # turn — never a dangling tool_results)
+    assert new_messages[1]["role"] == "assistant"
+    # every tool_results is immediately preceded by an assistant that made a
+    # tool call (no orphaned results after dropping the middle pairs)
+    for i, m in enumerate(new_messages):
+        if m["role"] == "tool_results":
+            assert new_messages[i - 1]["role"] == "assistant"
+            assert new_messages[i - 1]["tool_calls"]
+
+
+def test_compact_leaves_small_last_exchange_untouched():
+    # a normal short last exchange must not be summarized away
+    messages = _runaway_single_exchange(pairs=2)  # only 4 body messages
+    new_messages, summary = compaction.compact(messages, _FakeProvider())
+    assert new_messages == messages
+    assert summary is None
+
+
 def test_summarize_failure_does_not_raise():
     class _BrokenProvider:
         def complete(self, system, messages, tools):

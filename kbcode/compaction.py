@@ -105,14 +105,13 @@ def _summarize(provider: LLMProvider, transcript: str) -> str:
         return f"(summary failed: {exc})"
 
 
-def compact(
+def _compact_exchanges(
     messages: list[dict],
     provider: LLMProvider,
-    keep_head: int = 1,
-    keep_tail: int = 2,
+    keep_head: int,
+    keep_tail: int,
 ) -> tuple[list[dict], str | None]:
-    """Return (new_messages, summary). If there isn't enough to compact, returns
-    the original messages and None.
+    """The original strategy: summarize whole exchanges in the middle.
 
     Keeps the first ``keep_head`` exchanges and the last ``keep_tail`` exchanges
     intact, summarizes the middle, and prepends that recap to the first kept
@@ -142,3 +141,71 @@ def compact(
     spliced = dict(tail[0])
     spliced["content"] = recap + str(spliced["content"])
     return head + [spliced] + tail[1:], summary
+
+
+def _compact_within_last_exchange(
+    messages: list[dict],
+    provider: LLMProvider,
+    keep_tail_msgs: int,
+) -> tuple[list[dict], str | None]:
+    """Shrink a single runaway exchange from the inside — the case
+    exchange-level compaction can't touch, because it always protects the most
+    recent exchange, which is exactly the one that balloons when a turn runs
+    many tool round-trips and hits the step limit (a single user message with
+    ~50 assistant/tool_results pairs behind it). This is why ``/compact`` looked
+    dead after a step-limit stop.
+
+    Keep the exchange's user turn and its last ``keep_tail_msgs`` messages,
+    summarize the assistant/tool_results churn in between, and fold that recap
+    into the user turn. The cut lands on an assistant boundary and only whole
+    (assistant, tool_results) pairs are dropped, so tool-call/tool_result id
+    pairing and user/assistant alternation stay intact for every provider (see
+    [[providers]]).
+    """
+    starts = _exchange_starts(messages)
+    if not starts:
+        return messages, None
+    last = starts[-1]
+    body = messages[last + 1 :]  # after the user turn: assistant + tool_results
+    if len(body) <= keep_tail_msgs + 2:
+        return messages, None  # the last exchange isn't big enough to bother
+
+    cut = len(body) - keep_tail_msgs
+    # Keep the tail starting on an assistant turn, so nothing orphans a
+    # tool_results (which must follow the assistant that requested it).
+    while cut < len(body) and body[cut]["role"] != "assistant":
+        cut += 1
+    to_summarize, kept = body[:cut], body[cut:]
+    if not to_summarize or not kept:
+        return messages, None
+
+    summary = _summarize(provider, _render(to_summarize))
+    recap = (
+        "\n\n[Recap of earlier tool work in this turn, summarized to save context]\n"
+        f"{summary}\n"
+        "[End recap — the recent steps below are kept in full]"
+    )
+    new_user = dict(messages[last])
+    new_user["content"] = str(messages[last].get("content", "")) + recap
+    return messages[: last] + [new_user] + kept, summary
+
+
+def compact(
+    messages: list[dict],
+    provider: LLMProvider,
+    keep_head: int = 1,
+    keep_tail: int = 2,
+    keep_tail_msgs: int = 8,
+) -> tuple[list[dict], str | None]:
+    """Return (new_messages, summary), or (messages, None) when nothing could be
+    compacted. Two passes: first summarize whole exchanges in the middle, then
+    shrink the most recent exchange from the inside if it's still huge on its
+    own — a runaway turn that ran many tool round-trips. See the module
+    docstring and ``_compact_within_last_exchange``.
+    """
+    outer, outer_summary = _compact_exchanges(messages, provider, keep_head, keep_tail)
+    inner_msgs, inner_summary = _compact_within_last_exchange(outer, provider, keep_tail_msgs)
+    if outer_summary is None and inner_summary is None:
+        return messages, None
+    combined = "\n".join(s for s in (outer_summary, inner_summary) if s)
+    return inner_msgs, combined
