@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased
+## v1.9.0 (current)
 - **System prompt now stamps the current date/time** (`kbcode/prompts.py`) —
   `build_system_prompt()` injects a `## Current date & time` section
   (`datetime.now()`, injectable via a `now:` kwarg for tests) telling the
@@ -40,7 +40,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   delegation) with Pre/PostToolUse, and `Agent._stop_hook_feedback()` lets a
   `Stop` hook veto ending a turn. See [[safety]].
 
-## v1.8.0 (current)
+## v1.8.0
 - **`web_search` tool** (`kbcode/tools/web.py`) — the Hermes web-search idea,
   right-sized to one backend instead of its multi-provider plugin registry.
   DuckDuckGo search via the free `ddgs` package, no API key needed.
