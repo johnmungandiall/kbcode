@@ -94,7 +94,7 @@ no-install option.)
 
 | Command | What it does |
 |---|---|
-| `kbcode` | Start the chat on the current folder. |
+| `kb` | Start the chat on the current folder. |
 | `kbcode "do the thing"` | Run one task and exit (one-shot). |
 | `kbcode -y "do the thing"` | One-shot, but auto-approve every write & command (no y/N prompts). |
 | `kbcode -c` / `kbcode --continue` | Reopen the most recent saved chat for this folder. |
