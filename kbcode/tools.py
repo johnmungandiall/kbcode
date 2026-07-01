@@ -106,7 +106,14 @@ class Tools:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string"},
+                        "path": {
+                            "type": "string",
+                            "description": (
+                                "Where to create the file, relative to the project root (e.g. "
+                                "'src/utils.py'). Files can only be created inside the project "
+                                "folder — an absolute path outside it will be refused."
+                            ),
+                        },
                         "content": {"type": "string"},
                     },
                     "required": ["path", "content"],
@@ -118,7 +125,10 @@ class Tools:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "path": {"type": "string"},
+                        "path": {
+                            "type": "string",
+                            "description": "Path to the existing file, relative to the project root.",
+                        },
                         "old_string": {"type": "string"},
                         "new_string": {"type": "string"},
                     },
@@ -280,7 +290,11 @@ class Tools:
         candidate = Path(path)
         p = (candidate if candidate.is_absolute() else self.root / candidate).resolve()
         if self.root not in p.parents and p != self.root:
-            raise ValueError(f"Path escapes the project root: {path}")
+            raise ValueError(
+                f"Refused: '{path}' resolves to {p}, which is outside the project folder "
+                f"({self.root}). kbcode can only read/write inside the project. Use a path "
+                "relative to the project root, or tell the user this location is out of reach."
+            )
         return p
 
     def _protected_reason(self, p: Path) -> str | None:
