@@ -11,10 +11,10 @@
 Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, Ollama, custom).
 
 ## Key entry points
-- `kbcode/cli.py:327` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/cli.py:329` — `main()` entry point, parses args, dispatches to wizard/init/REPL
 - `kbcode/repl.py:151` — `repl()` the interactive chat loop
-- `kbcode/agent.py:60` — `Agent` class, the core tool-using loop
-- `kbcode/tools/core.py:19` — `ToolsCore`/`Tools`, all tool implementations + schemas
+- `kbcode/agent.py:62` — `Agent` class, the core tool-using loop
+- `kbcode/tools/core.py:22` — `ToolsCore`/`Tools`, all tool implementations + schemas
 
 See [[architecture]] for the full component map and its "Deep dives" links into
 the `kb/features/` notes.
@@ -22,7 +22,7 @@ the `kb/features/` notes.
 ## How to run
 - `pip install -e .` (editable dev install) or `pip install git+https://github.com/johnmungandiall/kbcode.git`
 - `kbcode init` then `kbcode model` then `kbcode` (or `kb`)
-- Tests: `pytest` (22 files under `tests/`, CI in `.github/workflows/ci.yml`)
+- Tests: `pytest` (23 files under `tests/`, CI in `.github/workflows/ci.yml`)
 
 See [[cheatsheet]] for the full command list.
 

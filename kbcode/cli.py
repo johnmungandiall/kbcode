@@ -10,6 +10,7 @@ own top level.
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 import sys
@@ -23,6 +24,7 @@ from .agent import Agent
 from .config import Config, global_dir, load_config
 from .interrupt import interrupt_on_escape
 from .knowledge_base import AGENT_MD_TEMPLATE, KnowledgeBase
+from .logs import setup_logging
 from .memory import Memory
 from .modes import load_modes
 from .permissions import Permissions
@@ -363,6 +365,11 @@ def main(argv: list[str] | None = None) -> int:
 
     config = load_config(project_dir or Path.cwd())
     config.auto_approve = auto
+    setup_logging(config.kbcode_dir)  # quiet on-disk trace for field debugging (#5)
+    logging.getLogger(__name__).info(
+        "kbcode %s starting — provider=%s model=%s dir=%s",
+        __version__, config.provider, config.model, config.project_dir,
+    )
     kb = KnowledgeBase(config.kb_dir)
 
     if argv and argv[0] == "init":

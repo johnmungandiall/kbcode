@@ -44,8 +44,10 @@ _EMERGENCY_STOP_MULTIPLIER = 3
 # either because ordering matters (edit then run the tests it affects) or
 # because they touch state (Permissions' interactive prompt, Checkpoints'
 # once-per-turn git snapshot, Memory's sqlite3 connection) that isn't
-# thread-safe to share across a pool.
-_PARALLEL_SAFE_TOOLS = {"read_file", "list_dir", "search_code", "kb_read", "kb_search"}
+# thread-safe to share across a pool. WHICH tools are safe is no longer listed
+# here: each tool declares `parallel_safe` in its schema (tools/schemas.py) and
+# the set is read via self.tools.parallel_safe_tools, so adding a read-only tool
+# can't silently fall back to sequential.
 _PARALLEL_MAX_WORKERS = 8
 
 # KB lifecycle hooks (the claude-kb idea): kbcode has no external hook-config
@@ -252,12 +254,13 @@ class Agent:
 
             results = []
             calls = resp.tool_calls
+            parallel_safe = self.tools.parallel_safe_tools
             i = 0
             while i < len(calls):
                 call = calls[i]
-                if call.name in _PARALLEL_SAFE_TOOLS and i + 1 < len(calls) and calls[i + 1].name in _PARALLEL_SAFE_TOOLS:
+                if call.name in parallel_safe and i + 1 < len(calls) and calls[i + 1].name in parallel_safe:
                     j = i + 1
-                    while j < len(calls) and calls[j].name in _PARALLEL_SAFE_TOOLS:
+                    while j < len(calls) and calls[j].name in parallel_safe:
                         j += 1
                     batch = calls[i:j]
                     results.extend(self._run_parallel_batch(batch))

@@ -25,15 +25,16 @@ model unchanged (see [[providers]]).
 - `permissions.py` — approval gating (Yes/Always/No menu) ([[safety]])
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus)
-- `prompt_input.py` — `/` autocomplete + arrow-key menus (prompt_toolkit)
+- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video`, `PATH_COMMANDS`) + arrow-key menus (prompt_toolkit)
+- `logs.py` — `setup_logging()`: quiet rotating file log at `.kbcode/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
 - `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
 - `redact.py` — regex secret redaction for tool output ([[safety]])
 - `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` (`kbcode/cli.py:327`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:151`)
-2. User types a message → `Agent.run()` (`kbcode/agent.py:182`) → `Agent._complete()` (`kbcode/agent.py:102`) calls provider
-3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()` (`kbcode/tools/core.py:76`)
+1. `main()` (`kbcode/cli.py:329`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:151`)
+2. User types a message → `Agent.run()` (`kbcode/agent.py:186`) → `Agent._complete()` (`kbcode/agent.py:104`) calls provider
+3. Provider returns text + tool_calls → agent loop dispatches to `Tools.execute()` (`kbcode/tools/core.py:87`)
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 

@@ -10,23 +10,63 @@ falls back to the plain reader — so kbcode never breaks because of this.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+# Slash commands whose first argument is a filesystem path — these get live
+# file/folder completion (Tab through directories) on top of the command menu.
+PATH_COMMANDS = frozenset({"/open", "/cd", "/image", "/img", "/video"})
+
+
+def _path_completions(word: str, limit: int = 40) -> list[tuple[str, str, str]]:
+    """Filesystem completions for a partially-typed path (the current word).
+
+    Returns ``(insert, display, meta)`` triples: ``insert``/``display`` is the
+    path to put back (directories get a trailing separator so you can keep
+    drilling in), ``meta`` marks ``'dir'``/``'file'``. Hidden entries surface
+    only once the user types the leading dot. Never raises — an unreadable or
+    missing directory just yields nothing.
+    """
+    head, tail = os.path.split(word)
+    scan = os.path.expanduser(head) if head else "."
+    try:
+        names = sorted(os.listdir(scan))
+    except OSError:
+        return []
+    out: list[tuple[str, str, str]] = []
+    for name in names:
+        if name.startswith(".") and not tail.startswith("."):
+            continue
+        if not name.startswith(tail):
+            continue
+        full = os.path.join(head, name) if head else name
+        is_dir = os.path.isdir(os.path.join(scan, name))
+        if is_dir:
+            full += os.sep
+        out.append((full, full, "dir" if is_dir else "file"))
+        if len(out) >= limit:
+            break
+    return out
 
 
 def suggest(
     text: str,
     commands: list[tuple[str, str]],
     arg_options: dict[str, list[str]] | None = None,
+    path_commands: frozenset[str] | set[str] | None = None,
 ) -> list[tuple[str, str, str]]:
     """Pure matching logic (no prompt_toolkit) — easy to test.
 
     Returns a list of ``(insert, display, meta)`` for the current input ``text``.
     Empty list means "no popup" (e.g. the user is typing a normal request).
     ``arg_options`` maps a command (e.g. ``/provider``) to the values to suggest
-    for its first argument.
+    for its first argument; ``path_commands`` (defaults to :data:`PATH_COMMANDS`)
+    names commands whose first argument gets filesystem path completion.
     """
     arg_options = arg_options or {}
+    if path_commands is None:
+        path_commands = PATH_COMMANDS
     if not text.startswith("/"):
         return []
 
@@ -41,9 +81,14 @@ def suggest(
 
     # Past the command word → argument completion for commands that have options.
     head, _, _ = text.partition(" ")
-    word = text.split(" ")[-1]
-    options = arg_options.get(head, [])
-    return [(name, name, "") for name in options if name.startswith(word)]
+    parts = text.split(" ")
+    word = parts[-1]
+    out = [(name, name, "") for name in arg_options.get(head, []) if name.startswith(word)]
+    # File-path completion, but only while typing the *first* argument (parts ==
+    # [command, partial-path]) — later words (e.g. /video's question) aren't paths.
+    if head in path_commands and len(parts) == 2:
+        out += _path_completions(word)
+    return out
 
 
 def select(options: list[str], header: str | None = None) -> tuple[bool, int | None]:
@@ -166,7 +211,7 @@ def make_input(
             text = document.text_before_cursor
             # Replace whatever the user has typed of the current word.
             word = text if " " not in text else text.split(" ")[-1]
-            for insert, display, meta in suggest(text, commands, arg_options):
+            for insert, display, meta in suggest(text, commands, arg_options, PATH_COMMANDS):
                 yield Completion(
                     insert,
                     start_position=-len(word),

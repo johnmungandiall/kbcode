@@ -20,8 +20,11 @@ results and assistant replies belong to the exchange above them.
 from __future__ import annotations
 
 import json
+import logging
 
 from .provider import LLMProvider
+
+log = logging.getLogger(__name__)
 
 _SUMMARY_SYSTEM = (
     "You compress an in-progress software engineering session into a faithful "
@@ -98,6 +101,7 @@ def _summarize(provider: LLMProvider, transcript: str) -> str:
         resp = provider.complete(_SUMMARY_SYSTEM, msg, [])
         return resp.text.strip() or "(summary unavailable)"
     except Exception as exc:  # noqa: BLE001 - never let compaction crash the run
+        log.warning("compaction summary failed — keeping full transcript", exc_info=True)
         return f"(summary failed: {exc})"
 
 

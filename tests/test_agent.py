@@ -439,6 +439,19 @@ def test_single_parallel_safe_call_still_works(tmp_path):
     assert "solo content" in tool_results[0]["content"]
 
 
+def test_parallel_safe_tools_derived_from_schema_flag(tmp_path):
+    # #6: the parallel set is read off each tool's `parallel_safe` schema flag,
+    # not a hardcoded list — so it can't drift from the actual read-only tools.
+    provider = FakeProvider([])
+    _agent, tools = _make_agent(tmp_path, provider)
+    assert tools.parallel_safe_tools == {"read_file", "list_dir", "search_code", "kb_read", "kb_search"}
+    flagged = {s["name"] for s in tools.schemas if s.get("parallel_safe")}
+    assert tools.parallel_safe_tools == flagged
+    # mutating tools (write/run) must never be marked safe.
+    assert "write_file" not in tools.parallel_safe_tools
+    assert "run_command" not in tools.parallel_safe_tools
+
+
 # --- token-budget-aware tool results (#4.2) --------------------------------
 
 

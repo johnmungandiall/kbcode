@@ -13,16 +13,16 @@ source like `MAX_TOKENS=100`); `read_file`/`search_code` redact with
 `KBCODE_REDACT_SECRETS=false` opts out (`_REDACT_ENABLED`, `kbcode/redact.py:20`).
 
 ## Checkpoints (right-sized Hermes port)
-`Checkpoints` (`kbcode/checkpoints.py:53`) auto-snapshots the project into a hidden
+`Checkpoints` (`kbcode/checkpoints.py:56`) auto-snapshots the project into a hidden
 shadow git repo (`.kbcode/checkpoints/`, own `GIT_DIR`/`GIT_WORK_TREE`/
 `GIT_INDEX_FILE` — never touches the real `.git`) right before the first
-mutating tool call of a turn. `ensure_checkpoint()` (`kbcode/checkpoints.py:129`)
-dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:63`, mirroring
+mutating tool call of a turn. `ensure_checkpoint()` (`kbcode/checkpoints.py:132`)
+dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:66`, mirroring
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
-(`_EXCLUDES`, `kbcode/checkpoints.py:28`), same spirit as redaction. `/rollback`
+(`_EXCLUDES`, `kbcode/checkpoints.py:31`), same spirit as redaction. `/rollback`
 (`repl._rollback_menu`, `kbcode/repl.py:36`) opens an arrow-key picker built on
-`prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:196`) is
+`prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:200`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
 maintenance; deleting `.kbcode/checkpoints/` is always safe.

@@ -2,6 +2,21 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased — since v1.6.3
+Three review-driven improvements (none is a bug fix; the "bug" findings they came
+with were verified false against the code):
+- **#6 parallel-safe tools are now schema-declared.** Each pure-read tool carries
+  `"parallel_safe": True` (`tools/schemas.py`); `Agent` reads the set via
+  `ToolsCore.parallel_safe_tools` instead of a hardcoded list, so a new read-only
+  tool can't silently run sequential. `AnthropicProvider._api_tools` strips the
+  flag before the request (OpenAI path already rebuilds tools).
+- **#5 diagnostic file log.** `logs.py` `setup_logging()` writes a quiet rotating
+  log at `.kbcode/kbcode.log` (`KBCODE_LOG_LEVEL`, default INFO; off/none = none).
+  Wired in `cli.py`; silent swallow points (checkpoints, compaction, tool errors)
+  now log with `exc_info`.
+- **#9 file-path autocomplete** for `/open`/`/image`/`/video` (`PATH_COMMANDS` +
+  `_path_completions` in `prompt_input.py`), on top of slash-command completion.
+
 ## KB audit — 2026-07-01
 `tools/kb-check.sh --fix`/`--freshness` reported 0 broken/stale/drift (133
 pointers). Manual spot-check of ~60 `Name (path:line)` pointers (name-match not

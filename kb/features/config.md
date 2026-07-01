@@ -22,11 +22,19 @@ especially visible when a subagent makes many calls. `Config.request_timeout`
 `LLMProvider._client_kwargs()` (see [[providers]]); set `KBCODE_REQUEST_TIMEOUT=0`
 to opt out and restore the SDK default.
 
+`KBCODE_LOG_LEVEL` (a *string*, not an `_int()` knob; default `INFO`) drives the
+diagnostic file log — `setup_logging()` (`kbcode/logs.py`, called from
+`kbcode/cli.py` right after `load_config`) attaches a rotating handler at
+`<project>/.kbcode/kbcode.log` to the `kbcode` logger. `DEBUG` = full traces for
+bug reports; `off`/`none`/`0` = write nothing. It's separate from `TerminalUI`
+on-screen output and never raises (unwritable path → no log, run continues).
+Modules log via the standard `logging.getLogger(__name__)`.
+
 ## Project retargeting
-`Config` (`kbcode/config.py:87`) derives every path (`kbcode_dir`, `kb_dir`,
+`Config` (`kbcode/config.py:93`) derives every path (`kbcode_dir`, `kb_dir`,
 `memory_db`, `agent_md`, `settings_file`, `standing_orders_file`, ...) as a
 property off `project_dir` — so the project can be retargeted live. The CLI
-picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:226`) or
+picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:228`) or
 `init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:444`) mutates
 `config.project_dir` (`kbcode/repl.py:453`) then rebuilds `kb`, `memory`, and the
 agent — re-scaffolding the new folder, keeping the same provider/model/key. A

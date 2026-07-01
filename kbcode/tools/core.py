@@ -6,6 +6,7 @@ subagent — see the sibling modules in this package).
 from __future__ import annotations
 
 import difflib
+import logging
 from pathlib import Path
 
 from ..checkpoints import Checkpoints
@@ -14,6 +15,8 @@ from ..knowledge_base import KnowledgeBase
 from ..memory import Memory
 from ..permissions import Permissions
 from .schemas import BASE_SCHEMAS
+
+log = logging.getLogger(__name__)
 
 
 class ToolsCore:
@@ -72,6 +75,14 @@ class ToolsCore:
     def _base_schemas(self) -> list[dict]:
         return BASE_SCHEMAS
 
+    @property
+    def parallel_safe_tools(self) -> set[str]:
+        """Names of tools safe to run concurrently (#4.3), read straight off the
+        per-tool ``parallel_safe`` flag in the schemas — the single source of
+        truth (see schemas.py). Agent uses this instead of a hardcoded set, so a
+        new read-only tool opts in just by carrying the flag."""
+        return {s["name"] for s in self.schemas if s.get("parallel_safe")}
+
     # --- dispatch ------------------------------------------------------
     def execute(self, name: str, inp: dict) -> tuple[str, bool]:
         # Tool-call repair (the openclaw idea): instead of failing hard on a
@@ -86,6 +97,7 @@ class ToolsCore:
         except PermissionError as exc:
             return str(exc), True
         except Exception as exc:  # noqa: BLE001 - surface error back to the model
+            log.debug("tool %r raised %s", name, exc, exc_info=True)
             return f"Error: {exc}", True
 
     def _schema_for(self, name: str) -> dict | None:

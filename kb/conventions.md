@@ -8,17 +8,20 @@
 - Tool methods follow `_tool_<name>(self, inp: dict) -> str` pattern
 
 ## Module organization
-- Tools register via `_base_schemas` property (`kbcode/tools/core.py:72`) +
+- Tools register via `_base_schemas` property (`kbcode/tools/core.py:75`) +
   `_tool_*` methods across `kbcode/tools/{file,kb,memory,planning,subagent}.py`
-- Provider dispatch: `get_provider()` returns `AnthropicProvider` or `OpenAICompatibleProvider` (`kbcode/provider.py:463`) — see [[providers]]
+- Provider dispatch: `get_provider()` returns `AnthropicProvider` or `OpenAICompatibleProvider` (`kbcode/provider.py:489`) — see [[providers]]
 - Mode/subagent definitions: YAML frontmatter between `---` fences + markdown body — see [[modes-subagents]]
 
 ## When adding things
 - **A new tool:** add its schema to `Tools._base_schemas` *and* a `_tool_<name>`
   method; if it should be restricted, add it to the right group (`READ`/
   `NOTES`/`EDIT`/`EXEC`) in `modes.py`, otherwise it's implicitly available
-  everywhere. (A schema that depends on runtime state, like `run_subagent`, is
-  appended in the `schemas` property instead — see [[tools-and-repair]].)
+  everywhere. If it's a **pure read** (no permission prompt / mutation /
+  checkpoint / shared SQLite), also set `"parallel_safe": True` on its schema so
+  it can batch concurrently (#4.3, see [[tools-and-repair]]). (A schema that
+  depends on runtime state, like `run_subagent`, is appended in the `schemas`
+  property instead — see [[tools-and-repair]].)
 - **A new slash command:** add it to `COMMANDS` in `ui.py` (single source for
   `/help` + autocomplete) and handle it in `repl()` (`repl.py`). Argument
   completion comes from the `arg_options` map passed to `make_input`. Pass any
@@ -26,7 +29,7 @@
 - **A new subagent or mode:** ship a markdown file (`.kbcode/agents/*.md` or
   `.kbcode/modes/*.md`) with `description:`/`tools:` frontmatter — no code
   change needed. A starter `code-explorer` subagent is scaffolded by
-  `cli._scaffold` (`kbcode/cli.py:63`).
+  `cli._scaffold` (`kbcode/cli.py:65`).
 - **An interactive picker:** reuse `prompt_input.select()` (returns
   `(available, index)`); always handle `available is False` with a
   non-interactive fallback, as `TerminalUI.permission` does.
@@ -39,7 +42,7 @@
 - Full KB-maintenance rules (auto-update, drift, runbooks, user map): [[about-kb]]
 
 ## Testing
-- `pytest` (`tests/`, 22 files) + `ruff` lint, both run in CI (`.github/workflows/ci.yml`)
+- `pytest` (`tests/`, 23 files) + `ruff` lint, both run in CI (`.github/workflows/ci.yml`)
 - No inline-script fallback needed anymore — write a `tests/test_*.py` case
 
 See [[gotchas]] for what breaks if you ignore these, [[architecture]] for the component map.

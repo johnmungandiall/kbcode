@@ -184,3 +184,19 @@ def test_anthropic_stream_extracts_tool_use_blocks():
     assert resp.tool_calls[0].name == "read_file"
     assert resp.tool_calls[0].input == {"path": "a.py"}
     assert resp.usage is None
+
+
+def test_anthropic_api_tools_strips_non_api_keys():
+    # #6: schemas carry kbcode-only metadata (e.g. parallel_safe); the Anthropic
+    # tools API rejects unknown keys, so _api_tools must keep only name/
+    # description/input_schema before the request goes out.
+    schemas = [
+        {"name": "read_file", "parallel_safe": True, "description": "d", "input_schema": {"type": "object"}},
+        {"name": "write_file", "description": "d2", "input_schema": {"type": "object"}},
+    ]
+    out = AnthropicProvider._api_tools(schemas)
+    assert out == [
+        {"name": "read_file", "description": "d", "input_schema": {"type": "object"}},
+        {"name": "write_file", "description": "d2", "input_schema": {"type": "object"}},
+    ]
+    assert all("parallel_safe" not in t for t in out)

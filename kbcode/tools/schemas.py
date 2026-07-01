@@ -8,9 +8,18 @@ from __future__ import annotations
 
 from .memory import _MEMORY_KINDS
 
+# A tool marked `"parallel_safe": True` is a pure read (no permission prompt, no
+# file mutation, no checkpoint, no shared SQLite connection) and so is safe to
+# run concurrently with other reads (#4.3). Declaring it *here*, next to the
+# tool, is the source of truth — Agent derives its parallel set from this flag
+# (via ToolsCore.parallel_safe_tools), so a new read-only tool opts in by adding
+# the flag and can't silently fall back to sequential. The flag is metadata for
+# kbcode only; providers strip it before the schema reaches the model API.
+
 BASE_SCHEMAS: list[dict] = [
     {
         "name": "read_file",
+        "parallel_safe": True,
         "description": "Read a text file from the project. Use this before editing a file.",
         "input_schema": {
             "type": "object",
@@ -67,6 +76,7 @@ BASE_SCHEMAS: list[dict] = [
     },
     {
         "name": "list_dir",
+        "parallel_safe": True,
         "description": "List files and folders in a directory (defaults to the project root).",
         "input_schema": {
             "type": "object",
@@ -75,6 +85,7 @@ BASE_SCHEMAS: list[dict] = [
     },
     {
         "name": "search_code",
+        "parallel_safe": True,
         "description": "Search the project for a regular expression. Returns matching path:line: text.",
         "input_schema": {
             "type": "object",
@@ -96,11 +107,13 @@ BASE_SCHEMAS: list[dict] = [
     },
     {
         "name": "kb_read",
+        "parallel_safe": True,
         "description": "Read the whole knowledge base (kb/ notes). Do this first to understand the project cheaply.",
         "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "kb_search",
+        "parallel_safe": True,
         "description": (
             "Search the knowledge base for a keyword without reading every note "
             "(cheaper than kb_read once the KB has grown). Returns kb/<note>.md:line: text."

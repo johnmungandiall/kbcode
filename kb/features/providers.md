@@ -1,10 +1,10 @@
 # Providers — normalized messages, translation, resilience, interrupts.
 
 ## Normalized messages + `raw` replay
-`Agent.messages` (`kbcode/agent.py:78`) is provider-agnostic, never a provider's native
+`Agent.messages` (`kbcode/agent.py:80`) is provider-agnostic, never a provider's native
 shape: `{"role":"user","content"}` (+ optional `"images"`), `{"role":"assistant",
 "text","tool_calls","raw"}`, `{"role":"tool_results","results"}`. Each provider's
-`_to_native` (Anthropic `kbcode/provider.py:181`, OpenAI-compatible `kbcode/provider.py:348`)
+`_to_native` (Anthropic `kbcode/provider.py:181`, OpenAI-compatible `kbcode/provider.py:358`)
 translates to/from its own API and stores the model's own assistant payload back
 in `raw` so the next request replays it losslessly (Claude thinking blocks vs
 OpenAI `tool_calls` differ structurally). **Invariant:** normalized<->native must
@@ -13,12 +13,19 @@ surgery (see [[context-management]] on compaction). A session uses exactly one
 provider, so `raw` is always that provider's shape — session replay requires a
 matching provider (see [[sessions]]).
 
-`get_provider()` (`kbcode/provider.py:479`) dispatches on `config.kind`. Every
+`get_provider()` (`kbcode/provider.py:489`) dispatches on `config.kind`. Every
 non-Claude provider (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom) is the
-*same* `OpenAICompatibleProvider` (`kbcode/provider.py:314`) with a different
-`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:216`) tries a staged
+*same* `OpenAICompatibleProvider` (`kbcode/provider.py:324`) with a different
+`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:226`) tries a staged
 kwargs fallback (`thinking`+`output_config` -> `thinking` -> plain), catching
 `TypeError` per attempt for older SDKs.
+
+Tool schemas carry kbcode-only metadata (e.g. `parallel_safe`, see
+[[tools-and-repair]]) that the model APIs reject as unknown keys. The OpenAI path
+drops it by rebuilding each tool (`_tools`, `kbcode/provider.py`); the Anthropic
+path, which otherwise forwards `tools` verbatim, keeps only name/description/
+`input_schema` via `AnthropicProvider._api_tools` in both `complete` and `stream`
+(see [[gotchas]]).
 
 Both SDK clients are built lazily with a shared timeout from
 `LLMProvider._client_kwargs()` (`kbcode/provider.py:132`): it passes
@@ -37,7 +44,7 @@ backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:58-59`). Hard error
 staged fallback still works.
 
 ## Interrupt mid-request
-`Agent._complete()` (`kbcode/agent.py:102`) runs the blocking `provider.complete`/
+`Agent._complete()` (`kbcode/agent.py:104`) runs the blocking `provider.complete`/
 `stream` call on a daemon worker thread and polls `done.wait(0.05)` on the main
 thread — a blocking socket read swallows `KeyboardInterrupt` until it returns, so
 without the poll, Esc would feel dead while "thinking...". `interrupt_on_escape()`

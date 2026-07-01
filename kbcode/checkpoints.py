@@ -13,11 +13,14 @@ the undo history.
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 _REF = "refs/kbcode/checkpoint"
 _GIT_TIMEOUT = 30
@@ -134,6 +137,7 @@ class Checkpoints:
         try:
             return self._take(reason)
         except Exception:
+            log.debug("checkpoint failed (reason=%s) — continuing without a snapshot", reason, exc_info=True)
             return False
 
     def _take(self, reason: str) -> bool:

@@ -213,6 +213,16 @@ class AnthropicProvider(LLMProvider):
                 out.append({"role": "user", "content": blocks})
         return out
 
+    @staticmethod
+    def _api_tools(tools: list[dict]) -> list[dict]:
+        """Keep only the keys the Anthropic tools API accepts. kbcode carries
+        extra per-tool metadata on the schema (e.g. ``parallel_safe``, #4.3);
+        forwarding an unknown key here would make the API reject the request."""
+        return [
+            {"name": t["name"], "description": t.get("description", ""), "input_schema": t["input_schema"]}
+            for t in tools
+        ]
+
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         native = self._to_native(messages)
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
@@ -221,7 +231,7 @@ class AnthropicProvider(LLMProvider):
             max_tokens=self.config.max_tokens,
             system=system_blocks,
             messages=native,
-            tools=tools,
+            tools=self._api_tools(tools),
         )
         attempts = [
             {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.effort}},
@@ -265,7 +275,7 @@ class AnthropicProvider(LLMProvider):
             max_tokens=self.config.max_tokens,
             system=system_blocks,
             messages=native,
-            tools=tools,
+            tools=self._api_tools(tools),
         )
         attempts = [
             {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.effort}},
