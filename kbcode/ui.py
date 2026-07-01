@@ -130,9 +130,10 @@ class _TickingStatus:
     elapsed time itself is the "still alive" signal.
     """
 
-    def __init__(self, console: Console, label: str, hint: str = ""):
+    def __init__(self, console: Console, label: str, hint: str = "", total_start: float | None = None):
         self._label = label
         self._hint = hint
+        self._total_start = total_start
         self._start = 0.0
         self._status = console.status(self._render(0.0), spinner="dots")
         self._stop = threading.Event()
@@ -140,6 +141,9 @@ class _TickingStatus:
 
     def _render(self, elapsed: float) -> str:
         text = f"[dim]{self._label}… {elapsed:.1f}s[/dim]"
+        if self._total_start is not None:
+            total = time.perf_counter() - self._total_start
+            text += f"  [dim](total {total:.1f}s)[/dim]"
         if self._hint:
             text += f"  [dim italic]{self._hint}[/dim italic]"
         return text
@@ -170,6 +174,14 @@ class TerminalUI:
         # Project root, so file tool-lines can show *where* a file actually is.
         # Set by the CLI when an agent is built / a project is opened.
         self.root: Path | None = None
+        # Set by turn_started() — lets every spinner in this turn also show a
+        # running grand total, so the total keeps counting across separate
+        # thinking / tool-running spinners instead of resetting each time.
+        self._turn_start: float | None = None
+
+    def turn_started(self) -> None:
+        """Mark the start of a new agent turn (call once per user turn)."""
+        self._turn_start = time.perf_counter()
 
     # -- chrome ---------------------------------------------------------
     def banner(self, provider: str, model: str, cwd: Path, mode: str = "code") -> None:
@@ -281,15 +293,15 @@ class TerminalUI:
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):
-        return _TickingStatus(self.console, "thinking", "(Esc to interrupt)")
+        return _TickingStatus(self.console, "thinking", "(Esc to interrupt)", self._turn_start)
 
     def working(self, label: str):
-        return _TickingStatus(self.console, label.rstrip("… "))
+        return _TickingStatus(self.console, label.rstrip("… "), total_start=self._turn_start)
 
     def tool_running(self):
         """Spinner shown while a tool call is actually executing, so a slow
         command (e.g. a long ``run_command``) never looks like it stalled."""
-        return _TickingStatus(self.console, "running", "(Esc to interrupt)")
+        return _TickingStatus(self.console, "running", "(Esc to interrupt)", self._turn_start)
 
     def assistant_text(self, text: str) -> None:
         if not text.strip():

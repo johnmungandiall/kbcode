@@ -154,6 +154,7 @@ class Agent:
         self._append(msg)
 
         start = time.perf_counter()
+        self.ui.turn_started()  # so every spinner this turn can also show a running total
         before = dict(self.usage)
         actions = 0
         self._kb_touched_this_run = False
