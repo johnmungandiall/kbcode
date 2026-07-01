@@ -36,9 +36,11 @@ COMMANDS = [
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
     ("/status", "show provider, model, mode and context size"),
+    ("/ping", "quick connectivity/auth check for the current provider"),
     ("/open <folder>", "switch to working on another project folder"),
     ("/kb", "list knowledge-base notes"),
     ("/memory", "show recent long-term memory"),
+    ("/memory-prune [days]", "remove duplicate memories (and, if given, anything older than [days])"),
     ("/skills", "list learned skills"),
     ("/todo", "show the agent's current task checklist"),
     ("/agents", "list available subagents (.kbcode/agents/)"),
@@ -46,10 +48,12 @@ COMMANDS = [
     ("/video <path> [question]", "describe a local video (via an auxiliary vision model) for your next message"),
     ("/learn [topic]", "save what we just did as a reusable skill"),
     ("/insights", "show tokens used and estimated cost (this chat + all saved sessions)"),
+    ("/cost", "one-line cost summary — model · tokens · $ (see /insights for detail)"),
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/rollback", "undo AI edits — pick a checkpoint from a menu (auto-saved before every edit)"),
-    ("/sessions", "list past chat sessions for this project"),
+    ("/sessions [query]", "list past chat sessions for this project, or full-text search them"),
+    ("/export [id]", "export a session (current, or by id) as a markdown file"),
     ("/resume [id]", "resume a past session (no id = pick from a list)"),
     ("/reset", "forget this chat (memory + kb are kept; starts a fresh saved session)"),
     ("/exit", "quit"),
@@ -70,6 +74,100 @@ def _human_count(n: int) -> str:
     return f"{n / 1_000_000:.1f}M".replace(".0M", "M")
 
 
+def _context_bar(tokens: int, limit: int, segments: int = 5) -> str:
+    """A compact ``▓▓░░░ 32%`` indicator (#7.5) — how full the context is
+    before auto-compaction kicks in. Empty string when there's no limit to
+    measure against (auto-compaction off), so the prompt stays uncluttered.
+    """
+    if limit <= 0:
+        return ""
+    pct = min(100, round(tokens / limit * 100))
+    filled = round(pct / 100 * segments)
+    bar = "▓" * filled + "░" * (segments - filled)
+    return f"{bar} {pct}% "
+
+
+# Each entry turns a tool's raw args into a human (verb, target) pair, like a
+# real CLI shows — a dict registry instead of a long if-name-== chain, so
+# adding a tool's display line means adding one entry here, not another branch.
+# `g(key)` reads a stringified/stripped arg; `full(path)` resolves it to where
+# the file actually lives (the model usually passes a bare relative name).
+def _describe_read_file(a, g, full):
+    return "Read", full(g("path"))
+
+
+def _describe_write_file(a, g, full):
+    return "Write", f"{full(g('path'))}  ({len(str(a.get('content', ''))):,} chars)"
+
+
+def _describe_edit_file(a, g, full):
+    return "Edit", full(g("path"))
+
+
+def _describe_list_dir(a, g, full):
+    return "List", g("path") or "."
+
+
+def _describe_search_code(a, g, full):
+    where = f"  in {g('path')}" if g("path") else ""
+    return "Search", f'"{g("pattern")}"{where}'
+
+
+def _describe_run_command(a, g, full):
+    return "Run", "$ " + g("command")
+
+
+def _describe_kb_read(a, g, full):
+    return "KB read", ""
+
+
+def _describe_kb_search(a, g, full):
+    return "KB search", f'"{g("query")}"'
+
+
+def _describe_kb_write(a, g, full):
+    return "KB write", g("name")
+
+
+def _describe_remember(a, g, full):
+    return "Remember", g("key") or _short(g("content"), 60)
+
+
+def _describe_recall(a, g, full):
+    return "Recall", f'"{g("query")}"'
+
+
+def _describe_save_skill(a, g, full):
+    return "Save skill", g("name")
+
+
+def _describe_manage_todos(a, g, full):
+    n = len(a.get("todos") or [])
+    return "Plan", f"{n} item{'s' if n != 1 else ''}"
+
+
+def _describe_run_subagent(a, g, full):
+    return "Delegate", f"→ {g('agent')}: {_short(g('task'), 60)}"
+
+
+_TOOL_DESCRIBERS = {
+    "read_file": _describe_read_file,
+    "write_file": _describe_write_file,
+    "edit_file": _describe_edit_file,
+    "list_dir": _describe_list_dir,
+    "search_code": _describe_search_code,
+    "run_command": _describe_run_command,
+    "kb_read": _describe_kb_read,
+    "kb_search": _describe_kb_search,
+    "kb_write": _describe_kb_write,
+    "remember": _describe_remember,
+    "recall": _describe_recall,
+    "save_skill": _describe_save_skill,
+    "manage_todos": _describe_manage_todos,
+    "run_subagent": _describe_run_subagent,
+}
+
+
 def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str, str]:
     """Turn a raw tool call into a human verb + target, like a real CLI shows."""
     a = args or {}
@@ -88,35 +186,10 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
         except (OSError, ValueError):
             return path
 
-    if name == "read_file":
-        return "Read", full(g("path"))
-    if name == "write_file":
-        return "Write", f"{full(g('path'))}  ({len(str(a.get('content', ''))):,} chars)"
-    if name == "edit_file":
-        return "Edit", full(g("path"))
-    if name == "list_dir":
-        return "List", g("path") or "."
-    if name == "search_code":
-        where = f"  in {g('path')}" if g("path") else ""
-        return "Search", f'"{g("pattern")}"{where}'
-    if name == "run_command":
-        return "Run", "$ " + g("command")
-    if name == "kb_read":
-        return "KB read", ""
-    if name == "kb_write":
-        return "KB write", g("name")
-    if name == "remember":
-        return "Remember", g("key") or _short(g("content"), 60)
-    if name == "recall":
-        return "Recall", f'"{g("query")}"'
-    if name == "save_skill":
-        return "Save skill", g("name")
-    if name == "manage_todos":
-        n = len(a.get("todos") or [])
-        return "Plan", f"{n} item{'s' if n != 1 else ''}"
-    if name == "run_subagent":
-        return "Delegate", f"→ {g('agent')}: {_short(g('task'), 60)}"
-    return name, (_short(a) if a else "")
+    describer = _TOOL_DESCRIBERS.get(name)
+    if describer is None:
+        return name, (_short(a) if a else "")
+    return describer(a, g, full)
 
 
 class _TickingStatus:
@@ -208,19 +281,23 @@ class TerminalUI:
             )
         )
 
-    def prompt(self, mode: str = "code") -> str:
+    def prompt(self, mode: str = "code", tokens: int = 0, limit: int = 0) -> str:
         tag = "" if mode == "code" else f"[cyan]({mode})[/cyan] "
-        return f"\n{tag}[bold green]you {_ARROW}[/bold green] "
+        bar = _context_bar(tokens, limit)
+        ctx = f"[dim]{bar}[/dim]" if bar else ""
+        return f"\n{ctx}{tag}[bold green]you {_ARROW}[/bold green] "
 
-    def prompt_html(self, mode: str = "code") -> str:
+    def prompt_html(self, mode: str = "code", tokens: int = 0, limit: int = 0) -> str:
         tag = "" if mode == "code" else f"<ansicyan>({mode})</ansicyan> "
-        return f"\n{tag}<ansigreen><b>you ›</b></ansigreen> "
+        bar = _context_bar(tokens, limit)
+        ctx = f"<ansigray>{bar}</ansigray>" if bar else ""
+        return f"\n{ctx}{tag}<ansigreen><b>you ›</b></ansigreen> "
 
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/version", "/status", "/open <folder>", "/insights", "/compact", "/rollback", "/sessions", "/resume [id]", "/reset", "/exit"]),
-            ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/skills", "/learn [topic]"]),
+            ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
+            ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
         ]
@@ -310,6 +387,19 @@ class TerminalUI:
         except Exception:  # noqa: BLE001 - never let rendering crash a reply
             self.console.print(text)
 
+    def stream_chunk(self, text: str) -> None:
+        """Print one streamed text chunk as it arrives (#3.1/#7.1) — raw, not
+        markdown-rendered (there's no way to safely re-parse markdown from a
+        partial chunk), and safe to call while a thinking()/working() status
+        is active: Rich hides and redraws the spinner around each print.
+        """
+        if text:
+            self.console.print(text, end="", markup=False, highlight=False)
+
+    def stream_newline(self) -> None:
+        """End a streamed response — chunks have no trailing newline of their own."""
+        self.console.print()
+
     def tool_call(self, name: str, args: dict) -> None:
         # Subagent inner calls arrive as "agent-name:tool" — nest them visually.
         prefix = ""
@@ -391,6 +481,14 @@ class TerminalUI:
             hist.add_row("est. cost (all-time)", f"${lcost:.4f}" if lcost is not None else "unknown model(s)")
             self.console.print(Panel(hist, title="insights (all saved sessions)", border_style="dim", padding=(1, 1)))
 
+    def cost(self, data: dict) -> None:
+        """One-line `/cost` alias for the verbose `/insights` panel."""
+        model = data.get("model", "?")
+        total = data.get("total_tokens", 0)
+        cost = data.get("cost")
+        cost_str = f"${cost:.4f}" if cost is not None else "unknown model"
+        self.notice(f"{model} · {total:,} tokens · {cost_str}", style="bold")
+
     def sessions(self, rows: list[dict], current_id: str | None = None) -> None:
         if not rows:
             self.notice("No saved sessions yet for this project.")
@@ -411,6 +509,23 @@ class TerminalUI:
                 f"{turns} turn{'s' if turns != 1 else ''}",
             )
         self.console.print(Panel(table, title="sessions", border_style="dim", padding=(1, 1)))
+        self.console.print("[dim]resume with  /resume <n or id>[/dim]")
+
+    def session_search_results(self, rows: list[dict], query: str) -> None:
+        """`/sessions <query>` (#8.1) — full-text hits, each with a snippet of
+        the matching line instead of the /sessions listing's turn count."""
+        if not rows:
+            self.notice(f'No saved sessions mention "{query}".')
+            return
+        table = Table.grid(padding=(0, 2))
+        table.add_column(justify="right", style="dim")
+        table.add_column(style="bold cyan")
+        table.add_column(style="dim")
+        table.add_column(overflow="fold")
+        for i, r in enumerate(rows, 1):
+            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(r["started_at"])) if r["started_at"] else "?"
+            table.add_row(f"{i}.", r["id"], when, r.get("snippet", ""))
+        self.console.print(Panel(table, title=f'sessions mentioning "{query}"', border_style="dim", padding=(1, 1)))
         self.console.print("[dim]resume with  /resume <n or id>[/dim]")
 
     def agents(self, items: dict) -> None:

@@ -196,6 +196,57 @@ def list_sessions(sessions_dir: Path, limit: int = 50) -> list[dict]:
     return rows[:limit]
 
 
+def _first_match(path: Path, needle: str) -> str | None:
+    """The first user/assistant message text containing ``needle``
+    (case-insensitive), collapsed to one short line — or None."""
+    try:
+        with path.open(encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("type") != "message":
+                    continue
+                text = rec.get("content") if rec.get("role") == "user" else rec.get("text")
+                if not text:
+                    continue
+                text = str(text)
+                if needle in text.lower():
+                    snippet = " ".join(text.split())
+                    return snippet[:100] + ("…" if len(snippet) > 100 else "")
+    except OSError:
+        return None
+    return None
+
+
+def search_sessions(sessions_dir: Path, query: str, limit: int = 20) -> list[dict]:
+    """Full-text search across this project's saved session transcripts
+    (#8.1) — find "that conversation about the auth bug" without listing
+    every session first. Returns session summary rows (like list_sessions)
+    plus a ``snippet`` of the first matching line, most-recent-first.
+    """
+    needle = query.strip().lower()
+    if not needle or not sessions_dir.exists():
+        return []
+    hits: list[dict] = []
+    for path in sessions_dir.glob("*.jsonl"):
+        snippet = _first_match(path, needle)
+        if snippet is None:
+            continue
+        summary = _summarize(path)
+        if summary is None:
+            continue
+        row = dict(summary)
+        row["snippet"] = snippet
+        hits.append(row)
+    hits.sort(key=lambda r: r["started_at"], reverse=True)
+    return hits[:limit]
+
+
 def load_session(path: Path) -> tuple[dict, list[dict]]:
     """Rebuild (meta, messages) from a transcript for resuming.
 
@@ -228,6 +279,50 @@ def load_session(path: Path) -> tuple[dict, list[dict]]:
                     msg["tool_calls"] = [ToolCall(**tc) for tc in msg["tool_calls"]]
                 messages.append(msg)
     return meta, messages
+
+
+def _fmt_args(args: dict, limit: int = 200) -> str:
+    try:
+        text = json.dumps(args, ensure_ascii=False)
+    except (TypeError, ValueError):
+        text = str(args)
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+def export_markdown(path: Path) -> str:
+    """Render a saved session transcript as readable markdown (#8.2) — for
+    sharing or documentation, since the raw .jsonl isn't meant for humans.
+    """
+    meta, messages = load_session(path)
+    lines: list[str] = [f"# kbcode session {meta.get('id', path.stem)}", ""]
+    started = meta.get("started_at")
+    if started:
+        lines.append(f"- started: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(started))}")
+    if meta.get("provider"):
+        lines.append(f"- provider/model: {meta['provider']} / {meta.get('model', '?')}")
+    if meta.get("git_branch"):
+        lines.append(f"- git branch: {meta['git_branch']}")
+    lines.append("")
+
+    for m in messages:
+        role = m.get("role")
+        if role == "user":
+            content = str(m.get("content") or "")
+            if m.get("images"):
+                content += f"\n\n*(with {len(m['images'])} image(s) attached)*"
+            lines.append(f"## User\n\n{content}\n")
+        elif role == "assistant":
+            text = (m.get("text") or "").strip()
+            if text:
+                lines.append(f"## Assistant\n\n{text}\n")
+            for tc in m.get("tool_calls") or []:
+                lines.append(f"> called `{tc.name}({_fmt_args(tc.input)})`\n")
+        elif role == "tool_results":
+            for r in m.get("results") or []:
+                tag = "error" if r.get("is_error") else "ok"
+                body = str(r.get("content") or "")
+                lines.append(f"```\n[tool result: {tag}]\n{body}\n```\n")
+    return "\n".join(lines)
 
 
 def lifetime_stats(sessions_dir: Path) -> dict:

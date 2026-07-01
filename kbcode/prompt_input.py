@@ -11,6 +11,7 @@ falls back to the plain reader — so kbcode never breaks because of this.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
 
 def suggest(
@@ -125,13 +126,20 @@ def select(options: list[str], header: str | None = None) -> tuple[bool, int | N
         return False, None
 
 
-def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]] | None = None):
+def make_input(
+    commands: list[tuple[str, str]],
+    arg_options: dict[str, list[str]] | None = None,
+    history_file: Path | None = None,
+):
     """Return an input object with ``.read(prompt_html)`` and ``.pop_images()``, or None.
 
     Besides slash-command autocomplete, this binds **Alt+V** to attach an image
     from the clipboard to the next message (for vision-capable models). Attached
     images wait in a buffer shown in the bottom toolbar; ``pop_images()`` returns
     and clears them — the caller sends them with the user's next turn.
+
+    ``history_file``, if given, persists input history there across sessions
+    (up-arrow recalls prompts from earlier runs, not just this one).
     """
     if not sys.stdin.isatty():
         return None  # piped / non-interactive: let the caller use plain input
@@ -140,9 +148,18 @@ def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]
         from prompt_toolkit.application import run_in_terminal
         from prompt_toolkit.completion import Completer, Completion
         from prompt_toolkit.formatted_text import HTML
+        from prompt_toolkit.history import FileHistory
         from prompt_toolkit.key_binding import KeyBindings
     except Exception:  # noqa: BLE001 - prompt_toolkit missing or broken
         return None
+
+    history = None
+    if history_file is not None:
+        try:
+            history_file.parent.mkdir(parents=True, exist_ok=True)
+            history = FileHistory(str(history_file))
+        except OSError:  # unwritable location — fall back to in-memory history
+            history = None
 
     class _SlashCompleter(Completer):
         def get_completions(self, document, complete_event):
@@ -196,6 +213,7 @@ def make_input(commands: list[tuple[str, str]], arg_options: dict[str, list[str]
         complete_while_typing=True,
         key_bindings=kb,
         bottom_toolbar=_toolbar,
+        history=history,
     )
 
     class _Input:

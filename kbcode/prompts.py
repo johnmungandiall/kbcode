@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 BASE_SYSTEM = """You are kbcode, a careful AI coding agent working inside a single project on the user's machine.
 
 You blend three habits:
@@ -22,12 +24,25 @@ Working rules:
 """
 
 
+def load_prompt_fragments(prompts_dir: Path) -> str:
+    """Concatenate ``.kbcode/prompts/*.md`` in sorted order (#9.3) — lets a
+    user split custom instructions across multiple files (e.g.
+    ``10-style.md``, ``20-testing.md``) instead of one growing
+    standing-orders.md. Missing directory or no files -> "".
+    """
+    if not prompts_dir.is_dir():
+        return ""
+    parts = [p.read_text(encoding="utf-8", errors="replace").strip() for p in sorted(prompts_dir.glob("*.md"))]
+    return "\n\n".join(p for p in parts if p)
+
+
 def build_system_prompt(
     kb_text: str,
     skills: list[dict],
     memories: list[dict],
     agent_md: str = "",
     standing_orders: str = "",
+    extra_prompts: str = "",
 ) -> str:
     parts = [BASE_SYSTEM]
 
@@ -35,6 +50,9 @@ def build_system_prompt(
     # session. Placed right after the base rules so they take priority.
     if standing_orders.strip():
         parts.append("## Standing orders (always apply, set by the user)\n" + standing_orders.strip())
+
+    if extra_prompts.strip():
+        parts.append("## Additional instructions (.kbcode/prompts/)\n" + extra_prompts.strip())
 
     if agent_md.strip():
         parts.append("## Project guide (AGENT.md)\n" + agent_md.strip())

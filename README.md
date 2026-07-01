@@ -4,6 +4,7 @@
 ![Version](https://img.shields.io/badge/version-1.5.0-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
+[![CI](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml/badge.svg)](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml)
 
 **A small AI coding agent you run in your terminal.** 💬 Ask in plain language —
 it reads your code, writes files, and runs commands for you, using *your own* AI key.
@@ -147,7 +148,12 @@ Type `/` and a **popup menu of commands** appears and filters as you type
 (arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names,
 after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
 `prompt_toolkit` (in `requirements.txt`); without it, commands still work by
-typing them in full.
+typing them in full. Input history persists across sessions (`.kbcode/history`),
+so **↑/↓** recall prompts from earlier chats too, not just this one.
+
+**Multi-line messages:** type a bare `"""` on its own line to start one, type
+your lines, then `"""` again on its own line to send — handy for pasting a
+longer request or a multi-paragraph error message.
 
 ### 🖼️ Images (vision)
 
@@ -224,11 +230,14 @@ Session:
 - `/help` — show the command table (grouped)
 - `/version` — show the kbcode version
 - `/status` — provider, model, mode, and a context-fullness bar
+- `/ping` — quick connectivity/auth check for the current provider (lists models; no chat call)
 - `/open <folder>` — switch to working on another project folder
 - `/insights` — tokens used and estimated cost (this chat + all saved sessions)
+- `/cost` — one-line cost summary — `model · tokens · $` (see `/insights` for detail)
 - `/compact` — summarize earlier chat to free up context
 - `/rollback` — undo AI edits from an auto-saved checkpoint
-- `/sessions` — list past chat sessions for this project
+- `/sessions [query]` — list past chat sessions, or full-text search them for a query
+- `/export [id]` — export a session (current, or by id) as a markdown file
 - `/resume [id]` — resume a past session (no id = pick from a list)
 - `/reset` — clear the current chat (memory and kb are kept; starts a fresh saved session)
 - `/exit` — quit
@@ -237,6 +246,7 @@ Knowledge & memory:
 - `/kb` — list knowledge-base notes
 - `/kb-check [--fix]` — check `path:line` pointers in `kb/` (with `--fix`, relocate drifted ones by symbol)
 - `/memory` — show recent long-term memory
+- `/memory-prune [days]` — remove duplicate memories (and, if given, anything older than `[days]`)
 - `/skills` — list learned skills
 - `/learn [topic]` — save what we just did as a reusable skill
 
@@ -270,6 +280,11 @@ Anything you write in `.kbcode/standing-orders.md` is added to the agent's
 instructions at the **start of every session** — e.g. "always run the tests
 after changing code" or "reply in plain language." `init` creates a commented
 template; leave it untouched (or empty) to disable.
+
+Prefer splitting instructions across files instead of one growing file? Drop
+`.md` files in `.kbcode/prompts/` — they're concatenated in **sorted filename
+order** and appended right after standing orders, e.g. `10-style.md`,
+`20-testing.md`. Optional; nothing is created there automatically.
 
 ### 📜 Session history (the Claude Code + Hermes idea)
 
@@ -307,7 +322,7 @@ your request
   └────────────────────────────────────────────────────────────────────────────┘
      │ tools:
      │   read_file / write_file / edit_file / list_dir / search_code / run_command
-     │   kb_read / kb_write          (knowledge base — claude-kb idea)
+     │   kb_read / kb_search / kb_write   (knowledge base — claude-kb idea)
      │   remember / recall / save_skill   (memory + skills — Hermes idea)
      │   manage_todos                (task checklist — Kilo Code idea)
      │   run_subagent                (delegate to a specialist — Claude Code idea)
@@ -328,9 +343,12 @@ your request
 
 > [!CAUTION]
 > **You're always in control.** Risky actions (writing files, running commands)
-> ask for your approval first. A relative path is anchored to the project
-> folder, but an absolute path is honored exactly as given — even outside the
-> project — so if you name a specific location, that's where the file goes;
+> ask for your approval first — and overwriting an existing file shows a
+> **colored diff** of what's actually changing (a brand-new file just shows
+> the byte count; nothing to diff yet). A relative path is anchored to the
+> project folder, but an absolute path is honored exactly as given — even
+> outside the project — so if you name a specific location, that's where
+> the file goes;
 > the approval prompt flags it with **`-- OUTSIDE the project folder`** so
 > you always see it before saying yes. As an extra safety rail, the agent
 > **refuses** to write to or edit sensitive files — `.git/`, `.ssh/`, `.env`
@@ -339,15 +357,24 @@ your request
 > `.gitignore` are fine.) It also **redacts secrets**
 > it stumbles into — API keys, auth headers, private keys, DB passwords — out
 > of command output and file reads before they ever reach the model or the
-> transcript. Turn it off with `KBCODE_REDACT_SECRETS=false` if you need raw
-> values. And before it edits or runs anything, it **auto-saves a checkpoint**
-> — if it makes a mess, `/rollback` puts your files back exactly how they were.
+> transcript — and tells you *how many* it caught (never the values), e.g.
+> `[kbcode redacted 1 likely secret from this output]`. Turn redaction off with
+> `KBCODE_REDACT_SECRETS=false` if you need raw values. Commands matching an
+> outright destructive pattern (`rm -rf /`, a fork bomb, `format C:`, …) are
+> **refused outright**, no prompt; a run-away loop is also capped at 10
+> `run_command` calls per turn. Writing to somewhere that looks like an OS
+> directory (`C:\Windows`, `/etc`, …) still asks, but the prompt flags it in
+> **bold** so it's hard to miss. And before it edits or runs anything, it
+> **auto-saves a checkpoint** — if it makes a mess, `/rollback` puts your files
+> back exactly how they were.
 
 ## 🗂️ Project layout
 
 ```
 kbcode/
-  cli.py            entry point + chat loop, slash commands, -C / init / /open
+  cli.py            entry point: argv parsing, project setup, console/ui singletons
+  repl.py           the interactive chat loop + slash commands (split out of cli.py)
+  wizard.py         the `kbcode model` setup wizard (split out of cli.py)
   agent.py          the agent loop, subagent delegation, /insights usage tally
   modes.py          code/architect/ask/debug modes (Kilo Code idea)
   subagents.py      .kbcode/agents/*.md loader — delegated specialists (Claude Code idea)
@@ -355,11 +382,19 @@ kbcode/
   prompt_input.py   "/" command autocomplete + the selectable menu (prompt_toolkit)
   compaction.py     summarize long chats to stay within context (Hermes idea)
   sessions.py       persisted chat transcripts — --continue/--resume, /insights rollup
-  provider.py       talks to Claude / any OpenAI-compatible model (+ token usage)
-  tools.py          the agent's tools (+ execute-time tool-call repair, openclaw idea)
+  provider.py       talks to Claude / any OpenAI-compatible model, streaming + non (+ token usage)
+  tools/            the agent's tools, one module per category (+ execute-time repair, openclaw idea)
+    __init__.py     the Tools facade — composes the categories below
+    core.py         schema/dispatch machinery + helpers shared across categories
+    schemas.py      the JSON schema for every built-in tool
+    file.py         read/write/edit/list/search/run_command
+    kb.py           kb_read/kb_search/kb_write
+    memory.py       remember/recall/save_skill
+    planning.py     manage_todos
+    subagent.py     run_subagent
   repair.py         recover tool calls a weak model wrote as plain text (openclaw idea)
   pricing.py        rough per-model USD pricing for /insights (Hermes idea)
-  prompts.py        the system prompt (+ standing orders)
+  prompts.py        the system prompt (+ standing orders, + .kbcode/prompts/ fragments)
   memory.py         persistent memory + skills (SQLite)
   knowledge_base.py kb/ notes + path:line checker & auto-fix (claude-kb idea)
   permissions.py    approval menu for risky actions
@@ -410,6 +445,7 @@ Set `KBCODE_PROVIDER` and the matching key:
 | 🌊 DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` |
 | 🛰️ OpenRouter (many models) | `openrouter` | `OPENROUTER_API_KEY` | `openai/gpt-4o` |
 | 🤖 MiMo (via OpenRouter) | `mimo` | `OPENROUTER_API_KEY` | set `KBCODE_MODEL` |
+| 🦙 Ollama (local models) | `ollama` | none needed (or `OLLAMA_API_KEY` for a remote server) | `llama3.1` |
 | 🧩 Any custom endpoint | `custom` | `KBCODE_API_KEY` + `KBCODE_BASE_URL` | set `KBCODE_MODEL` |
 
 Example `.env`:
@@ -430,3 +466,17 @@ DEEPSEEK_API_KEY=...
   shows it too).
 - ⬆️ **Update to the latest:** `kbcode update` — pulls the newest release from
   GitHub. (Same as `pip install --upgrade git+https://github.com/johnmungandiall/kbcode.git`.)
+
+## 🧪 Development
+
+```bash
+git clone https://github.com/johnmungandiall/kbcode.git
+cd kbcode
+pip install -e ".[dev]"  # kbcode itself + pytest + ruff
+pytest -q                # run the test suite
+ruff check .              # lint
+```
+
+GitHub Actions runs both on every push/PR (`.github/workflows/ci.yml`), across
+Python 3.10/3.12 on Ubuntu and Windows. See `CONTRIBUTING.md` for the full
+workflow (coding style, PR expectations).

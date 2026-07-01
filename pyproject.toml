@@ -21,6 +21,9 @@ dependencies = [
     "Pillow>=10.0",  # clipboard image grab for Alt+V / vision input
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
 [project.urls]
 Homepage = "https://github.com/johnmungandiall/kbcode"
 Repository = "https://github.com/johnmungandiall/kbcode"
@@ -40,3 +43,14 @@ packages = ["kbcode"]
 
 [tool.setuptools.dynamic]
 version = { attr = "kbcode.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]

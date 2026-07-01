@@ -83,6 +83,55 @@ def _mask_token(token: str) -> str:
     return f"{token[:6]}...{token[-4:]}"
 
 
+def redact_with_count(text: str, *, code_file: bool = False) -> tuple[str, int]:
+    """Like :func:`redact_sensitive_text`, but also returns how many secrets
+    were masked — so a caller can tell the user secrets were caught (the
+    Hermes "redaction audit" idea) without revealing what they were.
+    """
+    if not text or not _REDACT_ENABLED:
+        return text, 0
+
+    total = 0
+
+    if _PREFIX_RE.search(text):
+        text, n = _PREFIX_RE.subn(lambda m: _mask_token(m.group(1)), text)
+        total += n
+
+    if not code_file:
+        if "=" in text:
+            text, n = _ENV_ASSIGN_RE.subn(
+                lambda m: f"{m.group(1)}={m.group(2)}{_mask_token(m.group(3))}{m.group(2)}",
+                text,
+            )
+            total += n
+        if ":" in text and '"' in text:
+            text, n = _JSON_FIELD_RE.subn(
+                lambda m: f'{m.group(1)}: "{_mask_token(m.group(2))}"', text
+            )
+            total += n
+
+    if "uthorization" in text or "UTHORIZATION" in text:
+        text, n = _AUTH_HEADER_RE.subn(
+            lambda m: m.group(1) + (m.group(2) or "") + _mask_token(m.group(3)),
+            text,
+        )
+        total += n
+
+    if "BEGIN" in text and "-----" in text:
+        text, n = _PRIVATE_KEY_RE.subn("[REDACTED PRIVATE KEY]", text)
+        total += n
+
+    if "://" in text:
+        text, n = _DB_CONNSTR_RE.subn(lambda m: f"{m.group(1)}***{m.group(3)}", text)
+        total += n
+
+    if "eyJ" in text:
+        text, n = _JWT_RE.subn(lambda m: _mask_token(m.group(0)), text)
+        total += n
+
+    return text, total
+
+
 def redact_sensitive_text(text: str, *, code_file: bool = False) -> str:
     """Mask secrets in ``text``. Safe on any string; non-matches pass through.
 
@@ -91,39 +140,7 @@ def redact_sensitive_text(text: str, *, code_file: bool = False) -> str:
     ``"apiKey": "test"`` fixtures). Prefix-matched keys, auth headers, private
     keys, DB connection strings, and JWTs are still redacted either way.
     """
-    if not text or not _REDACT_ENABLED:
-        return text
-
-    if _PREFIX_RE.search(text):
-        text = _PREFIX_RE.sub(lambda m: _mask_token(m.group(1)), text)
-
-    if not code_file:
-        if "=" in text:
-            text = _ENV_ASSIGN_RE.sub(
-                lambda m: f"{m.group(1)}={m.group(2)}{_mask_token(m.group(3))}{m.group(2)}",
-                text,
-            )
-        if ":" in text and '"' in text:
-            text = _JSON_FIELD_RE.sub(
-                lambda m: f'{m.group(1)}: "{_mask_token(m.group(2))}"', text
-            )
-
-    if "uthorization" in text or "UTHORIZATION" in text:
-        text = _AUTH_HEADER_RE.sub(
-            lambda m: m.group(1) + (m.group(2) or "") + _mask_token(m.group(3)),
-            text,
-        )
-
-    if "BEGIN" in text and "-----" in text:
-        text = _PRIVATE_KEY_RE.sub("[REDACTED PRIVATE KEY]", text)
-
-    if "://" in text:
-        text = _DB_CONNSTR_RE.sub(lambda m: f"{m.group(1)}***{m.group(3)}", text)
-
-    if "eyJ" in text:
-        text = _JWT_RE.sub(lambda m: _mask_token(m.group(0)), text)
-
-    return text
+    return redact_with_count(text, code_file=code_file)[0]
 
 
 # Commands whose stdout is an environment-variable dump (KEY=value lines),
@@ -155,8 +172,13 @@ def is_env_dump_command(command: str | None) -> bool:
     return False
 
 
+def redact_terminal_output_with_count(output: str, command: str | None = None) -> tuple[str, int]:
+    """Like :func:`redact_terminal_output`, but also returns the redaction count."""
+    if not output:
+        return output, 0
+    return redact_with_count(output, code_file=not is_env_dump_command(command))
+
+
 def redact_terminal_output(output: str, command: str | None = None) -> str:
     """Redact secrets from a command's stdout/stderr before it reaches the model."""
-    if not output:
-        return output
-    return redact_sensitive_text(output, code_file=not is_env_dump_command(command))
+    return redact_terminal_output_with_count(output, command)[0]

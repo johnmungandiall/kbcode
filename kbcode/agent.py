@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from . import vision_fallback
 from .compaction import compact, estimate_tokens
@@ -24,6 +25,28 @@ from .ui import TerminalUI
 
 _MAX_STEPS = 50  # safety cap on tool round-trips per user message
 _SUBAGENT_MAX_STEPS = 30  # a delegated task gets its own, smaller budget
+_MAX_PROMOTED_RECOVERIES = 3  # give up auto-repairing plain-text tool calls after this many/turn
+
+# Context-aware step budget (#4.5): _maybe_compact() only runs once, at the
+# start of run() — a single turn with many tool round-trips can still grow
+# past compact_threshold before the next turn ever checks again. So the loop
+# re-checks after every tool round-trip and compacts mid-turn if needed. If
+# even that doesn't help (there isn't enough *history* to summarize — it's
+# this turn's own tool output that's large), stop early rather than march
+# toward a context-window overflow; _EMERGENCY_STOP_MULTIPLIER sets how much
+# further past the threshold that's allowed to happen first.
+_EMERGENCY_STOP_MULTIPLIER = 3
+
+# Parallel tool calls (#4.3): only tools that are pure reads (no permission
+# prompt, no file mutation, no checkpoint, no shared SQLite connection) are
+# safe to run off the main thread. write_file/edit_file/run_command/kb_write/
+# remember/recall/save_skill/manage_todos/run_subagent all stay sequential —
+# either because ordering matters (edit then run the tests it affects) or
+# because they touch state (Permissions' interactive prompt, Checkpoints'
+# once-per-turn git snapshot, Memory's sqlite3 connection) that isn't
+# thread-safe to share across a pool.
+_PARALLEL_SAFE_TOOLS = {"read_file", "list_dir", "search_code", "kb_read", "kb_search"}
+_PARALLEL_MAX_WORKERS = 8
 
 # KB lifecycle hooks (the claude-kb idea): kbcode has no external hook-config
 # file, so the two hooks claude-kb installs into .claude/settings.json —
@@ -76,7 +99,7 @@ class Agent:
         self.mode = mode
         return True
 
-    def _complete(self, system: str, messages: list[dict], schemas: list[dict]):
+    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None):
         """Call the provider off the main thread so Esc / Ctrl-C stay responsive.
 
         A blocking HTTP request holds the socket deep in C, so a pending
@@ -85,13 +108,23 @@ class Agent:
         Here the request runs in a daemon worker while the main thread waits in
         short Python-level polls, so the interrupt lands within ~50 ms. The
         orphaned worker just finishes and its result is dropped.
+
+        ``on_text``, if given, switches to the provider's streaming call
+        (#3.1/#7.1) and is invoked with each text chunk *from the worker
+        thread* as it arrives — safe because Rich's Console has its own
+        internal lock and this codebase already updates a status spinner from
+        a background thread the same way (see _TickingStatus). Left as None
+        (the default), this behaves exactly as before: one blocking call.
         """
         box: dict = {}
         done = threading.Event()
 
         def work() -> None:
             try:
-                box["resp"] = self.provider.complete(system, messages, schemas)
+                if on_text is not None:
+                    box["resp"] = self.provider.stream(system, messages, schemas, on_text=on_text)
+                else:
+                    box["resp"] = self.provider.complete(system, messages, schemas)
             except BaseException as exc:  # carried over and re-raised on the main thread
                 box["err"] = exc
             finally:
@@ -157,20 +190,26 @@ class Agent:
         self.ui.turn_started()  # so every spinner this turn can also show a running total
         before = dict(self.usage)
         actions = 0
+        promoted_recoveries = 0
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
         self.tools.checkpoints.new_turn()
+        self.tools.new_turn()
 
         for _ in range(_MAX_STEPS):
+            self._update_read_budget()
             try:
                 with self.ui.thinking():
                     resp = self._complete(
-                        self._system_for_mode(), self.messages, self._mode_schemas()
+                        self._system_for_mode(), self.messages, self._mode_schemas(),
+                        on_text=self.ui.stream_chunk,
                     )
             except ProviderError as exc:
                 if self._try_vision_fallback(exc):
                     continue
                 raise
+            if resp.text.strip():
+                self.ui.stream_newline()  # chunks printed raw, with no trailing newline
             self._record_usage(resp.usage)
 
             self._append(
@@ -183,22 +222,46 @@ class Agent:
             )
 
             if not resp.tool_calls:
-                promoted, cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
+                # Note: promoted/cleaned text was already streamed above (raw,
+                # tool-call markup and all) — it isn't re-shown here, since
+                # streaming already showed *something* and re-rendering the
+                # cleaned version would just duplicate it.
+                promoted, _cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
                 if promoted:
-                    if cleaned:
-                        self.ui.assistant_text(cleaned)
+                    if promoted_recoveries >= _MAX_PROMOTED_RECOVERIES:
+                        self.ui.notice(
+                            f"Model kept writing tool calls as plain text after "
+                            f"{_MAX_PROMOTED_RECOVERIES} auto-repairs this turn — giving up and "
+                            "ending the turn instead of looping further.",
+                            style="yellow",
+                        )
+                        self._turn_summary(start, actions, before)
+                        return
+                    promoted_recoveries += 1
                     actions += self._run_promoted(promoted)
                     continue
-                self.ui.assistant_text(resp.text)
                 if self._kb_drift_feedback():
                     continue
                 self._turn_summary(start, actions, before)
                 return
 
-            self.ui.assistant_text(resp.text)
+            # Any preamble text (e.g. "let me check that file") was already
+            # streamed above, before the tool calls themselves execute.
 
             results = []
-            for call in resp.tool_calls:
+            calls = resp.tool_calls
+            i = 0
+            while i < len(calls):
+                call = calls[i]
+                if call.name in _PARALLEL_SAFE_TOOLS and i + 1 < len(calls) and calls[i + 1].name in _PARALLEL_SAFE_TOOLS:
+                    j = i + 1
+                    while j < len(calls) and calls[j].name in _PARALLEL_SAFE_TOOLS:
+                        j += 1
+                    batch = calls[i:j]
+                    results.extend(self._run_parallel_batch(batch))
+                    actions += len(batch)
+                    i = j
+                    continue
                 actions += 1
                 self.ui.tool_call(call.name, dict(call.input))
                 if not self.mode.allows(call.name):
@@ -213,10 +276,71 @@ class Agent:
                 self.ui.tool_result(content, is_error)
                 content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                 results.append({"id": call.id, "content": content, "is_error": is_error})
+                i += 1
             self._append({"role": "tool_results", "results": results})
+
+            if self._compact_mid_turn_or_stop(start, actions, before):
+                return
 
         self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
         self._turn_summary(start, actions, before)
+
+    def _run_parallel_batch(self, calls: list) -> list[dict]:
+        """Run a run of consecutive read-only tool calls concurrently (#4.3).
+
+        Parallelism only speeds up the *work* — the call/result lines are
+        still rendered sequentially afterward, in the model's original order,
+        since rich's spinner/console isn't built for concurrent renders.
+        """
+        allowed = [c for c in calls if self.mode.allows(c.name)]
+        outcomes: dict[str, tuple[str, bool]] = {}
+        if allowed:
+            label = f"running {len(allowed)} tools in parallel"
+            with self.ui.working(label):
+                with ThreadPoolExecutor(max_workers=min(_PARALLEL_MAX_WORKERS, len(allowed))) as pool:
+                    future_to_call = {
+                        pool.submit(self.tools.execute, c.name, dict(c.input)): c for c in allowed
+                    }
+                    for future, call in future_to_call.items():
+                        outcomes[call.id] = future.result()
+
+        results = []
+        for call in calls:
+            self.ui.tool_call(call.name, dict(call.input))
+            if call.id in outcomes:
+                content, is_error = outcomes[call.id]
+            else:
+                content, is_error = (
+                    f"Tool '{call.name}' is not available in {self.mode.name} mode. "
+                    f"Switch to a mode that allows it (e.g. /mode code) or use a read-only tool.",
+                    True,
+                )
+            self.ui.tool_result(content, is_error)
+            content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
+            results.append({"id": call.id, "content": content, "is_error": is_error})
+        return results
+
+    def _compact_mid_turn_or_stop(self, start: float, actions: int, before: dict) -> bool:
+        """Re-check context size after a tool round-trip (not just at the start
+        of run()), since a single turn's own tool output can grow past
+        compact_threshold before the next turn ever looks again. Compacts if
+        that helps; ends the turn early if it doesn't. Returns True if the
+        turn was ended.
+        """
+        if self.compact_threshold <= 0:
+            return False
+        if estimate_tokens(self.messages) < self.compact_threshold:
+            return False
+        self.compact_now(announce="auto")
+        if estimate_tokens(self.messages) < self.compact_threshold * _EMERGENCY_STOP_MULTIPLIER:
+            return False
+        self.ui.notice(
+            "Stopped: this turn's own tool output grew too large even after compacting "
+            "earlier history. Ask a narrower question, or continue in a fresh message.",
+            style="yellow",
+        )
+        self._turn_summary(start, actions, before)
+        return True
 
     def _run_promoted(self, promoted: list[tuple[str, dict]]) -> int:
         """Run tool calls the model wrote as plain text, then feed results back.
@@ -426,6 +550,18 @@ class Agent:
         if estimate_tokens(self.messages) < self.compact_threshold:
             return
         self.compact_now(announce="auto")
+
+    def _update_read_budget(self) -> None:
+        """Narrow read_file's result size as context fills up (#4.2), instead
+        of always allowing the fixed default — so one huge file read can't
+        single-handedly blow past the compaction threshold. No-op (fixed
+        default) when auto-compaction is off, since there's no budget to speak of.
+        """
+        if self.compact_threshold <= 0:
+            self.tools.context_budget_chars = None
+            return
+        remaining_tokens = max(0, self.compact_threshold - estimate_tokens(self.messages))
+        self.tools.context_budget_chars = remaining_tokens * 4  # ~4 chars/token, matches estimate_tokens
 
     def compact_now(self, announce: str = "manual") -> bool:
         """Summarize the middle of the conversation. Returns True if it compacted."""

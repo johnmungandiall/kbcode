@@ -154,19 +154,48 @@ class KnowledgeBase:
     def __init__(self, kb_dir: Path):
         self.kb_dir = kb_dir
         self.kb_dir.mkdir(parents=True, exist_ok=True)
+        # Cache of the joined (untruncated) notes, invalidated by write_note()
+        # (#10.2) — read_all() can be called more than once per process (the
+        # kb_read tool, plus the initial system-prompt build) without re-globbing
+        # and re-reading every note from disk each time. Trade-off: a note
+        # edited on disk by something other than this KnowledgeBase instance
+        # (e.g. by hand in another editor, mid-session) won't be picked up
+        # until the next write_note() call clears the cache.
+        self._joined_cache: str | None = None
 
     def list_notes(self) -> list[str]:
         return sorted(p.name for p in self.kb_dir.glob("*.md"))
 
     def read_all(self, max_chars: int = 20000) -> str:
-        parts: list[str] = []
-        for p in sorted(self.kb_dir.glob("*.md")):
-            text = p.read_text(encoding="utf-8", errors="replace").strip()
-            parts.append(f"### kb/{p.name}\n{text}")
-        joined = "\n\n".join(parts)
+        if self._joined_cache is None:
+            parts: list[str] = []
+            for p in sorted(self.kb_dir.glob("*.md")):
+                text = p.read_text(encoding="utf-8", errors="replace").strip()
+                parts.append(f"### kb/{p.name}\n{text}")
+            self._joined_cache = "\n\n".join(parts)
+        joined = self._joined_cache
         if len(joined) > max_chars:
             joined = joined[:max_chars] + "\n\n[...knowledge base truncated...]"
         return joined
+
+    def search(self, query: str, max_results: int = 20) -> list[str]:
+        """Find notes mentioning ``query`` (case-insensitive substring) without
+        reading the whole knowledge base — cheaper than ``read_all()`` once the
+        KB has grown past a handful of notes. Returns ``kb/<note>.md:N: line``
+        hits, in note-file order.
+        """
+        needle = query.strip().lower()
+        if not needle:
+            return []
+        hits: list[str] = []
+        for p in sorted(self.kb_dir.glob("*.md")):
+            text = p.read_text(encoding="utf-8", errors="replace")
+            for i, line in enumerate(text.splitlines(), 1):
+                if needle in line.lower():
+                    hits.append(f"kb/{p.name}:{i}: {line.strip()}")
+                    if len(hits) >= max_results:
+                        return hits
+        return hits
 
     def read_note(self, name: str) -> str | None:
         p = self.kb_dir / self._safe(name)
@@ -175,6 +204,7 @@ class KnowledgeBase:
     def write_note(self, name: str, content: str) -> str:
         p = self.kb_dir / self._safe(name)
         p.write_text(content, encoding="utf-8")
+        self._joined_cache = None
         return f"wrote kb/{p.name}"
 
     def scaffold(self) -> None:
@@ -282,13 +312,13 @@ class KnowledgeBase:
         if 1 <= current <= len(lines) and any(a in lines[current - 1] for a in anchors):
             return current
         for anchor in anchors:
-            defs = [i + 1 for i, l in enumerate(lines) if anchor in l and _DEF_RE.search(l)]
+            defs = [i + 1 for i, line in enumerate(lines) if anchor in line and _DEF_RE.search(line)]
             if len(defs) == 1:
                 return defs[0]
-            calls = [i + 1 for i, l in enumerate(lines) if (anchor + "(") in l]
+            calls = [i + 1 for i, line in enumerate(lines) if (anchor + "(") in line]
             if len(calls) == 1:
                 return calls[0]
-            hits = [i + 1 for i, l in enumerate(lines) if anchor in l]
+            hits = [i + 1 for i, line in enumerate(lines) if anchor in line]
             if len(hits) == 1:
                 return hits[0]
         return None

@@ -61,6 +61,16 @@ PRESETS: dict[str, dict] = {
         "key_env": "OPENROUTER_API_KEY",
         "model": "openrouter/auto",
     },
+    # Local models via Ollama's OpenAI-compatible endpoint. No real API key is
+    # needed, but the OpenAI SDK requires a non-empty value, so a dummy is used
+    # unless OLLAMA_API_KEY is set (e.g. for a remote/authenticated Ollama).
+    "ollama": {
+        "kind": "openai",
+        "base_url": "http://localhost:11434/v1",
+        "key_env": "OLLAMA_API_KEY",
+        "model": "llama3.1",
+        "key_optional": True,
+    },
     # Fully manual: set base_url + key yourself (e.g. a self-hosted endpoint).
     "custom": {
         "kind": "openai",
@@ -126,6 +136,18 @@ class Config:
         # openclaw idea: persistent instructions injected into every session.
         return self.kbcode_dir / "standing-orders.md"
 
+    @property
+    def history_file(self) -> Path:
+        # prompt_toolkit's on-disk input history, so up-arrow recalls past
+        # prompts across sessions (not just within one REPL run).
+        return self.kbcode_dir / "history"
+
+    @property
+    def prompts_dir(self) -> Path:
+        # Custom system-prompt fragments (like standing-orders.md, but split
+        # across files), appended in sorted order.
+        return self.kbcode_dir / "prompts"
+
     def ensure_dirs(self) -> None:
         self.kbcode_dir.mkdir(parents=True, exist_ok=True)
         self.kb_dir.mkdir(parents=True, exist_ok=True)
@@ -143,6 +165,8 @@ class Config:
         self.kind = preset["kind"]
         self.key_env = preset["key_env"]
         self.api_key = os.environ.get(preset["key_env"]) or os.environ.get("KBCODE_API_KEY")
+        if not self.api_key and preset.get("key_optional"):
+            self.api_key = "not-needed"  # e.g. a local Ollama server doesn't check it
         self.base_url = base_url if base_url is not None else preset["base_url"]
         self.model = model or preset["model"]
 

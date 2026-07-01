@@ -75,32 +75,66 @@ class Memory:
         self.conn.commit()
         return "remembered"
 
-    def recall(self, query: str, limit: int = 5) -> list[dict]:
+    def recall(self, query: str, limit: int = 5, kind: str | None = None) -> list[dict]:
+        """Search memory, optionally narrowed to one `kind` (decision,
+        preference, bug, todo, note — #8.4)."""
         rows: list[sqlite3.Row] = []
         if self.fts and query.strip():
+            sql = (
+                "SELECT m.kind, m.key, m.content FROM memories_fts f "
+                "JOIN memories m ON m.id = f.rowid WHERE memories_fts MATCH ?"
+            )
+            params: list = [self._fts_query(query)]
+            if kind:
+                sql += " AND m.kind = ?"
+                params.append(kind)
+            sql += " ORDER BY rank LIMIT ?"
+            params.append(limit)
             try:
-                rows = self.conn.execute(
-                    "SELECT m.kind, m.key, m.content FROM memories_fts f "
-                    "JOIN memories m ON m.id = f.rowid "
-                    "WHERE memories_fts MATCH ? ORDER BY rank LIMIT ?",
-                    (self._fts_query(query), limit),
-                ).fetchall()
+                rows = self.conn.execute(sql, params).fetchall()
             except sqlite3.OperationalError:
                 rows = []
         if not rows:
+            sql = "SELECT kind, key, content FROM memories WHERE content LIKE ?"
+            params = [f"%{query}%"]
+            if kind:
+                sql += " AND kind = ?"
+                params.append(kind)
+            sql += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            rows = self.conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+    def recent(self, limit: int = 8, kind: str | None = None) -> list[dict]:
+        if kind:
             rows = self.conn.execute(
-                "SELECT kind, key, content FROM memories "
-                "WHERE content LIKE ? ORDER BY created_at DESC LIMIT ?",
-                (f"%{query}%", limit),
+                "SELECT kind, key, content FROM memories WHERE kind = ? ORDER BY created_at DESC LIMIT ?",
+                (kind, limit),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT kind, key, content FROM memories ORDER BY created_at DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def recent(self, limit: int = 8) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT kind, key, content FROM memories ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [dict(r) for r in rows]
+    def prune(self, older_than_days: float | None = None) -> dict:
+        """Remove duplicate memories (#8.3) — the table otherwise grows
+        forever. Keeps the newest row for each exact-duplicate content, and
+        optionally ages out anything older than ``older_than_days``. Returns
+        how many rows each pass removed.
+        """
+        cur = self.conn.execute(
+            "DELETE FROM memories WHERE id NOT IN (SELECT MAX(id) FROM memories GROUP BY content)"
+        )
+        duplicates_removed = cur.rowcount
+        aged_removed = 0
+        if older_than_days is not None:
+            cutoff = time.time() - older_than_days * 86400
+            cur = self.conn.execute("DELETE FROM memories WHERE created_at < ?", (cutoff,))
+            aged_removed = cur.rowcount
+        self.conn.commit()
+        return {"duplicates_removed": duplicates_removed, "aged_removed": aged_removed}
 
     @staticmethod
     def _fts_query(query: str) -> str:

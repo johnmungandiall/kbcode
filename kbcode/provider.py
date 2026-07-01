@@ -132,6 +132,16 @@ class LLMProvider:
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         raise NotImplementedError
 
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
+        """Token-by-token variant of complete() (#3.1/#7.1). Default falls back
+        to complete() and delivers the whole text as one chunk, so a provider
+        that hasn't implemented true streaming still works — just without the
+        incremental display. Subclasses override for real streaming."""
+        resp = self.complete(system, messages, tools)
+        if on_text and resp.text:
+            on_text(resp.text)
+        return resp
+
     def list_models(self) -> list[str]:
         """Return the model ids this provider/key can use (best effort)."""
         return []
@@ -142,13 +152,19 @@ class LLMProvider:
 # --------------------------------------------------------------------------
 class AnthropicProvider(LLMProvider):
     def __init__(self, config: Config, ui=None):
-        try:
-            import anthropic
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
         self.config = config
         self.ui = ui  # optional: receives "retrying…" notices
-        self.client = anthropic.Anthropic(api_key=config.api_key or None)
+        self._client = None  # built lazily so `import anthropic` isn't paid at startup
+
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                import anthropic
+            except ImportError as exc:  # pragma: no cover
+                raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
+            self._client = anthropic.Anthropic(api_key=self.config.api_key or None)
+        return self._client
 
     def _to_native(self, messages: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -229,6 +245,53 @@ class AnthropicProvider(LLMProvider):
         } if u else None
         return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content, usage=usage)
 
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
+        native = self._to_native(messages)
+        system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+        base = dict(
+            model=self.config.model,
+            max_tokens=self.config.max_tokens,
+            system=system_blocks,
+            messages=native,
+            tools=tools,
+        )
+        attempts = [
+            {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.effort}},
+            {**base, "thinking": {"type": "adaptive"}},
+            base,
+        ]
+
+        def do_stream(kwargs):
+            with self.client.messages.stream(**kwargs) as stream_ctx:
+                for chunk in stream_ctx.text_stream:
+                    if on_text and chunk:
+                        on_text(chunk)
+                return stream_ctx.get_final_message()
+
+        last_exc: Exception | None = None
+        final = None
+        for kwargs in attempts:
+            try:
+                final = _with_retry(lambda kw=kwargs: do_stream(kw), self.ui)
+                break
+            except TypeError as exc:  # SDK too old for this kwarg
+                last_exc = exc
+        if final is None:
+            raise last_exc  # type: ignore[misc]
+
+        text = "".join(b.text for b in final.content if getattr(b, "type", None) == "text")
+        tool_calls = [
+            ToolCall(b.id, b.name, dict(b.input))
+            for b in final.content
+            if getattr(b, "type", None) == "tool_use"
+        ]
+        u = getattr(final, "usage", None)
+        usage = {
+            "input_tokens": getattr(u, "input_tokens", 0) or 0,
+            "output_tokens": getattr(u, "output_tokens", 0) or 0,
+        } if u else None
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=final.content, usage=usage)
+
     def list_models(self) -> list[str]:
         return [m.id for m in self.client.models.list()]
 
@@ -238,13 +301,19 @@ class AnthropicProvider(LLMProvider):
 # --------------------------------------------------------------------------
 class OpenAICompatibleProvider(LLMProvider):
     def __init__(self, config: Config, ui=None):
-        try:
-            from openai import OpenAI
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
         self.config = config
         self.ui = ui  # optional: receives "retrying…" notices
-        self.client = OpenAI(api_key=config.api_key or "missing", base_url=config.base_url)
+        self._client = None  # built lazily so `from openai import OpenAI` isn't paid at startup
+
+    @property
+    def client(self):
+        if self._client is None:
+            try:
+                from openai import OpenAI
+            except ImportError as exc:  # pragma: no cover
+                raise RuntimeError("Missing package. Run: pip install -r requirements.txt") from exc
+            self._client = OpenAI(api_key=self.config.api_key or "missing", base_url=self.config.base_url)
+        return self._client
 
     @staticmethod
     def _tools(tools: list[dict]) -> list[dict]:
@@ -317,6 +386,70 @@ class OpenAICompatibleProvider(LLMProvider):
         if raw_tool_calls:
             raw["tool_calls"] = raw_tool_calls
         u = getattr(resp, "usage", None)
+        usage = {
+            "input_tokens": getattr(u, "prompt_tokens", 0) or 0,
+            "output_tokens": getattr(u, "completion_tokens", 0) or 0,
+        } if u else None
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage)
+
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
+        native = self._to_native(system, messages)
+
+        def do_stream():
+            resp_stream = self.client.chat.completions.create(
+                model=self.config.model,
+                messages=native,
+                tools=self._tools(tools),
+                max_tokens=self.config.max_tokens,
+                stream=True,
+            )
+            text_parts: list[str] = []
+            tool_acc: dict[int, dict] = {}
+            usage = None
+            for chunk in resp_stream:
+                chunk_usage = getattr(chunk, "usage", None)
+                if chunk_usage is not None:
+                    usage = chunk_usage
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+                if delta and delta.content:
+                    text_parts.append(delta.content)
+                    if on_text:
+                        on_text(delta.content)
+                for tc in getattr(delta, "tool_calls", None) or []:
+                    acc = tool_acc.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                    if tc.id:
+                        acc["id"] = tc.id
+                    if tc.function:
+                        if tc.function.name:
+                            acc["name"] += tc.function.name
+                        if tc.function.arguments:
+                            acc["arguments"] += tc.function.arguments
+            return "".join(text_parts), tool_acc, usage
+
+        text, tool_acc, u = _with_retry(do_stream, self.ui)
+
+        tool_calls: list[ToolCall] = []
+        raw_tool_calls: list[dict] = []
+        for idx in sorted(tool_acc):
+            acc = tool_acc[idx]
+            try:
+                args = json.loads(acc["arguments"] or "{}")
+            except (json.JSONDecodeError, TypeError):
+                args = {}
+            tool_calls.append(ToolCall(acc["id"], acc["name"], args))
+            raw_tool_calls.append(
+                {
+                    "id": acc["id"],
+                    "type": "function",
+                    "function": {"name": acc["name"], "arguments": acc["arguments"]},
+                }
+            )
+
+        raw: dict = {"role": "assistant", "content": text or ""}
+        if raw_tool_calls:
+            raw["tool_calls"] = raw_tool_calls
         usage = {
             "input_tokens": getattr(u, "prompt_tokens", 0) or 0,
             "output_tokens": getattr(u, "completion_tokens", 0) or 0,
