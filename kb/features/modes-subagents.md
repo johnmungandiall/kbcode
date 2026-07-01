@@ -1,15 +1,15 @@
 # Modes & subagents — personalities, tool guardrails, delegation.
 
 ## Modes apply per turn
-`Mode` (`kbcode/modes.py:30`) pairs instructions with an allowed-tool set from the
-`READ`/`NOTES`/`EDIT`/`EXEC` groups (`kbcode/modes.py:23-26` — `manage_todos` lives in
-`READ` so the task checklist works even read-only). `Agent.run` rebuilds
+`Mode` (`kbcode/modes.py:33`) pairs instructions with an allowed-tool set from the
+`READ`/`NOTES`/`EDIT`/`EXEC` groups (`kbcode/modes.py:23-29` — `manage_todos` and
+`web_search` live in `READ` so they work even read-only). `Agent.run` rebuilds
 `_system_for_mode()` (`kbcode/agent.py:180`) and `_mode_schemas()` (`kbcode/agent.py:183`) on
 **every** model call. Enforcement is two-layer: disallowed tools are never shown
 to the model, and `run()` guards again at execute time. Builtins
-(`_BUILTINS`, `kbcode/modes.py:40`): `code`/`debug` (all tools), `architect` (read +
+(`_BUILTINS`, `kbcode/modes.py:43`): `code`/`debug` (all tools), `architect` (read +
 notes), `ask` (read-only). Custom modes load from `.kbcode/modes/*.md` via
-`load_custom_modes()` (`kbcode/modes.py:99`).
+`load_custom_modes()` (`kbcode/modes.py:102`).
 
 ## Subagents delegate into a fresh context
 `load_subagents()` (`kbcode/subagents.py:40`) reads `.kbcode/agents/*.md` (same

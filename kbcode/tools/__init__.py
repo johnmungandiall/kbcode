@@ -6,9 +6,9 @@ method named ``_tool_<name>`` that runs it. ``execute`` returns
 ``(content, is_error)`` so the agent can feed results back to the model.
 
 Split into one module per tool category (#2.2) — file.py, kb.py, memory.py,
-planning.py, subagent.py — composed here into one ``Tools`` facade so callers
-keep using ``from kbcode.tools import Tools`` unchanged; core.py holds the
-schema/dispatch machinery and helpers shared across categories.
+planning.py, subagent.py, web.py — composed here into one ``Tools`` facade so
+callers keep using ``from kbcode.tools import Tools`` unchanged; core.py holds
+the schema/dispatch machinery and helpers shared across categories.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from .kb import KBToolsMixin
 from .memory import MemoryToolsMixin
 from .planning import PlanningToolsMixin, format_todos
 from .subagent import SubagentToolsMixin
+from .web import WebToolsMixin
 
 __all__ = ["Tools", "format_todos"]
 
@@ -29,6 +30,7 @@ class Tools(
     MemoryToolsMixin,
     PlanningToolsMixin,
     SubagentToolsMixin,
+    WebToolsMixin,
     ToolsCore,
 ):
     """Composes every tool category behind one class; see module docstring."""

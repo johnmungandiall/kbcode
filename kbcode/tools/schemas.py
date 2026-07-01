@@ -97,6 +97,28 @@ BASE_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "web_search",
+        "parallel_safe": True,
+        "description": (
+            "Search the web via DuckDuckGo (free, no API key). Returns up to "
+            "20 results with title, url, and description. Use for current "
+            "events, docs, or anything not in the project or your training data."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query."},
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results to return. Defaults to 5.",
+                    "minimum": 1,
+                    "maximum": 20,
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
         "name": "run_command",
         "description": "Run a shell command in the project root. Use for tests, builds, git, installs. Needs user approval.",
         "input_schema": {

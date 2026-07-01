@@ -444,7 +444,9 @@ def test_parallel_safe_tools_derived_from_schema_flag(tmp_path):
     # not a hardcoded list — so it can't drift from the actual read-only tools.
     provider = FakeProvider([])
     _agent, tools = _make_agent(tmp_path, provider)
-    assert tools.parallel_safe_tools == {"read_file", "list_dir", "search_code", "kb_read", "kb_search"}
+    assert tools.parallel_safe_tools == {
+        "read_file", "list_dir", "search_code", "kb_read", "kb_search", "web_search",
+    }
     flagged = {s["name"] for s in tools.schemas if s.get("parallel_safe")}
     assert tools.parallel_safe_tools == flagged
     # mutating tools (write/run) must never be marked safe.

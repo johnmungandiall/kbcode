@@ -150,6 +150,10 @@ def _describe_run_subagent(a, g, full):
     return "Delegate", f"→ {g('agent')}: {_short(g('task'), 60)}"
 
 
+def _describe_web_search(a, g, full):
+    return "Web search", f'"{g("query")}"'
+
+
 _TOOL_DESCRIBERS = {
     "read_file": _describe_read_file,
     "write_file": _describe_write_file,
@@ -165,6 +169,7 @@ _TOOL_DESCRIBERS = {
     "save_skill": _describe_save_skill,
     "manage_todos": _describe_manage_todos,
     "run_subagent": _describe_run_subagent,
+    "web_search": _describe_web_search,
 }
 
 

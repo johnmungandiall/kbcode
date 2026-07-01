@@ -70,6 +70,16 @@
 - Add a new schema-level metadata key → confirm it's dropped for Anthropic
   (extend `_api_tools`), or Claude requests 400. See [[providers]], [[tools-and-repair]].
 
+## web_search uses a throwaway thread pool, not a shared one
+- `kbcode/tools/web.py:39` — `_tool_web_search` can't cancel a blocking `ddgs`
+  call on timeout, and `ddgs`'s own per-request timeout doesn't bound its
+  internal multi-engine retry loop. A shared pool would let one hung search
+  serialize every later search behind it.
+- Fix: a fresh single-worker `ThreadPoolExecutor` per call, with
+  `shutdown(wait=False, cancel_futures=True)` in `finally` so the hung worker
+  thread is abandoned (leaked, not killed — Python can't kill threads) instead
+  of blocking the tool call. Don't switch this to a shared/module-level pool.
+
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's
   own key as an OpenRouter route when `base_url` verifiably contains

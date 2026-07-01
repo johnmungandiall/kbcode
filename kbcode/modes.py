@@ -20,7 +20,10 @@ from pathlib import Path
 # Tool groups (names match Tools.schemas in tools.py).
 # manage_todos is planning-only (no file/command side effects), so it lives in
 # READ — the baseline every mode allows, including read-only ask/architect.
-READ = {"read_file", "list_dir", "search_code", "kb_read", "kb_search", "recall", "manage_todos"}
+READ = {
+    "read_file", "list_dir", "search_code", "kb_read", "kb_search", "recall",
+    "manage_todos", "web_search",
+}
 NOTES = {"kb_write", "remember", "save_skill"}  # knowledge/memory writes — no code or commands
 EDIT = {"write_file", "edit_file"}
 EXEC = {"run_command"}

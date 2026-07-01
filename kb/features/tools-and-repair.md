@@ -30,7 +30,8 @@ the `-- OUTSIDE the project folder` flag on the permission prompt.
 
 ## The roster & UI
 Tools: `read/write/edit/list/search/run` + `kb_read/kb_write` +
-`remember/recall/save_skill` + `manage_todos` + the conditional
+`remember/recall/save_skill` + `manage_todos` + `web_search`
+(`_tool_web_search`, `kbcode/tools/web.py:39`) + the conditional
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`

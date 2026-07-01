@@ -19,6 +19,7 @@ dependencies = [
     "rich>=13.0",
     "prompt_toolkit>=3.0",
     "Pillow>=10.0",  # clipboard image grab for Alt+V / vision input
+    "ddgs>=9.0",  # free, no-API-key backend for the web_search tool
 ]
 
 [project.optional-dependencies]

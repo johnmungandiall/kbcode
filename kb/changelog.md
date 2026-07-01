@@ -2,6 +2,15 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased — since v1.7.0
+- **`web_search` tool** (`kbcode/tools/web.py`) — the Hermes web-search idea,
+  right-sized to one backend instead of its multi-provider plugin registry.
+  DuckDuckGo search via the free `ddgs` package, no API key needed.
+  Read-only/`parallel_safe`, available in every mode's `READ` group. A
+  throwaway single-worker thread pool enforces a hard 20s timeout since
+  `ddgs` can't be cancelled mid-call (see [[gotchas]]). `ddgs>=9.0` is now a
+  hard dependency.
+
 ## v1.7.0 (current)
 Three review-driven improvements (none is a bug fix; the "bug" findings they came
 with were verified false against the code):

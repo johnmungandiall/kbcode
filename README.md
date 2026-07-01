@@ -326,6 +326,7 @@ your request
      │   remember / recall / save_skill   (memory + skills — Hermes idea)
      │   manage_todos                (task checklist — Kilo Code idea)
      │   run_subagent                (delegate to a specialist — Claude Code idea)
+     │   web_search                  (DuckDuckGo, free/no key — Hermes idea)
      ▼
   files in your project      kb/ notes        .kbcode/memory.db
 ```
@@ -392,6 +393,7 @@ kbcode/
     memory.py       remember/recall/save_skill
     planning.py     manage_todos
     subagent.py     run_subagent
+    web.py          web_search (DuckDuckGo via the ddgs package, no API key)
   repair.py         recover tool calls a weak model wrote as plain text (openclaw idea)
   pricing.py        rough per-model USD pricing for /insights (Hermes idea)
   prompts.py        the system prompt (+ standing orders, + .kbcode/prompts/ fragments)
