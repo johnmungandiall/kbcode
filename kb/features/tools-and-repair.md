@@ -39,7 +39,7 @@ raise `ValueError`, which would abort the tool (search hits used to do this; see
 Tools: `read/write/edit/edit_files/list/search/run` + `kb_read/kb_write` +
 `remember/recall/save_skill` + `manage_todos` + `web_search` + `repo_map`
 
-`read_file` supports optional `offset` (1-based) + `limit` (lines) for reading slices of large files without shell chunking or full loads.
+`read_file` supports optional `offset` (1-based) + `limit` (lines) for reading slices of large files without shell chunking or full loads. When a range is given it streams lines (no full file load in memory).
 
 New tools `repo_map` (structural overview) and `edit_files` (multi-file edits) were added inspired by Aider and Zed after studying their references. Use `repo_map` early for exploration and `edit_files` for coordinated changes across files.
 

@@ -27,10 +27,9 @@ the `kb/features/` notes.
 See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.9.10"`; release history in [[changelog]]
+- `kbcode/__init__.py:9` — `__version__ = "1.9.11"`; release history in [[changelog]]
 
-last indexed: 2026-07-01 (v1.9.10: search_code limit, improved repo_map with rg, more prompt/examples for efficient exploration;
-v1.9.9 loop prevention + Esc fix)
+last indexed: 2026-07-01 (v1.9.11: read_file offset+limit for large files with efficient line streaming (solves step-limit + powershell chunking on huge main.dart etc.); v1.9.10 exploration improvements)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

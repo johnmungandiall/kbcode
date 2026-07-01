@@ -2,14 +2,17 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.10 (current)
+## v1.9.11 (current)
+- `read_file` now supports `offset` (1-based) + `limit` for reading slices of large files. Range reads use efficient line-by-line streaming (no full file load) to avoid the old shell-chunking pattern (`powershell Get-Content | Select -Skip`). Still respects context budget and preserves original line numbers in output. Directly addresses step-limit issues on huge files (e.g. 2000+ line main.dart). UI display updated, tests added.
+- Updated documentation in tools-and-repair.md, changelog, and overview.
+
+## v1.9.10
 - **Further exploration improvements**:
   - `search_code` now supports `limit` parameter (default 50) to prevent dumping too many results that lead to more loops.
   - `repo_map` significantly improved: prefers ripgrep (rg) when available for faster and more accurate symbol extraction, limits to ~5 symbols per file for clean output, better fallback.
   - `code-explorer` subagent now explicitly includes `repo_map` and stronger instructions.
   - More examples and emphasis in core system prompt for scoped, efficient searches (e.g., broker comparisons).
   - Updated documentation in gotchas and tools-and-repair.
-- `read_file` now accepts optional `offset` (1-based line) and `limit` (line count). This lets agents read slices of huge files (e.g. 2000+ line main.dart) directly instead of resorting to `run_command` + `Get-Content | Select -Skip`. Still respects the shrinking context budget. Updated UI display and tests.
 
 - Previous anti-loop and interrupt fixes from 1.9.9 carried forward.
 
