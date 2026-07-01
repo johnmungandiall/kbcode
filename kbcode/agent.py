@@ -238,6 +238,10 @@ class Agent:
 
         for _ in range(_MAX_STEPS):
             self._update_read_budget()
+            # Proactive auto-compact before each model call (in case previous
+            # tool results or text pushed us over without a mid-turn check yet).
+            if self.compact_threshold > 0 and estimate_tokens(self.messages) >= self.compact_threshold:
+                self.compact_now(announce="auto")
             try:
                 with self.ui.thinking():
                     resp = self._complete(

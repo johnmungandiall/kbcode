@@ -22,6 +22,10 @@ especially visible when a subagent makes many calls. `Config.request_timeout`
 `LLMProvider._client_kwargs()` (see [[providers]]); set `KBCODE_REQUEST_TIMEOUT=0`
 to opt out and restore the SDK default.
 
+You can also set "compact_tokens" in .kbcode/settings.json (or global
+~/.kbcode/settings.json) so auto-compaction kicks in at the right size for
+your model (e.g. 80000 for large-context models). Env var always wins.
+
 `KBCODE_LOG_LEVEL` (a *string*, not an `_int()` knob; default `INFO`) drives the
 diagnostic file log — `setup_logging()` (`kbcode/logs.py`, called from
 `kbcode/cli.py` right after `load_config`) attaches a rotating handler at

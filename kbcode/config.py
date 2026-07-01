@@ -18,7 +18,7 @@ DEFAULT_MAX_TOKENS = 16000
 DEFAULT_EFFORT = "high"
 # Auto-compact the chat once its history crosses this rough token estimate.
 # 0 disables it. Override with KBCODE_COMPACT_TOKENS.
-DEFAULT_COMPACT_TOKENS = 12000
+DEFAULT_COMPACT_TOKENS = 80000
 # Per-request HTTP timeout (seconds) for the provider call. Without this the
 # SDK default (~600s) lets a stalled model freeze the agent for ten minutes —
 # painfully visible when a subagent makes many calls. On timeout the request
@@ -247,7 +247,7 @@ def load_config(project_dir: Path | None = None) -> Config:
         project_dir=project_dir,
         max_tokens=_int("KBCODE_MAX_TOKENS", DEFAULT_MAX_TOKENS),
         effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
-        compact_threshold=_int("KBCODE_COMPACT_TOKENS", DEFAULT_COMPACT_TOKENS),
+        compact_threshold=_int("KBCODE_COMPACT_TOKENS", settings.get("compact_tokens") or DEFAULT_COMPACT_TOKENS),
         request_timeout=_int("KBCODE_REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
         hooks=settings.get("hooks") or {},
     )
