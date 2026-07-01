@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased — since v1.6.3
+## v1.7.0 (current)
 Three review-driven improvements (none is a bug fix; the "bug" findings they came
 with were verified false against the code):
 - **#6 parallel-safe tools are now schema-declared.** Each pure-read tool carries
@@ -26,7 +26,7 @@ the component list (existed in code, missing from the map) and documented the
 new `.claude/hooks/kb_*.py` enforcement hooks in `about-kb.md` (committed this
 session, undocumented). No other drift found.
 
-## v1.6.3 (current)
+## v1.6.3
 - Fix "agent freezes for minutes" on slow/stalled providers (esp. MiMo + a
   subagent making many calls): the SDK clients were built with no request
   timeout, so a stalled call inherited the SDK's ~600s default. Added
