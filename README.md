@@ -278,7 +278,11 @@ your request
 > ask for your approval first. As an extra safety rail, the agent **refuses** to
 > write to or edit sensitive files — `.git/`, `.ssh/`, `.env` and secrets, private
 > keys, and kbcode's own state — even if you approve. (Templates like
-> `.env.example` and your `.gitignore` are fine.)
+> `.env.example` and your `.gitignore` are fine.) It also **redacts secrets**
+> it stumbles into — API keys, auth headers, private keys, DB passwords — out
+> of command output and file reads before they ever reach the model or the
+> transcript. Turn it off with `KBCODE_REDACT_SECRETS=false` if you need raw
+> values.
 
 ## 🗂️ Project layout
 

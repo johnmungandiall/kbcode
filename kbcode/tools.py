@@ -18,6 +18,7 @@ from .config import Config
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
 from .permissions import Permissions
+from .redact import redact_sensitive_text, redact_terminal_output
 
 # Directories we never scan when searching code.
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
@@ -313,6 +314,7 @@ class Tools:
         text = p.read_text(encoding="utf-8", errors="replace")
         if len(text) > _MAX_READ_CHARS:
             text = text[:_MAX_READ_CHARS] + "\n[...file truncated...]"
+        text = redact_sensitive_text(text, code_file=True)
         lines = text.splitlines()
         return "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
 
@@ -378,7 +380,8 @@ class Tools:
                         for i, line in enumerate(fh, 1):
                             if regex.search(line):
                                 rel = fp.relative_to(self.root)
-                                hits.append(f"{rel}:{i}: {line.rstrip()[:200]}")
+                                snippet = redact_sensitive_text(line.rstrip()[:200], code_file=True)
+                                hits.append(f"{rel}:{i}: {snippet}")
                                 if len(hits) >= 100:
                                     return "\n".join(hits) + "\n[...stopped at 100 matches...]"
                 except (UnicodeDecodeError, OSError):
@@ -400,8 +403,8 @@ class Tools:
             )
         except subprocess.TimeoutExpired:
             return "Command timed out after 180s."
-        out = (proc.stdout or "")[-8000:]
-        err = (proc.stderr or "")[-4000:]
+        out = redact_terminal_output((proc.stdout or "")[-8000:], command)
+        err = redact_terminal_output((proc.stderr or "")[-4000:], command)
         return f"exit code: {proc.returncode}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
 
     # --- knowledge base ------------------------------------------------
