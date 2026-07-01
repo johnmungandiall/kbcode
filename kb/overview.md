@@ -1,12 +1,26 @@
 # Overview
 
-_What is this project?_ (fill this in — one short paragraph)
+**kbcode** is a terminal-based AI coding agent (v1.4.2) that blends five ideas:
+1. **Hands** (Claude Code) — reads/writes files, runs commands
+2. **Memory + skills** (Hermes) — persistent SQLite memory across sessions
+3. **Knowledge base** (claude-kb) — token-cheap `kb/` notes about the project
+4. **Modes** (Kilo Code) — code/architect/ask/debug personalities with tool guardrails
+5. **Tool-call repair** (openclaw) — fixes malformed calls from weaker models
+
+Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom).
 
 ## Key entry points
-- `path/to/main` — what it does
+- `kbcode/cli.py:797` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/cli.py:380` — `_repl()` the interactive chat loop
+- `kbcode/agent.py:37` — `Agent` class, the core tool-using loop
+- `kbcode/tools.py:48` — `Tools` class, all tool implementations + schemas
 
 ## How to run
-- (command to run / build / test)
+- `pip install -e .` (editable dev install) or `pip install git+https://github.com/johnmungandiall/kbcode.git`
+- `kbcode init` then `kbcode model` then `kbcode` (or `kb`)
+- Tests: no test suite found in repo
 
-> Tip: ask kbcode to "build the knowledge base for this project" and it
-> will scan the code and fill these notes in for you.
+## Version
+- `kbcode/__init__.py:9` — `__version__ = "1.4.2"`
+
+See [[architecture]] for how the pieces fit, [[conventions]] for structure rules.
