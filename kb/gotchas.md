@@ -81,7 +81,7 @@
   of blocking the tool call. Don't switch this to a shared/module-level pool.
 
 ## Hook commands run with full shell privileges, unsandboxed
-- `kbcode/hooks.py:84` — `HooksRunner._run_one()` runs a configured hook's
+- `kbcode/hooks.py:85` — `HooksRunner._run_one()` runs a configured hook's
   `command` via `subprocess.run(shell=True, ...)` — same trust model as
   Claude Code's own hooks. A malicious or careless hook script in
   `.kbcode/settings.json` can do anything a shell can do (no allowlist, no
