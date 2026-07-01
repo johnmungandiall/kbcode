@@ -111,4 +111,17 @@
   `OPENROUTER_API_KEY` while `KBCODE_BASE_URL` points elsewhere, so trusting
   the env var name alone would silently 401 — see [[vision]]
 
+## `kbcode update` needs force-reinstall; bump `__version__` every release
+- `kbcode/cli.py:47` — `_self_update()` installs from a moving git branch, not a
+  pinned commit. A bare `pip install --upgrade git+URL` is a **silent no-op**
+  when `__version__` is unchanged: pip sees the same version already installed
+  and skips, so a fix pushed to GitHub without a version bump never reaches
+  installed users (they stay stale while `python -m kbcode` from source shows
+  the fix — "works from source, broken when installed"). Two guards, keep both:
+  (1) `_self_update` runs a second `--force-reinstall --no-deps --no-cache-dir`
+  step so HEAD is rebuilt regardless of version; (2) **always bump
+  `kbcode/__init__.py` `__version__` in the same commit as any user-facing fix**
+  so even the OLD update command upgrades. Fixed in v1.9.1 ([[changelog]]).
+- Same family as the v1.6.1 packaging trap — see [[changelog]].
+
 See [[conventions]] for general rules, [[about-kb]] for how traps get indexed here.
