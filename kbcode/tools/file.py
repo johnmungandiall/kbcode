@@ -185,6 +185,72 @@ class FileToolsMixin:
         p.write_text(new_text, encoding="utf-8")
         return f"edited {p}"
 
+    def _tool_edit_files(self, inp: dict) -> str:
+        """Apply multiple precise edits across files. Each requires unique old_string.
+        Provides a single permission prompt summary. Inspired by coordinated multi-file
+        AI edits in advanced editors."""
+        edits = inp.get("edits", [])
+        if not edits:
+            return "No edits provided."
+
+        summaries = []
+        protected_errors = []
+
+        for edit in edits:
+            path = edit["path"]
+            old = edit["old_string"]
+            new = edit["new_string"]
+
+            p = self._resolve(path)
+            reason = self._protected_reason(p)
+            if reason:
+                protected_errors.append(f"{p} is {reason}")
+                continue
+
+            if not p.exists():
+                protected_errors.append(f"No such file: {path}")
+                continue
+
+            text = p.read_text(encoding="utf-8", errors="replace")
+            count = text.count(old)
+            if count == 0:
+                protected_errors.append(f"old_string not found in {path}")
+                continue
+            if count > 1:
+                protected_errors.append(f"old_string appears {count} times in {path}; must be unique")
+                continue
+
+            new_text = text.replace(old, new, 1)
+            diff = self._unified_diff(text, new_text, f"{p} (current)", f"{p} (new)")
+            outside = " (outside project)" if self._is_outside_project(p) else ""
+            summaries.append(f"edit {p}{outside}:\n{diff}")
+
+        if protected_errors:
+            return "Some edits blocked:\n" + "\n".join(protected_errors)
+
+        if not summaries:
+            return "No valid edits."
+
+        # Single permission prompt for the batch
+        detail = "Apply the following edits:\n\n" + "\n\n".join(summaries)
+        if not self.perm.check("edit_files", detail):
+            raise PermissionError("User denied permission for the batch edits.")
+
+        self.checkpoints.ensure_checkpoint("before edit_files")
+
+        results = []
+        for edit in edits:
+            path = edit["path"]
+            old = edit["old_string"]
+            new = edit["new_string"]
+            p = self._resolve(path)
+            text = p.read_text(encoding="utf-8", errors="replace")
+            new_text = text.replace(old, new, 1)
+            p.write_text(new_text, encoding="utf-8")
+            results.append(f"edited {p}")
+
+        return "\n".join(results)
+
     def _tool_list_dir(self, inp: dict) -> str:
         """List a directory's immediate entries (dirs suffixed with /), skipping _SKIP_DIRS."""
         p = self._resolve(inp.get("path", "."))

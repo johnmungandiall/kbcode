@@ -75,6 +75,32 @@ BASE_SCHEMAS: list[dict] = [
         },
     },
     {
+        "name": "edit_files",
+        "description": (
+            "Perform multiple precise search/replace edits across files in one call. "
+            "Each edit must have a unique exact old_string. Inspired by multi-file AI editing "
+            "capabilities in advanced editors like Zed. Great for coordinated refactors."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "edits": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "old_string": {"type": "string"},
+                            "new_string": {"type": "string"}
+                        },
+                        "required": ["path", "old_string", "new_string"]
+                    }
+                }
+            },
+            "required": ["edits"]
+        }
+    },
+    {
         "name": "list_dir",
         "parallel_safe": True,
         "description": "List files and folders in a directory (defaults to the project root).",

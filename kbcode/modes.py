@@ -25,7 +25,7 @@ READ = {
     "manage_todos", "web_search",
 }
 NOTES = {"kb_write", "remember", "save_skill"}  # knowledge/memory writes — no code or commands
-EDIT = {"write_file", "edit_file"}
+EDIT = {"write_file", "edit_file", "edit_files"}
 EXEC = {"run_command"}
 
 

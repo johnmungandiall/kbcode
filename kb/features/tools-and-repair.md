@@ -36,8 +36,13 @@ raise `ValueError`, which would abort the tool (search hits used to do this; see
 [[gotchas]]). New tools that print a resolved path must go through it.
 
 ## The roster & UI
-Tools: `read/write/edit/list/search/run` + `kb_read/kb_write` +
-`remember/recall/save_skill` + `manage_todos` + `web_search`
+Tools: `read/write/edit/edit_files/list/search/run` + `kb_read/kb_write` +
+`remember/recall/save_skill` + `manage_todos` + `web_search` + `repo_map`
+
+`edit_files` allows the agent to propose coordinated changes across several files
+in a single step (with one permission dialog showing diffs), similar to how
+advanced AI-native editors like Zed let their agents perform multi-file refactors
+and feature implementations cleanly.
 (`_tool_web_search`, `kbcode/tools/web.py:39`) + the conditional
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
