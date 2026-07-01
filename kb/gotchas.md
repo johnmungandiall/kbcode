@@ -146,6 +146,9 @@
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
 
+## Avoiding search/exploration loops
+- When doing comparisons across directories (e.g. similar functions in broker/kotak vs broker/zerodha), the agent must start with `repo_map` (scoped to subdirs) then use `search_code` with the `path` argument for narrow, targeted searches. Batch different scoped searches in one step. Stop and summarize as soon as the pattern is found — do not repeat similar searches. Updated BASE_SYSTEM, search_code description, and code-explorer instructions enforce this (see prompts.py and schemas.py). This prevents the repetitive search loops that previously caused long-running or "stuck" turns.
+
 ## run_command per-turn limit (runaway guard)
 - `kbcode/tools/file.py:42` — `_MAX_COMMANDS_PER_TURN = 25` (raised from 10) is a
   safety rail inside `_tool_run_command`. It increments a per-turn counter (reset

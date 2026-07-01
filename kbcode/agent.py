@@ -236,114 +236,119 @@ class Agent:
         self.tools.checkpoints.new_turn()
         self.tools.new_turn()
 
-        for _ in range(_MAX_STEPS):
-            self._update_read_budget()
-            # Proactive auto-compact before each model call (in case previous
-            # tool results or text pushed us over without a mid-turn check yet).
-            if self.compact_threshold > 0 and estimate_tokens(self.messages) >= self.compact_threshold:
-                self.compact_now(announce="auto")
-            try:
-                with self.ui.thinking():
-                    resp = self._complete(
-                        self._system_for_mode(), self.messages, self._mode_schemas(),
-                        on_text=self.ui.stream_chunk,
-                    )
-            except ProviderError as exc:
-                if self._try_vision_fallback(exc):
-                    continue
-                raise
-            if resp.text.strip():
-                self.ui.stream_newline()  # chunks printed raw, with no trailing newline
-            self._record_usage(resp.usage)
-
-            self._append(
-                {
-                    "role": "assistant",
-                    "text": resp.text,
-                    "tool_calls": resp.tool_calls,
-                    "raw": resp.raw,
-                }
-            )
-
-            if not resp.tool_calls:
-                # Note: promoted/cleaned text was already streamed above (raw,
-                # tool-call markup and all) — it isn't re-shown here, since
-                # streaming already showed *something* and re-rendering the
-                # cleaned version would just duplicate it.
-                promoted, _cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
-                if promoted:
-                    if promoted_recoveries >= _MAX_PROMOTED_RECOVERIES:
-                        self.ui.notice(
-                            f"Model kept writing tool calls as plain text after "
-                            f"{_MAX_PROMOTED_RECOVERIES} auto-repairs this turn — giving up and "
-                            "ending the turn instead of looping further.",
-                            style="yellow",
+        try:
+            for _ in range(_MAX_STEPS):
+                self._update_read_budget()
+                # Proactive auto-compact before each model call (in case previous
+                # tool results or text pushed us over without a mid-turn check yet).
+                if self.compact_threshold > 0 and estimate_tokens(self.messages) >= self.compact_threshold:
+                    self.compact_now(announce="auto")
+                try:
+                    with self.ui.thinking():
+                        resp = self._complete(
+                            self._system_for_mode(), self.messages, self._mode_schemas(),
+                            on_text=self.ui.stream_chunk,
                         )
-                        self._turn_summary(start, actions, before)
-                        return
-                    promoted_recoveries += 1
-                    actions += self._run_promoted(promoted)
-                    continue
-                if self._kb_drift_feedback():
-                    continue
-                if self._stop_hook_feedback():
-                    continue
-                self._turn_summary(start, actions, before)
-                return
+                except ProviderError as exc:
+                    if self._try_vision_fallback(exc):
+                        continue
+                    raise
+                if resp.text.strip():
+                    self.ui.stream_newline()  # chunks printed raw, with no trailing newline
+                self._record_usage(resp.usage)
 
-            # Any preamble text (e.g. "let me check that file") was already
-            # streamed above, before the tool calls themselves execute.
+                self._append(
+                    {
+                        "role": "assistant",
+                        "text": resp.text,
+                        "tool_calls": resp.tool_calls,
+                        "raw": resp.raw,
+                    }
+                )
 
-            results = []
-            calls = resp.tool_calls
-            parallel_safe = self.tools.parallel_safe_tools
-            i = 0
-            while i < len(calls):
-                call = calls[i]
-                if call.name in parallel_safe and i + 1 < len(calls) and calls[i + 1].name in parallel_safe:
-                    j = i + 1
-                    while j < len(calls) and calls[j].name in parallel_safe:
-                        j += 1
-                    batch = calls[i:j]
-                    results.extend(self._run_parallel_batch(batch))
-                    actions += len(batch)
-                    i = j
-                    continue
-                if (
-                    self._is_parallel_subagent_call(call)
-                    and i + 1 < len(calls)
-                    and self._is_parallel_subagent_call(calls[i + 1])
-                ):
-                    j = i + 1
-                    while j < len(calls) and self._is_parallel_subagent_call(calls[j]):
-                        j += 1
-                    batch = calls[i:j]
-                    results.extend(self._run_subagents_parallel_batch(batch))
-                    actions += len(batch)
-                    i = j
-                    continue
-                actions += 1
-                self.ui.tool_call(call.name, dict(call.input))
-                if not self.mode.allows(call.name):
-                    content, is_error = (
-                        f"Tool '{call.name}' is not available in {self.mode.name} mode. "
-                        f"Switch to a mode that allows it (e.g. /mode code) or use a read-only tool.",
-                        True,
-                    )
-                else:
-                    with self.ui.tool_running():
-                        content, is_error = self._dispatch_tool(call.name, dict(call.input))
-                self.ui.tool_result(content, is_error)
-                content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
-                results.append({"id": call.id, "content": content, "is_error": is_error})
-                i += 1
-            self._append({"role": "tool_results", "results": results})
+                if not resp.tool_calls:
+                    # Note: promoted/cleaned text was already streamed above (raw,
+                    # tool-call markup and all) — it isn't re-shown here, since
+                    # streaming already showed *something* and re-rendering the
+                    # cleaned version would just duplicate it.
+                    promoted, _cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
+                    if promoted:
+                        if promoted_recoveries >= _MAX_PROMOTED_RECOVERIES:
+                            self.ui.notice(
+                                f"Model kept writing tool calls as plain text after "
+                                f"{_MAX_PROMOTED_RECOVERIES} auto-repairs this turn — giving up and "
+                                "ending the turn instead of looping further.",
+                                style="yellow",
+                            )
+                            self._turn_summary(start, actions, before)
+                            return
+                        promoted_recoveries += 1
+                        actions += self._run_promoted(promoted)
+                        continue
+                    if self._kb_drift_feedback():
+                        continue
+                    if self._stop_hook_feedback():
+                        continue
+                    self._turn_summary(start, actions, before)
+                    return
 
-            if self._compact_mid_turn_or_stop(start, actions, before):
-                return
+                # Any preamble text (e.g. "let me check that file") was already
+                # streamed above, before the tool calls themselves execute.
 
-        self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
-        self._turn_summary(start, actions, before)
+                results = []
+                calls = resp.tool_calls
+                parallel_safe = self.tools.parallel_safe_tools
+                i = 0
+                while i < len(calls):
+                    call = calls[i]
+                    if call.name in parallel_safe and i + 1 < len(calls) and calls[i + 1].name in parallel_safe:
+                        j = i + 1
+                        while j < len(calls) and calls[j].name in parallel_safe:
+                            j += 1
+                        batch = calls[i:j]
+                        results.extend(self._run_parallel_batch(batch))
+                        actions += len(batch)
+                        i = j
+                        continue
+                    if (
+                        self._is_parallel_subagent_call(call)
+                        and i + 1 < len(calls)
+                        and self._is_parallel_subagent_call(calls[i + 1])
+                    ):
+                        j = i + 1
+                        while j < len(calls) and self._is_parallel_subagent_call(calls[j]):
+                            j += 1
+                        batch = calls[i:j]
+                        results.extend(self._run_subagents_parallel_batch(batch))
+                        actions += len(batch)
+                        i = j
+                        continue
+                    actions += 1
+                    self.ui.tool_call(call.name, dict(call.input))
+                    if not self.mode.allows(call.name):
+                        content, is_error = (
+                            f"Tool '{call.name}' is not available in {self.mode.name} mode. "
+                            f"Switch to a mode that allows it (e.g. /mode code) or use a read-only tool.",
+                            True,
+                        )
+                    else:
+                        with self.ui.tool_running():
+                            content, is_error = self._dispatch_tool(call.name, dict(call.input))
+                    self.ui.tool_result(content, is_error)
+                    content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
+                    results.append({"id": call.id, "content": content, "is_error": is_error})
+                    i += 1
+                self._append({"role": "tool_results", "results": results})
+
+                if self._compact_mid_turn_or_stop(start, actions, before):
+                    return
+
+            self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
+            self._turn_summary(start, actions, before)
+        except KeyboardInterrupt:
+            self.ui.notice("interrupted.", style="yellow")
+            self._turn_summary(start, actions, before)
+            raise
 
     def _run_parallel_batch(self, calls: list) -> list[dict]:
         """Run a run of consecutive read-only tool calls concurrently (#4.3).

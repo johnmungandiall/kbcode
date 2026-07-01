@@ -2,7 +2,18 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## v1.9.8 (current)
+## v1.9.9 (current)
+- **Prevent search/exploration loops + better Esc handling** — updated prompts
+  and tool descriptions to force efficient exploration: always start with
+  `repo_map` (scoped), use `search_code` with `path` to narrow (e.g. specific
+  broker subdirs), batch multiple scoped searches, and stop/summarize as soon
+  as the pattern is found. No more repetitive "search ... in broker/xxx" loops.
+  - Improved interrupt handling in `Agent.run` so Esc (KeyboardInterrupt)
+    always prints a clean "interrupted." notice + accurate `_turn_summary`
+    with actions so far (fixes weird "reversed/reset progress" display on
+    interrupt).
+
+## v1.9.8
 - **New `edit_files` tool** — perform multiple precise search/replace edits
   across files in a single call (with one combined permission prompt showing
   diffs). Inspired by Zed's strong multi-file AI editing after cloning and

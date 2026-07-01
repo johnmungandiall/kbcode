@@ -112,7 +112,7 @@ BASE_SCHEMAS: list[dict] = [
     {
         "name": "search_code",
         "parallel_safe": True,
-        "description": "Search the project for a regular expression. Returns matching path:line: text.",
+        "description": "Search the project (or a subdirectory via 'path') for a regular expression. Returns matching path:line: text. ALWAYS use the 'path' parameter to scope searches narrowly (e.g. 'broker/kotak' or 'broker/zerodha') when comparing across directories – this prevents broad loops and makes searches efficient. Batch multiple scoped searches in one step.",
         "input_schema": {
             "type": "object",
             "properties": {
