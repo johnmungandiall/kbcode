@@ -22,8 +22,9 @@
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.
   kbcode now aggressively batches parallel reads (16 workers + prompt rules).
-- `pytest` — run the test suite (`tests/`, 30 files + conftest.py); `python -m py_compile
-  kbcode/*.py` for a fast syntax-only check
+- `pytest` — run the test suite (`tests/`, 30 files + conftest.py); `python -m compileall -q kbcode`
+  for a fast syntax-only check (glob-free — `py_compile kbcode/*.py` breaks on
+  Windows PowerShell, which doesn't expand `*`)
 
 ## Windows / PowerShell (this is the dev environment)
 - Set `PYTHONIOENCODING=utf-8` before running anything that prints the UI —

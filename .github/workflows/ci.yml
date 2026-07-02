@@ -23,6 +23,9 @@ jobs:
       - name: Lint with ruff
         run: ruff check .
       - name: Byte-compile (de-facto build check)
-        run: python -m py_compile kbcode/*.py
+        # compileall, not `py_compile kbcode/*.py`: PowerShell (the Windows
+        # runner shell) doesn't expand globs, so py_compile got the literal
+        # `kbcode/*.py` and failed on every Windows job.
+        run: python -m compileall -q kbcode
       - name: Run tests
         run: pytest -q
