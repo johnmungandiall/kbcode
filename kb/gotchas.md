@@ -37,23 +37,23 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:269`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:279`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:148`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:458`) calls `_active_status.stop()`
-  (`kbcode/ui.py:282`) on the first token, so from then on only the worker thread
+- Fix: `stream_chunk` (`kbcode/ui.py:468`) calls `_active_status.stop()`
+  (`kbcode/ui.py:292`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:454`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:464`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:209`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:211`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
