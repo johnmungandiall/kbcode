@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased (2026-07-02) — auto mode, type-ahead, thinking display
+## v1.16.0 (2026-07-02) — auto mode, type-ahead, thinking display
 - **Ask/auto permission modes** (Claude Code's Shift+Tab idea): `/auto` or
   **Shift+Tab** (at the prompt AND mid-turn) toggles; auto = no permission
   prompts, no questions — plus an auto-mode system note, a "convince the
