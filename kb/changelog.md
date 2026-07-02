@@ -3,6 +3,10 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## v1.10.0 (2026-07-02)
+- `max_tokens` now automatically follows the model (`get_default_max_tokens` in config.py). Different sensible output limits for Claude 4/Sonnet, GPT-4o/o-series, DeepSeek, Gemini, etc. (fallback 16000). Setting `KBCODE_MAX_TOKENS` or settings.json `"max_tokens"` pins it. `/model` switches now auto-adjust max_tokens (unless pinned). New `/maxtokens <n>|auto` command + shown in `/status`. `persist_global_tuning` also covers max_tokens.
+- Thinking now supports "off" (`/thinking off` or KBCODE_THINKING=off or "none"/"disable"). When "off", reasoning/thinking blocks are omitted from Anthropic and OpenAI calls. Updated _normalize_thinking, provider logic, commands, and docs. Temperature and max_tokens changes from same release.
+- Banner (`ui.banner`) now shows tuning settings (temp / thinking / max_tokens) on the right side of the startup panel, filling the previously empty space. 
+- Temperature adjustable (`KBCODE_TEMPERATURE`, `/temperature <val>|none`) — accepts exactly 0, 0.01, 0.02, ... 1.00 (rounded to 2 decimals on set/load). UI shows 0.00 / 0.50 / 1.00 style. 
 - **MCP support (stdio, tools only)** — new `kbcode/tools/mcp.py`: a lean
   newline-JSON-RPC stdio client (no SDK, no new deps;
   `initialize`/`tools/list`/`tools/call` only) + `MCPManager`. Servers come

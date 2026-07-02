@@ -1,7 +1,7 @@
 # Gotchas — traps specific to this repo. Read before editing.
 
 ## Anthropic SDK kwargs
-- the staged `attempts` list in `complete` (`kbcode/provider.py:303-320`) tries thinking/effort kwargs with SDK fallbacks (see [[providers]])
+- the staged `attempts` list in `complete` (`kbcode/provider.py`) conditionally tries thinking + output_config.effort (plus temperature) only if thinking != "off"; falls back for older SDKs (see [[providers]])
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls

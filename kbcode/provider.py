@@ -300,11 +300,17 @@ class AnthropicProvider(LLMProvider):
             messages=native,
             tools=self._api_tools(tools),
         )
-        attempts = [
-            {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.effort}},
-            {**base, "thinking": {"type": "adaptive"}},
-            base,
-        ]
+        if getattr(self.config, "temperature", None) is not None:
+            base["temperature"] = self.config.temperature
+        th = getattr(self.config, "thinking", None)
+        if th and th != "off":
+            attempts = [
+                {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": th}},
+                {**base, "thinking": {"type": "adaptive"}},
+                base,
+            ]
+        else:
+            attempts = [base]
         last_exc: Exception | None = None
         resp = None
         for kwargs in attempts:
@@ -340,11 +346,17 @@ class AnthropicProvider(LLMProvider):
             messages=native,
             tools=self._api_tools(tools),
         )
-        attempts = [
-            {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": self.config.effort}},
-            {**base, "thinking": {"type": "adaptive"}},
-            base,
-        ]
+        if getattr(self.config, "temperature", None) is not None:
+            base["temperature"] = self.config.temperature
+        th = getattr(self.config, "thinking", None)
+        if th and th != "off":
+            attempts = [
+                {**base, "thinking": {"type": "adaptive"}, "output_config": {"effort": th}},
+                {**base, "thinking": {"type": "adaptive"}},
+                base,
+            ]
+        else:
+            attempts = [base]
 
         def do_stream(kwargs):
             # Iterate the event stream (not just text_stream): the SDK's
@@ -452,12 +464,21 @@ class OpenAICompatibleProvider(LLMProvider):
 
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         native = self._to_native(system, messages)
+        extra: dict = {}
+        if getattr(self.config, "temperature", None) is not None:
+            extra["temperature"] = self.config.temperature
+        th = getattr(self.config, "thinking", None)
+        if th and th != "off":
+            if th == "normal":
+                th = "medium"
+            extra["reasoning_effort"] = th
         resp = _with_retry(
             lambda: self.client.chat.completions.create(
                 model=self.config.model,
                 messages=native,
                 tools=self._tools(tools),
                 max_tokens=self.config.max_tokens,
+                **extra,
             ),
             self.ui,
         )
@@ -494,12 +515,21 @@ class OpenAICompatibleProvider(LLMProvider):
         native = self._to_native(system, messages)
 
         def do_stream():
+            extra: dict = {}
+            if getattr(self.config, "temperature", None) is not None:
+                extra["temperature"] = self.config.temperature
+            th = getattr(self.config, "thinking", None)
+            if th and th != "off":
+                if th == "normal":
+                    th = "medium"
+                extra["reasoning_effort"] = th
             resp_stream = self.client.chat.completions.create(
                 model=self.config.model,
                 messages=native,
                 tools=self._tools(tools),
                 max_tokens=self.config.max_tokens,
                 stream=True,
+                **extra,
             )
             text_parts: list[str] = []
             tool_acc: dict[int, dict] = {}

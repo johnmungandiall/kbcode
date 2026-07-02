@@ -1,7 +1,7 @@
 # Config — precedence, presets, paths, project retargeting.
 
 ## Precedence
-`load_config()` (`kbcode/config.py:365`) resolves provider/model/base_url and the API
+`load_config()` (`kbcode/config.py:484`) resolves provider/model/base_url , temperature, thinking (incl. 'off'), max_tokens (model-aware auto) and the API
 key (via `.env`) as: **env vars > the project's `.kbcode`/.env > the launch
 folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:220`) > preset
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
@@ -63,6 +63,17 @@ safely — "continue" resumes — see [[gotchas]] for why real tasks hit them.
 You can also set "compact_tokens" in .kbcode/settings.json (or global
 ~/.kbcode/settings.json) so auto-compaction kicks in at the right size for
 your model (e.g. 80000 for large-context models). Env var always wins.
+
+Temperature (range 0-1), thinking and max_tokens are loaded preferring env → settings.json →
+auto (for max_tokens). `KBCODE_MAX_TOKENS` (or settings `"max_tokens"`) pins a
+fixed value. Otherwise `get_default_max_tokens(model)` chooses based on the model
+id (see `kbcode/config.py`).
+
+Live commands: `/temperature <0|0.01|...|1>|none`, `/thinking off|low|...|high`, `/maxtokens <n>|auto`.
+`/thinking off` disables reasoning entirely (no effort passed to provider).
+Thinking accepts off | low | medium | normal | high (normal→medium; stored as-is).
+Pinned values (and auto state for max_tokens) are saved via `persist_global_tuning`.
+See [[providers]] for how they reach the API calls.
 
 `KBCODE_LOG_LEVEL` (a *string*, not an `_int()` knob; default `INFO`) drives the
 diagnostic file log — `setup_logging(config.state_dir)` (`kbcode/logs.py`, called

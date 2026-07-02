@@ -18,7 +18,14 @@ non-Claude provider (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom) is the
 *same* `OpenAICompatibleProvider` (`kbcode/provider.py:396`) with a different
 `base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:293`) tries a staged
 kwargs fallback (`thinking`+`output_config` -> `thinking` -> plain), catching
-`TypeError` per attempt for older SDKs.
+`TypeError` per attempt for older SDKs. Temperature (if set) and thinking level
+(from `config.thinking`) are included **only if not "off"** (Anthropic output_config.effort,
+OpenAI `reasoning_effort` + `temperature`). Use `/thinking off` or KBCODE_THINKING=off
+to disable reasoning blocks entirely. "normal" normalizes to "medium".
+
+`max_tokens` is now model-aware: `config.max_tokens` (and thus every `messages.create`
+call) is chosen automatically from the model id unless `KBCODE_MAX_TOKENS` or
+settings pinned it (see [[config]] + `get_default_max_tokens`).
 
 ## Prompt caching (Anthropic only)
 Anthropic prompt caching is a **prefix match** over the rendered request

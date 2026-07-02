@@ -17,7 +17,88 @@ except ImportError:  # pragma: no cover - dotenv is optional at runtime
 
 
 DEFAULT_MAX_TOKENS = 16000
-DEFAULT_EFFORT = "high"
+DEFAULT_THINKING = "high"
+DEFAULT_TEMPERATURE: float | None = None
+
+
+def _parse_temperature(raw: str | float | None) -> float | None:
+    """Parse temperature. Accepts 0-1 range (clamped for safety from env/settings)."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        val = float(raw)
+    else:
+        s = str(raw).strip().lower()
+        if s in ("", "none", "null", "default"):
+            return None
+        try:
+            val = float(s)
+        except ValueError:
+            return None
+    # Enforce 0 to 1 (user preference). Values are rounded to 0.01 precision:
+    # 0, 0.01, 0.02, ..., 1.00
+    if val < 0.0:
+        val = 0.0
+    elif val > 1.0:
+        val = 1.0
+    return round(val, 2)
+
+
+def _normalize_thinking(raw: str | None) -> str:
+    if not raw:
+        return DEFAULT_THINKING
+    val = str(raw).strip().lower()
+    if val in ("off", "none", "disable", "false", "0"):
+        return "off"
+    if val == "normal":
+        val = "medium"
+    if val in ("off", "low", "medium", "high", "max"):
+        return val
+    return DEFAULT_THINKING
+
+
+# Model-aware defaults for max output tokens (the value sent as `max_tokens`
+# to the provider). Matched by substring (more specific first). This lets
+# kbcode pick sensible values automatically when you switch models (Claude,
+# GPT-4o, DeepSeek, Gemini, local models etc all have very different limits).
+# You can still force a value with KBCODE_MAX_TOKENS or settings "max_tokens".
+_MODEL_MAX_TOKENS: list[tuple[str, int]] = [
+    # Claude family (newer ones support higher output)
+    ("claude-opus-4", 16000),
+    ("claude-sonnet-4", 16000),
+    ("claude-3-5-sonnet", 8192),
+    ("claude-sonnet", 8192),
+    ("claude-opus", 8192),
+    ("claude-haiku", 8192),
+    ("claude", 8000),
+    # OpenAI reasoning + GPT
+    ("o3-mini", 8192),
+    ("o3", 8192),
+    ("o1-preview", 8192),
+    ("o1-mini", 8192),
+    ("o1", 8192),
+    ("gpt-4.1", 16384),
+    ("gpt-4o-mini", 16384),
+    ("gpt-4o", 16384),
+    ("gpt-4", 8192),
+    # Others
+    ("deepseek-reasoner", 8192),
+    ("deepseek", 8192),
+    ("gemini-2.0", 8192),
+    ("gemini-1.5", 8192),
+    ("gemini", 8192),
+]
+
+
+def get_default_max_tokens(model: str) -> int:
+    """Choose a reasonable max_tokens (output limit) based on model name."""
+    m = (model or "").lower()
+    for needle, val in _MODEL_MAX_TOKENS:
+        if needle in m:
+            return val
+    return DEFAULT_MAX_TOKENS
+
+
 # Auto-compact the chat once its history crosses this rough token estimate.
 # 0 disables it. Override with KBCODE_COMPACT_TOKENS.
 DEFAULT_COMPACT_TOKENS = 80000
@@ -109,7 +190,11 @@ class Config:
     api_key: str | None = None
     key_env: str = "ANTHROPIC_API_KEY"
     max_tokens: int = DEFAULT_MAX_TOKENS
-    effort: str = DEFAULT_EFFORT
+    temperature: float | None = DEFAULT_TEMPERATURE
+    thinking: str = DEFAULT_THINKING
+    # Internal: whether max_tokens was explicitly pinned by env or settings (if False,
+    # we auto-adjust it when the model changes via /model or use_provider).
+    _max_tokens_pinned: bool = field(default=False, repr=False)
     compact_threshold: int = DEFAULT_COMPACT_TOKENS
     request_timeout: int = DEFAULT_REQUEST_TIMEOUT
     max_steps: int = DEFAULT_MAX_STEPS
@@ -202,6 +287,8 @@ class Config:
             self.api_key = "not-needed"  # e.g. a local Ollama server doesn't check it
         self.base_url = base_url if base_url is not None else preset["base_url"]
         self.model = model or preset["model"]
+        if not getattr(self, "_max_tokens_pinned", False):
+            self.max_tokens = get_default_max_tokens(self.model)
 
 
 def _ensure_self_ignore(kbcode_dir: Path) -> None:
@@ -263,7 +350,13 @@ def load_settings(kbcode_dir: Path) -> dict:
 def save_settings(kbcode_dir: Path, provider: str, model: str, base_url: str | None) -> None:
     kbcode_dir.mkdir(parents=True, exist_ok=True)
     _ensure_self_ignore(kbcode_dir)
-    data = {"provider": provider, "model": model, "base_url": base_url}
+    data = load_settings(kbcode_dir)
+    data["provider"] = provider
+    data["model"] = model
+    if base_url is not None:
+        data["base_url"] = base_url
+    else:
+        data.pop("base_url", None)
     (kbcode_dir / "settings.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
@@ -311,6 +404,28 @@ def persist_global_choice(config: "Config") -> None:
     preset_base = preset.get("base_url")
     base_to_save = config.base_url if config.base_url != preset_base else None
     save_settings(global_dir(), config.provider, config.model, base_to_save)
+
+
+def persist_global_tuning(config: "Config") -> None:
+    """Persist temperature/thinking/max_tokens (when pinned) to global ~/.kbcode only.
+
+    Used by REPL /temperature, /thinking and /maxtokens. When max_tokens is
+    unpinned (auto), we remove the key so future loads will choose per-model.
+    """
+    home = global_dir()
+    data = load_settings(home)
+    if config.temperature is not None:
+        data["temperature"] = config.temperature
+    else:
+        data.pop("temperature", None)
+    data["thinking"] = config.thinking
+    if getattr(config, "_max_tokens_pinned", False):
+        data["max_tokens"] = config.max_tokens
+    else:
+        data.pop("max_tokens", None)
+    home.mkdir(parents=True, exist_ok=True)
+    _ensure_self_ignore(home)
+    (home / "settings.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 # --- .env helpers (internal but usable by wizard + repl for consistent pinning) ---
@@ -423,10 +538,34 @@ def load_config(project_dir: Path | None = None) -> Config:
     model = os.environ.get("KBCODE_MODEL") or settings.get("model") or preset["model"]
     base_url = os.environ.get("KBCODE_BASE_URL") or settings.get("base_url") or preset["base_url"]
 
+    # Decide max_tokens: env wins (pinned), then settings "max_tokens", else auto per-model.
+    env_max_raw = os.environ.get("KBCODE_MAX_TOKENS")
+    settings_max = settings.get("max_tokens")
+    if env_max_raw is not None:
+        max_tokens = _int("KBCODE_MAX_TOKENS", DEFAULT_MAX_TOKENS)
+        max_tokens_pinned = True
+    elif settings_max is not None:
+        try:
+            max_tokens = int(settings_max)
+            max_tokens_pinned = True
+        except (ValueError, TypeError):
+            max_tokens = get_default_max_tokens(model)
+            max_tokens_pinned = False
+    else:
+        max_tokens = get_default_max_tokens(model)
+        max_tokens_pinned = False
+
     config = Config(
         project_dir=project_dir,
-        max_tokens=_int("KBCODE_MAX_TOKENS", DEFAULT_MAX_TOKENS),
-        effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
+        max_tokens=max_tokens,
+        temperature=_parse_temperature(os.environ.get("KBCODE_TEMPERATURE") or settings.get("temperature")),
+        thinking=_normalize_thinking(
+            os.environ.get("KBCODE_THINKING")
+            or os.environ.get("KBCODE_EFFORT")
+            or settings.get("thinking")
+            or settings.get("effort")
+            or DEFAULT_THINKING
+        ),
         compact_threshold=_int("KBCODE_COMPACT_TOKENS", settings.get("compact_tokens") or DEFAULT_COMPACT_TOKENS),
         request_timeout=_int("KBCODE_REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
         max_steps=_int("KBCODE_MAX_STEPS", DEFAULT_MAX_STEPS),
@@ -434,5 +573,6 @@ def load_config(project_dir: Path | None = None) -> Config:
         hooks=settings.get("hooks") or {},
         mcp=load_mcp_servers(project_dir, launch_dir),
     )
+    config._max_tokens_pinned = max_tokens_pinned
     config.use_provider(provider, model=model, base_url=base_url)
     return config

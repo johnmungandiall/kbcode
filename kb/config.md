@@ -6,7 +6,7 @@ anthropic, openai, openrouter, deepseek, gemini, mimo, ollama, custom.
 Each has `kind`, `base_url`, `key_env`, `model`.
 
 ## Settings loading
-`load_config()` at [config.py](../kbcode/config.py) `load_config:364` merges settings
+`load_config()` at [config.py](../kbcode/config.py) `load_config:484` merges settings
 from 3 levels: `~/.kbcode` → launch-dir `.kbcode` → project `.kbcode` (last wins).
 Env vars (`KBCODE_PROVIDER`, `KBCODE_MODEL`, etc.) beat all settings files.
 
@@ -32,5 +32,9 @@ Per-project runtime state (memory db, sessions, checkpoints, history, log) lives
 in `state_dir:130` — `~/.kbcode/projects/<slug>/` (`project_slug:229`;
 `KBCODE_HOME` overrides the home). The project `.kbcode/` is config-only and
 self-gitignored (`_ensure_self_ignore:206`). Full detail: kb/features/config.md.
+
+max_tokens is now automatically derived from the chosen model (unless pinned via
+KBCODE_MAX_TOKENS env or "max_tokens" in settings.json). Thinking supports "off".
+See kb/features/config.md.
 
 See [[architecture]], [[repl]].

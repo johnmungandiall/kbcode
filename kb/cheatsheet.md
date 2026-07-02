@@ -33,6 +33,9 @@
 - `/mode code|architect|ask|debug` — switch personality
 - `/provider <name>` — switch model provider
 - `/model <id>` — switch model
+- `/temperature <0|0.01|...|1>|none` — adjust sampling temp (0.00 to 1.00 in 0.01 steps)
+- `/thinking off|low|medium|normal|high` — set reasoning level or 'off' to disable (normal=medium)
+- `/maxtokens <n>|auto` — set or auto max output tokens based on model
 - `/status` — provider, model, mode, context size
 - `/todo` — show task checklist
 - `/kb` — list kb/ notes

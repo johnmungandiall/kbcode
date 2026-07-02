@@ -31,7 +31,7 @@ See [[cheatsheet]] for the full command list.
 ## Version
 - `kbcode/__init__.py:9` — `__version__ = "1.10.0"`; release history in [[changelog]]
 
-last indexed: 2026-07-02 (uncommitted: MCP support — `kbcode/tools/mcp.py` stdio client/manager, `mcpServers` settings block with per-server deep merge, `mcp__` dispatch fork in ToolsCore, `/mcp` command; see [[mcp]])
+last indexed: 2026-07-02 (uncommitted: banner now shows temp/thinking/max_tokens on the right; see [[ui]] / architecture)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

@@ -35,6 +35,9 @@ COMMANDS = [
     ("/mode [name]", "switch mode: code / architect / ask / debug (no name = list)"),
     ("/provider [name] [model]", "switch provider (no name = list them)"),
     ("/model [id]", "switch model (no id = list this provider's models)"),
+    ("/temperature <val>|none", "set sampling temperature (0, 0.01 ... 1.00) or 'none' for default; applies to next turn"),
+    ("/thinking <level>", "set thinking level: off | low | medium | normal | high (normal→medium); use 'off' to disable reasoning"),
+    ("/maxtokens <n>|auto", "set max output tokens, or 'auto' to let it follow the current model automatically"),
     ("/status", "show provider, model, mode and context size"),
     ("/ping", "quick connectivity/auth check for the current provider"),
     ("/open <folder>", "switch to working on another project folder"),
@@ -343,7 +346,8 @@ class TerminalUI:
         self._turn_start = time.perf_counter()
 
     # -- chrome ---------------------------------------------------------
-    def banner(self, provider: str, model: str, cwd: Path, mode: str = "code") -> None:
+    def banner(self, provider: str, model: str, cwd: Path, mode: str = "code",
+               *, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None) -> None:
         info = Table.grid(padding=(0, 2))
         info.add_column(justify="right", style="dim")
         info.add_column(style="bold")
@@ -352,10 +356,25 @@ class TerminalUI:
         info.add_row("mode", mode)
         info.add_row("folder", str(cwd))
 
+        settings = Table.grid(padding=(0, 2))
+        settings.add_column(justify="right", style="dim")
+        settings.add_column(style="bold")
+        if temperature is not None:
+            settings.add_row("temp", f"{temperature:.2f}")
+        else:
+            settings.add_row("temp", "default")
+        settings.add_row("thinking", thinking or "high")
+        settings.add_row("max_tokens", str(max_tokens) if max_tokens is not None else "default")
+
+        layout = Table.grid(padding=(0, 6))
+        layout.add_column()
+        layout.add_column()
+        layout.add_row(info, settings)
+
         body = Table.grid(padding=(0, 0))
         body.add_row(Text("kbcode by John Mungandi", style="dim italic"))
         body.add_row("")
-        body.add_row(info)
+        body.add_row(layout)
         body.add_row("")
         body.add_row(Text("/help for commands  ·  /exit to quit", style="dim"))
 
@@ -386,7 +405,7 @@ class TerminalUI:
             ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
-            ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
+            ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]", "/temperature <val>|none", "/thinking <level>", "/maxtokens <n>|auto"]),
         ]
         table = Table.grid(padding=(0, 2))
         table.add_column(justify="left", overflow="fold")
@@ -439,20 +458,29 @@ class TerminalUI:
             return "a"
         return "y" if ans in ("y", "yes") else "n"
 
-    def status_line(self, provider: str, model: str, mode: str, tokens: int, limit: int = 0) -> None:
+    def status_line(self, provider: str, model: str, mode: str, tokens: int, limit: int = 0, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None) -> None:
         ctx = f"~{_human_count(tokens)} tokens"
         if limit > 0:
             pct = min(100, round(tokens / limit * 100))
             filled = round(pct / 10)
             ctx += f"  [{'█' * filled}{'░' * (10 - filled)}] {pct}% before auto-compact"
-        self.console.print(
-            Text.assemble(
-                ("provider ", "dim"), (provider, "bold"),
-                ("   model ", "dim"), (model, "bold"),
-                ("   mode ", "dim"), (mode, "bold"),
-                ("   context ", "dim"), (ctx, "bold"),
-            )
-        )
+        extra: list[tuple[str, str]] = []
+        if temperature is not None:
+            extra.append(("   temp ", "dim"))
+            extra.append((f"{temperature:.2f}", "bold"))
+        if thinking:
+            extra.append(("   thinking ", "dim"))
+            extra.append((thinking, "bold"))
+        if max_tokens is not None:
+            extra.append(("   max_tokens ", "dim"))
+            extra.append((str(max_tokens), "bold"))
+        parts = [
+            ("provider ", "dim"), (provider, "bold"),
+            ("   model ", "dim"), (model, "bold"),
+            ("   mode ", "dim"), (mode, "bold"),
+            ("   context ", "dim"), (ctx, "bold"),
+        ] + extra
+        self.console.print(Text.assemble(*parts))
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):

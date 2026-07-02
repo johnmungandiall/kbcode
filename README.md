@@ -509,7 +509,7 @@ DEEPSEEK_API_KEY=...
 > [!NOTE]
 > - `KBCODE_MODEL` overrides the model id for any provider.
 > - Switching provider clears the current chat (memory and kb are kept).
-> - `KBCODE_EFFORT` (low/medium/high/max) applies to Claude only.
+> - `KBCODE_TEMPERATURE`, `KBCODE_THINKING` and `KBCODE_MAX_TOKENS` are adjustable at runtime (`/temperature`, `/thinking`, `/maxtokens`). `KBCODE_THINKING=off` disables reasoning/thinking. "normal" maps to medium for thinking. When `KBCODE_MAX_TOKENS` is not set, max_tokens is chosen automatically based on the current model. Use `/maxtokens auto` to return to model-driven behavior.
 > - `KBCODE_REQUEST_TIMEOUT` (seconds, default `120`) caps how long one model
 >   call can hang before it fails fast and retries — handy for slow endpoints;
 >   set `0` to restore the SDK's ~10-minute default. See `.env.example`.

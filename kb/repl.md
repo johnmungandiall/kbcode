@@ -17,4 +17,6 @@ builds two callables for `/provider` and `/model` autocomplete:
 switching in one project becomes the default for all projects, while a project
 explicitly configured via `kb model` still keeps its overrides.
 
+The initial banner now also shows the active temperature, thinking, and max_tokens on the right (see `ui.banner`).
+
 See [[config]], [[architecture]].

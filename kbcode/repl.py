@@ -25,7 +25,11 @@ from .cli import (
     _session_picker,
     ui,
 )
-from .config import PRESETS, Config, load_mcp_servers, persist_choice, persist_global_choice, load_model_cache, save_model_cache
+from .config import (
+    PRESETS, Config, load_mcp_servers, persist_choice, persist_global_choice,
+    persist_global_tuning, load_model_cache, save_model_cache,
+    get_default_max_tokens,
+)
 from .interrupt import interrupt_on_escape
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
@@ -213,7 +217,8 @@ def _read_multiline(read_line) -> str:
 def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None = None) -> None:
     """The interactive chat loop: read a line, dispatch slash commands, or run it as a turn."""
     agent = agent or _build_agent(config, kb, memory)
-    ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
+    ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
+              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens)
 
     provider_args, model_args = _model_completion_sources(config)
     arg_options = {
@@ -272,6 +277,9 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             ui.status_line(
                 config.provider, config.model, agent.mode.name,
                 agent.context_tokens(), config.compact_threshold,
+                temperature=config.temperature,
+                thinking=config.thinking,
+                max_tokens=config.max_tokens,
             )
             mgr = getattr(agent.tools, "mcp", None)
             if mgr is not None and mgr.clients:
@@ -348,9 +356,81 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             continue
         if user.startswith("/model"):
             config.model = user.split(maxsplit=1)[1].strip()
+            if not getattr(config, "_max_tokens_pinned", False):
+                config.max_tokens = get_default_max_tokens(config.model)
             agent.provider = get_provider(config, ui)  # same chat, new model
             persist_global_choice(config)  # cross-project default — all projects see this change
             ui.notice(f"model → {config.model}", style="green")
+            continue
+        if user.split()[0] in ("/temperature", "/temp"):
+            parts = user.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                cur = config.temperature if config.temperature is not None else "default (unset)"
+                if isinstance(cur, float):
+                    cur = f"{cur:.2f}"
+                ui.notice(f"current temperature: {cur}  (use /temperature 0/0.01.../1 or /temp none)")
+                continue
+            arg = parts[1].strip().lower()
+            if arg in ("none", "default", "unset", "null"):
+                config.temperature = None
+            else:
+                try:
+                    val = float(arg)
+                    if not (0.0 <= val <= 1.0):
+                        ui.error("temperature must be a number between 0 and 1 (e.g. 0, 0.01, 0.5, 1) or 'none'")
+                        continue
+                    config.temperature = round(val, 2)
+                except ValueError:
+                    ui.error("temperature must be a number between 0 and 1 (e.g. 0, 0.01, 0.5, 1) or 'none'")
+                    continue
+            persist_global_tuning(config)
+            shown = config.temperature if config.temperature is not None else "default"
+            if isinstance(shown, float):
+                shown = f"{shown:.2f}"
+            ui.notice(f"temperature → {shown}", style="green")
+            continue
+        if user.startswith("/thinking"):
+            parts = user.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                ui.notice(f"current thinking: {config.thinking}  (low | medium | normal | high | off)")
+                continue
+            level = parts[1].strip().lower()
+            if level in ("off", "none", "disable", "false", "0"):
+                level = "off"
+            elif level == "normal":
+                level = "medium"
+            if level not in ("off", "low", "medium", "high", "max"):
+                ui.error("thinking must be one of: off, low, medium, normal, high (normal=medium)")
+                continue
+            config.thinking = level
+            persist_global_tuning(config)
+            ui.notice(f"thinking → {config.thinking}", style="green")
+            continue
+        if user.split() and user.split()[0] in ("/maxtokens", "/maxtoken", "/max-tokens", "/max_tokens"):
+            parts = user.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                cur = config.max_tokens
+                pinned = getattr(config, "_max_tokens_pinned", False)
+                note = " (pinned)" if pinned else " (auto based on model)"
+                ui.notice(f"current max_tokens: {cur}{note}  — use /maxtokens <number> or /maxtokens auto")
+                continue
+            arg = parts[1].strip().lower()
+            if arg in ("auto", "default", "model"):
+                config._max_tokens_pinned = False
+                config.max_tokens = get_default_max_tokens(config.model)
+                persist_global_tuning(config)  # clears the pinned value so auto takes over next time
+                ui.notice(f"max_tokens → auto (now {config.max_tokens} for current model)", style="green")
+                continue
+            try:
+                val = int(arg)
+                if val < 256 or val > 200000:
+                    raise ValueError
+                config.max_tokens = val
+                config._max_tokens_pinned = True
+                persist_global_tuning(config)  # store the explicit pin
+                ui.notice(f"max_tokens → {config.max_tokens} (pinned)", style="green")
+            except Exception:
+                ui.error("max_tokens must be a number (e.g. 8192) or 'auto'")
             continue
         if user == "/kb":
             notes = kb.list_notes()
@@ -580,7 +660,8 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             _scaffold(config, kb)  # set it up (AGENT.md, kb/, .kbcode/) if new
             agent = _build_agent(config, kb, memory)
             ui.notice(f"now working on {config.project_dir}", style="green")
-            ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
+            ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
+              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens)
             continue
 
         # Guard a common mix-up: `init`/`model` are TERMINAL commands. Typed in
