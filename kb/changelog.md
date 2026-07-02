@@ -3,6 +3,14 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **Flexible search/replace with multiple strategies** (the Aider idea #3):
+  `edit_file`/`edit_files` no longer fail when the model gets indentation
+  slightly wrong or adds extra blank lines. New
+  [kbcode/tools/edit_strategies.py](../kbcode/tools/edit_strategies.py)
+  tries five strategies in order: exact → strip-blanks → indent →
+  strip+indent → fuzzy (difflib, ≥70 %). Every strategy checks for
+  uniqueness; the strategy name appears in the permission prompt and result.
+  See [[edit-strategies]], [[tools-and-repair]].
 - **Post-edit syntax check** (the Aider idea): every write_file/edit_file/
   edit_files result now carries a WARNING when the written file no longer
   parses (`lint_text` in the new `kbcode/lint.py` + `_lint_note` in

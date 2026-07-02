@@ -43,6 +43,15 @@ already on disk; (2) the warning's second sentence excuses deliberately
 piece-wise writes (the output-budget rules above tell the model to build big
 files in parts, and a half-written .py never parses) — see [[gotchas]].
 
+## Flexible edit_file matching (Aider idea #3)
+When `edit_file`/`edit_files` can't find an exact match — models often get
+indentation wrong or add extra blank lines — `edit_strategies.try_edit()`
+(`kbcode/tools/edit_strategies.py:36`) tries five strategies in order:
+exact → strip-blanks → indent → strip+indent → fuzzy (difflib, ≥70 %).
+Every strategy includes a uniqueness check; the strategy name tags the
+permission prompt and result line (`[strategy: indent]`). Pure stdlib, zero
+new dependencies. See [[edit-strategies]].
+
 ## MCP tools (external servers, namespaced `mcp__server__tool`)
 When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
 an `MCPManager` to `Tools.mcp` (`kbcode/tools/core.py:41`); `ToolsCore.schemas`

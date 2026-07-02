@@ -17,6 +17,7 @@ from pathlib import Path
 from ..config import DEFAULT_MAX_COMMANDS
 from ..lint import lint_text
 from ..redact import redact_terminal_output_with_count, redact_with_count
+from .edit_strategies import try_edit, try_single_strategy
 
 # Directories we never scan when searching code.
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
@@ -257,13 +258,10 @@ class FileToolsMixin:
         if not p.exists():
             raise ValueError(f"No such file: {inp['path']}")
         text = p.read_text(encoding="utf-8", errors="replace")
-        count = text.count(inp["old_string"])
-        if count == 0:
-            raise ValueError("old_string not found in file.")
-        if count > 1:
-            raise ValueError(f"old_string appears {count} times; make it unique.")
-        new_text = text.replace(inp["old_string"], inp["new_string"], 1)
+        new_text, strategy = try_edit(text, inp["old_string"], inp["new_string"])
         detail = f"edit {p}"
+        if strategy != "exact":
+            detail += f"  [strategy: {strategy}]"
         if self._is_outside_project(p):
             detail += " -- OUTSIDE the project folder"
         if self._is_system_path(p):
@@ -285,6 +283,8 @@ class FileToolsMixin:
 
         summaries = []
         protected_errors = []
+        # Store strategy names alongside summaries so we can report them.
+        edit_info: list[tuple[str, str, str, str, str]] = []  # (path, old, new, new_text, strategy)
 
         for edit in edits:
             path = edit["path"]
@@ -302,18 +302,17 @@ class FileToolsMixin:
                 continue
 
             text = p.read_text(encoding="utf-8", errors="replace")
-            count = text.count(old)
-            if count == 0:
-                protected_errors.append(f"old_string not found in {path}")
-                continue
-            if count > 1:
-                protected_errors.append(f"old_string appears {count} times in {path}; must be unique")
+            try:
+                new_text, strategy = try_edit(text, old, new)
+            except ValueError as exc:
+                protected_errors.append(f"{path}: {exc}")
                 continue
 
-            new_text = text.replace(old, new, 1)
             diff = self._unified_diff(text, new_text, f"{p} (current)", f"{p} (new)")
             outside = " (outside project)" if self._is_outside_project(p) else ""
-            summaries.append(f"edit {p}{outside}:\n{diff}")
+            strat_note = f"  [strategy: {strategy}]" if strategy != "exact" else ""
+            summaries.append(f"edit {p}{outside}{strat_note}:\n{diff}")
+            edit_info.append((path, old, new, new_text, strategy))
 
         if protected_errors:
             return "Some edits blocked:\n" + "\n".join(protected_errors)
@@ -329,15 +328,13 @@ class FileToolsMixin:
         self.checkpoints.ensure_checkpoint("before edit_files")
 
         results = []
-        for edit in edits:
-            path = edit["path"]
-            old = edit["old_string"]
-            new = edit["new_string"]
+        for path, old, new, _preview_text, strategy in edit_info:
             p = self._resolve(path)
             text = p.read_text(encoding="utf-8", errors="replace")
-            new_text = text.replace(old, new, 1)
+            new_text = try_single_strategy(text, old, new)
             p.write_text(new_text, encoding="utf-8")
-            results.append(f"edited {p}" + self._lint_note(p, new_text))
+            strat_note = f"  [strategy: {strategy}]" if strategy != "exact" else ""
+            results.append(f"edited {p}{strat_note}" + self._lint_note(p, new_text))
 
         return "\n".join(results)
 

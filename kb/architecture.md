@@ -11,7 +11,7 @@ model unchanged (see [[providers]]).
 - `wizard.py` — `model_wizard()`, the `kbcode model` provider/key/model setup flow
 - `agent.py` — the agent loop (`Agent.run`), subagent delegation, `/insights`
 - `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC ([[providers]])
-- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + background tasks `check_task`/`stop_background_tasks` + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search` + `fetch_url`, [[gotchas]]), `mcp.py` (stdio MCP client + `MCPManager`, [[mcp]]), `schemas.py` ([[tools-and-repair]])
+- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + background tasks `check_task`/`stop_background_tasks` + `_protected_reason`), `edit_strategies.py` (multi-strategy search/replace for edit_file: exact → strip-blanks → indent → fuzzy, [[edit-strategies]]), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search` + `fetch_url`, [[gotchas]]), `mcp.py` (stdio MCP client + `MCPManager`, [[mcp]]), `schemas.py` ([[tools-and-repair]])
 - `config.py` — `Config` dataclass, `load_config()`, provider presets, `~/.kbcode` settings; per-project runtime state lives in `Config.state_dir` = `~/.kbcode/projects/<slug>/`, project `.kbcode/` is config-only + self-gitignored ([[config]])
 - `modes.py` — `Mode` dataclass + 4 builtins + custom mode loader from `.kbcode/modes/` ([[modes-subagents]])
 - `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md` + `builtin_subagents()` (autopilot, fixer) ([[modes-subagents]])

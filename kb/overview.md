@@ -31,7 +31,7 @@ See [[cheatsheet]] for the full command list.
 ## Version
 - `kbcode/__init__.py:9` — `__version__ = "1.16.0"`; release history in [[changelog]]
 
-last indexed: 2026-07-02 (v1.16.0 released: auto mode + type-ahead + thinking display + search stall fix)
+last indexed: 2026-07-02 (v1.17.0-dev: flexible search/replace strategies + post-edit syntax check)
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.
