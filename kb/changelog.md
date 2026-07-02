@@ -29,7 +29,13 @@ The ONLY place release history lives (don't duplicate it in other notes).
   (`thinking… N chars of reasoning`), collapses to one `🧠 thought…` line per
   step, and `/thoughts` expands the full turn's reasoning
   (Anthropic thinking blocks; DeepSeek `reasoning_content`; OpenRouter `reasoning`).
-- Tests: new `tests/test_auto_mode.py`; suite now 426 tests, ruff clean.
+- **search_code can no longer stall a turn** (live "running… 285s" fixer
+  hang): the Python fallback walk now skips the project .gitignore's plain
+  top-level dirs (`references/` etc. — `_gitignored_dirs`), and every search
+  is capped by `_SEARCH_TIME_BUDGET` (30s) returning partial hits + a
+  "narrow with 'path'" note. See [[gotchas]].
+- Tests: new `tests/test_auto_mode.py` + search guards; suite now 428 tests,
+  ruff clean.
 
 ## v1.15.0 (2026-07-02)
 - **Replies render as markdown in the terminal** (user request): `stream_chunk`

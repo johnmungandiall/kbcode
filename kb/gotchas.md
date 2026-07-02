@@ -212,6 +212,18 @@
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
 
+## search_code's Python fallback must never crawl vendored trees
+- The ripgrep pre-filter is gitignore-aware; the fallback walk was NOT — in
+  this repo it crawled `references/` (7 cloned repos incl. zed) file by file,
+  so one unscoped search ran 285s+ and looked like a hang (hit live via the
+  fixer subagent). Two guards now, keep both: `_walk_files` skips the project
+  .gitignore's plain top-level dir entries (`_gitignored_dirs`,
+  `kbcode/tools/file.py:371`), and `_tool_search_code` enforces
+  `_SEARCH_TIME_BUDGET` (30s, `kbcode/tools/file.py:28`) — past it, partial
+  hits return with a "narrow with 'path'" note. Tests:
+  `tests/test_tools_search.py` (gitignore-skip + budget; budget test uses a
+  NEGATIVE budget — 0.0 was flaky when the clock didn't tick).
+
 ## Avoiding search/exploration loops
 - When doing comparisons across directories (e.g. similar functions in broker/kotak vs broker/zerodha), the agent must start with `repo_map` (scoped to subdirs) then use `search_code` with the `path` argument for narrow, targeted searches. Batch different scoped searches in one step. Stop and summarize as soon as the pattern is found — do not repeat similar searches. Updated BASE_SYSTEM, search_code description, and code-explorer instructions enforce this (see prompts.py and schemas.py). This prevents the repetitive search loops that previously caused long-running or "stuck" turns.
 

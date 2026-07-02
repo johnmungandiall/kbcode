@@ -20,6 +20,12 @@ from ..redact import redact_terminal_output_with_count, redact_with_count
 # Directories we never scan when searching code.
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
 _COMMAND_TIMEOUT = 180  # seconds per run_command call
+# Hard cap on one search_code call. The ripgrep pre-filter is gitignore-aware
+# and fast, but when it isn't available (or errors) the Python fallback walks
+# the tree file by file — in a project carrying big vendored/cloned dirs that
+# ran for MINUTES and looked like a hang (the real-world "running… 285s" fixer
+# stall). Partial hits are still returned with a "narrow the search" note.
+_SEARCH_TIME_BUDGET = 30.0  # seconds
 _OUTPUT_ENCODING = locale.getpreferredencoding(False)  # what text=True would have used
 _MAX_READ_CHARS = 60000
 _MIN_READ_CHARS = 2000  # never truncate a read this aggressively, even under context pressure
@@ -362,10 +368,34 @@ class FileToolsMixin:
                 files.append(p)
         return files
 
+    def _gitignored_dirs(self) -> set[str]:
+        """Directory names the project's top-level .gitignore hides — the
+        Python fallback walk skips them the way ripgrep would. Only simple
+        `name` / `name/` lines are honored (that covers vendored trees like
+        `references/`); glob and nested patterns are left to ripgrep. Never
+        raises."""
+        names: set[str] = set()
+        try:
+            lines = (self.root / ".gitignore").read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            return names
+        for line in lines:
+            entry = line.strip().rstrip("/")
+            if not entry or entry.startswith(("#", "!")):
+                continue
+            if "/" in entry or any(ch in entry for ch in "*?[]"):
+                continue  # not a plain directory name
+            names.add(entry)
+        return names
+
     def _walk_files(self, base: Path):
-        """The pre-ripgrep fallback file listing: every file under base, skipping _SKIP_DIRS."""
+        """The pre-ripgrep fallback file listing: every file under base,
+        skipping _SKIP_DIRS and the project .gitignore's top-level dirs —
+        without the latter, a repo with big vendored/cloned trees made the
+        fallback crawl for minutes (see _SEARCH_TIME_BUDGET)."""
+        skip = _SKIP_DIRS | self._gitignored_dirs()
         for dirpath, dirnames, filenames in os.walk(base):
-            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            dirnames[:] = [d for d in dirnames if d not in skip]
             for fn in filenames:
                 yield Path(dirpath) / fn
 
@@ -380,7 +410,15 @@ class FileToolsMixin:
 
         hits: list[str] = []
         redacted = 0
+        deadline = time.monotonic() + _SEARCH_TIME_BUDGET
         for fp in files:
+            if time.monotonic() > deadline:
+                note = (
+                    f"[search stopped after {_SEARCH_TIME_BUDGET:.0f}s — the tree is large; "
+                    "narrow it with the 'path' argument or a more specific pattern]"
+                )
+                body = "\n".join(hits + [note]) if hits else f"(no matches yet)\n{note}"
+                return self._note_redactions(body, redacted)
             try:
                 with fp.open("r", encoding="utf-8", errors="strict") as fh:
                     for i, line in enumerate(fh, 1):
