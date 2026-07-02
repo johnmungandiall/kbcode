@@ -26,7 +26,7 @@ model unchanged (see [[providers]]).
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `hooks.py` — `HooksRunner`, user-scriptable PreToolUse/PostToolUse/Stop hooks from `settings.json` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner with provider+settings on right, markdown, tool lines, menus). Banner now shows current temp / thinking / max_tokens on the right side (in the previously empty area). Tool activity now uses clean high-level summaries (e.g. "Search ... → 5 matches", relative paths) so users can follow what the agent is doing without seeing raw code in the log.
-- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:96`) + arrow-key menus (prompt_toolkit)
+- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:97`) + arrow-key menus (prompt_toolkit)
 - `logs.py` — `setup_logging(state_dir)`: quiet rotating file log at `~/.kbcode/projects/<slug>/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
 - `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
 - `redact.py` — regex secret redaction for tool output ([[safety]])

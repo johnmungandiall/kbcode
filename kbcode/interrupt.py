@@ -21,6 +21,24 @@ import contextlib
 import sys
 import threading
 
+# While set, the watcher stops reading the keyboard entirely. An interactive
+# prompt shown MID-TURN (the permission menu / typed y-N-a fallback) otherwise
+# races the watcher for every keystroke — msvcrt.getwch()/stdin.read() on the
+# watcher thread eats arrows, Enter, or the y/n itself, so the menu randomly
+# doesn't respond and the whole agent looks stuck on a write.
+_paused = threading.Event()
+
+
+@contextlib.contextmanager
+def pause_escape_watcher():
+    """While active, the Esc watcher leaves the keyboard alone so an
+    interactive prompt receives every key. No-op when no watcher is running."""
+    _paused.set()
+    try:
+        yield
+    finally:
+        _paused.clear()
+
 
 @contextlib.contextmanager
 def interrupt_on_escape(enabled: bool = True):
@@ -57,6 +75,9 @@ def _make_watcher():
     if msvcrt is not None:
         def watch_windows(stop: threading.Event) -> None:
             while not stop.is_set():
+                if _paused.is_set():  # a prompt owns the keyboard right now
+                    stop.wait(0.05)
+                    continue
                 if msvcrt.kbhit():
                     ch = msvcrt.getwch()
                     if ch == "\x1b" and not stop.is_set():  # Esc
@@ -82,6 +103,9 @@ def _make_watcher():
         try:
             tty.setcbreak(fd)
             while not stop.is_set():
+                if _paused.is_set():  # a prompt owns the keyboard right now
+                    stop.wait(0.05)
+                    continue
                 ready, _, _ = select.select([sys.stdin], [], [], 0.05)
                 if not ready:
                     continue

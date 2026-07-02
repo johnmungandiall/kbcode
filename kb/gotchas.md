@@ -35,27 +35,38 @@
   actual submodule (`core.py`/`file.py`/`kb.py`/`memory.py`/`planning.py`/
   `subagent.py`/`schemas.py`)
 
-## Streamed text must stop the thinking spinner first
+## Only ONE thread may write the terminal — spinner vs. mid-turn prints
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:269`). Streamed
-  reply text arrives via `on_text` on the *provider worker thread*
-  (`kbcode/agent.py:155`). Two threads writing the terminal at once = the spinner's
-  redraw stomps the half-printed line, shredding any multi-line reply into trailing
-  fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:523`) calls `_active_status.stop()`
-  (`kbcode/ui.py:313`) on the first token, so from then on only the worker thread
-  prints. Don't re-introduce a spinner that stays live during streaming.
-  `stream_tool_hint` (`kbcode/ui.py:548`) follows the same rules — spinner
-  stopped first, half-printed stream line closed via `_stream_open`.
-- `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
-  thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
-  `self._stop_lock` — without it both callers can pass the `_stopped` check and
-  tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
-- Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:519`) is not used on the streaming path.
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:309`). Anything
+  that *prints* from another thread while it's live (the old raw chunk streaming
+  did; `stream_tool_hint` still does) shreds output into trailing fragments —
+  so every mid-turn printer stops `_active_status` first.
+- Since v1.15.0 `stream_chunk` (`kbcode/ui.py:543`) does NOT print chunks at all:
+  it buffers a char count and feeds `set_progress()` (`kbcode/ui.py:293`) so the
+  spinner shows `writing… N chars`, and `Agent.run` renders the COMPLETE reply as
+  markdown via `assistant_text` (`kbcode/ui.py:535`) once the response resolves
+  (`kbcode/agent.py:296`). Don't reintroduce raw chunk printing — it both
+  races the spinner and makes markdown rendering impossible.
+- `stream_tool_hint` (`kbcode/ui.py:566`) still prints from the worker thread, so
+  it still stops the spinner first.
+- `stop()` can be called from worker AND main threads, so its check-and-tear-down
+  is guarded by `self._stop_lock` — without it both callers can pass the
+  `_stopped` check and tear the Rich `Live` down twice, corrupting the terminal.
+
+## Mid-turn interactive prompts must stop the spinner AND pause the Esc watcher
+- The permission menu fires DEEP inside a turn (`tools.execute` → `Permissions.check`
+  → `ui.permission`, under `ui.tool_running()` and `interrupt_on_escape()`). Two
+  things used to make it look stuck ("write_file hangs"): the live spinner's ticker
+  redraw repainted over the menu, and the Esc watcher thread
+  (`watch_windows`/`watch_posix`, `kbcode/interrupt.py:76`) ate the menu's
+  keystrokes — `msvcrt.getwch()`/`stdin.read()` race the prompt for every key.
+- Fix: `ui.permission` (`kbcode/ui.py:449`) stops `_active_status` first and wraps
+  its `select()`/typed fallback in `pause_escape_watcher()`
+  (`kbcode/interrupt.py:33`), which the watcher loops check via the module-level
+  `_paused` event. ANY new mid-turn prompt must do both.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:228`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:230`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`

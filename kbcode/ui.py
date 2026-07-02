@@ -22,6 +22,7 @@ from rich.table import Table
 from rich.text import Text
 
 from . import __version__
+from .interrupt import pause_escape_watcher
 from .prompt_input import select
 
 _TOOL_ICON = "⏺"
@@ -61,6 +62,7 @@ COMMANDS = [
     ("/diff [n]", "show what the AI changed since a checkpoint (no n = newest; list them with /rollback)"),
     ("/sessions [query]", "list past chat sessions for this project, or full-text search them"),
     ("/export [id]", "export a session (current, or by id) as a markdown file"),
+    ("/copy [n]", "copy the last reply's code block (or block n; no blocks = whole reply) to the clipboard"),
     ("/resume [id]", "resume a past session (no id = pick from a list)"),
     ("/reset", "forget this chat (memory + kb are kept; starts a fresh saved session)"),
     ("/exit", "quit"),
@@ -288,6 +290,13 @@ class _TickingStatus:
         self._stopped = False
         self._stop_lock = threading.Lock()  # so worker + main thread can't tear down at once
 
+    def set_progress(self, label: str, hint: str) -> None:
+        """Swap the label/hint the ticker shows. Safe from any thread — it
+        only assigns attributes the ticker thread reads on its next 100ms
+        redraw, so no second thread ever writes the terminal directly."""
+        self._label = label
+        self._hint = hint
+
     def _render(self, elapsed: float) -> str:
         text = f"[dim]{self._label}… {elapsed:.1f}s[/dim]"
         if self._total_start is not None:
@@ -345,13 +354,14 @@ class TerminalUI:
         # running grand total, so the total keeps counting across separate
         # thinking / tool-running spinners instead of resetting each time.
         self._turn_start: float | None = None
-        # The spinner currently on screen, if any. stream_chunk() stops it the
-        # moment real text starts arriving so the spinner's background redraw
-        # can't race the streamed prints (see _TickingStatus.stop).
+        # The spinner currently on screen, if any. stream_chunk() feeds it a
+        # live "writing… N chars" progress label while the reply streams in;
+        # stream_tool_hint() stops it before printing (its prints would race
+        # the spinner's background redraw — see _TickingStatus.stop).
         self._active_status: _TickingStatus | None = None
-        # True while a streamed reply line is half-printed (no trailing
-        # newline yet) — stream_tool_hint() must close it before printing.
-        self._stream_open = False
+        # Characters received so far for the reply currently streaming —
+        # reset by thinking(), grown by stream_chunk().
+        self._stream_len = 0
 
     def turn_started(self) -> None:
         """Mark the start of a new agent turn (call once per user turn)."""
@@ -441,7 +451,15 @@ class TerminalUI:
 
         Returns 'y' (allow once) / 'a' (allow for the session) / 'n' (deny).
         Falls back to a typed y/N/a prompt when no interactive menu is available.
+
+        This fires MID-TURN (inside tools.execute, under the tool_running()
+        spinner and the Esc watcher), so before prompting it must (1) stop the
+        live spinner — its ticker-thread redraw would repaint over the menu —
+        and (2) pause the Esc watcher, whose keyboard reads otherwise steal
+        the menu's keystrokes; both made a write_file approval look stuck.
         """
+        if self._active_status is not None:
+            self._active_status.stop()
         body = Text()
         body.append(f"{tool}\n", style="bold yellow")
         for line in (detail.splitlines() or [detail]):
@@ -452,9 +470,10 @@ class TerminalUI:
 
         labels = ["Yes", f"Yes, and don't ask again for {tool} this session", "No"]
         codes = ["y", "a", "n"]
-        available, idx = select(labels, header="  ↑/↓ then Enter (or press 1/2/3):")
-        if not available:
-            return self._permission_typed()
+        with pause_escape_watcher():
+            available, idx = select(labels, header="  ↑/↓ then Enter (or press 1/2/3):")
+            if not available:
+                return self._permission_typed()
         if idx is None:  # Esc / Ctrl-C
             self.console.print("  ✗ No", style="red")
             return "n"
@@ -502,6 +521,7 @@ class TerminalUI:
 
     # -- agent turn output ---------------------------------------------
     def thinking(self):
+        self._stream_len = 0  # fresh model call: restart the writing… counter
         return _TickingStatus(self.console, "thinking", "(Esc to interrupt)", self._turn_start, ui=self)
 
     def working(self, label: str):
@@ -521,44 +541,40 @@ class TerminalUI:
             self.console.print(text)
 
     def stream_chunk(self, text: str) -> None:
-        """Print one streamed text chunk as it arrives (#3.1/#7.1) — raw, not
-        markdown-rendered (there's no way to safely re-parse markdown from a
-        partial chunk).
+        """Track one streamed text chunk as it arrives (#3.1/#7.1) — buffered,
+        not printed.
 
-        The first chunk stops any live thinking()/working() spinner first. The
-        spinner is a Rich ``Live`` region refreshed from a background ticker
-        thread; leaving it running while these partial-line prints stream in
-        lets the two threads race, and the spinner's redraw shreds the reply
-        into trailing fragments. Once real text is flowing it's also the
-        liveness signal the spinner was standing in for, so dropping it is the
-        right call, not just a workaround.
+        Chunks used to be printed raw, which meant the reply could never be
+        markdown-rendered (no safe way to re-parse markdown from a half-printed
+        reply). Now nothing is printed while the response streams: the
+        thinking() spinner stays up and its label counts the characters
+        received, so a long reply still reads as alive rather than frozen, and
+        assistant_text() renders the complete reply as markdown once the
+        response resolves. Runs on the provider worker thread, but it only
+        updates the spinner's label attributes (picked up by the ticker
+        thread's next redraw) — it never writes the terminal itself, so the
+        old two-writers race can't happen.
         """
         if not text:
             return
+        self._stream_len += len(text)
         if self._active_status is not None:
-            self._active_status.stop()
-        self._stream_open = not text.endswith("\n")
-        self.console.print(text, end="", markup=False, highlight=False)
-
-    def stream_newline(self) -> None:
-        """End a streamed response — chunks have no trailing newline of their own."""
-        self._stream_open = False
-        self.console.print()
+            self._active_status.set_progress(
+                "writing", f"{self._stream_len:,} chars  (Esc to interrupt)"
+            )
 
     def stream_tool_hint(self, name: str) -> None:
         """One dim line the moment the model starts composing a call to *name*,
         while the response is still streaming — a long tool-call-heavy response
         otherwise looks frozen (the arguments JSON can take a while to
         generate). The real tool_call() line, with described args, follows once
-        the response resolves. Same thread rules as stream_chunk: this runs on
-        the provider worker thread, so any live spinner is stopped first."""
+        the response resolves. Unlike stream_chunk this *prints* from the
+        provider worker thread, so any live spinner is stopped first (its
+        ticker-thread redraw would race this print and shred the line)."""
         if not name:
             return
         if self._active_status is not None:
             self._active_status.stop()
-        if self._stream_open:
-            self.console.print()  # close the half-printed streamed line first
-            self._stream_open = False
         self.console.print(f"{_TOOL_ICON} {name} …", style="dim", markup=False, highlight=False)
 
     def tool_call(self, name: str, args: dict) -> None:

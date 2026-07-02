@@ -2,6 +2,25 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## v1.15.0 (2026-07-02)
+- **Replies render as markdown in the terminal** (user request): `stream_chunk`
+  no longer prints raw chunks — it feeds a `writing… N chars` progress label
+  into the still-live thinking spinner (`_TickingStatus.set_progress`), and
+  `Agent.run` shows the complete reply via `ui.assistant_text` (Rich
+  `Markdown`) once the response resolves. `stream_newline`/`_stream_open` are
+  gone. See [[gotchas]] "Only ONE thread may write the terminal".
+- **Fixed "write_file looks stuck" during permission prompts** (user report):
+  the mid-turn permission menu was raced by (1) the `tool_running()` spinner's
+  ticker redraw painting over it and (2) the Esc watcher thread eating its
+  keystrokes (`msvcrt.getwch()`/`stdin.read()` vs the menu, key by key).
+  `ui.permission` now stops the spinner and wraps the prompt in the new
+  `interrupt.pause_escape_watcher()`. See [[safety]], [[gotchas]].
+- **New `/copy [n]`:** copies the last reply's fenced code block (or block n;
+  a reply with no blocks = the whole reply) to the system clipboard — the
+  terminal's answer to a "copy button". New `kbcode/clipboard.py`
+  (`extract_code_blocks` + `copy_to_clipboard`; `clip`/`pbcopy`/`wl-copy`/
+  `xclip`/`xsel`, UTF-16 for Windows `clip.exe` so non-ASCII survives).
+
 ## v1.14.0 (2026-07-02)
 - 2026-07-02 — **`KBCODE_MAX_STEPS=0` / `KBCODE_MAX_COMMANDS=0` now mean
   UNLIMITED** (that runaway guard is disabled): the agent loop switches to

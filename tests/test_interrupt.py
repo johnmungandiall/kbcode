@@ -41,6 +41,22 @@ def test_watcher_thread_is_joined_before_returning(monkeypatch):
     assert captured["thread"].is_alive() is False
 
 
+def test_pause_escape_watcher_sets_and_clears_the_pause_flag():
+    assert interrupt._paused.is_set() is False
+    with interrupt.pause_escape_watcher():
+        assert interrupt._paused.is_set() is True
+    assert interrupt._paused.is_set() is False
+
+
+def test_pause_escape_watcher_clears_the_flag_even_on_error():
+    try:
+        with interrupt.pause_escape_watcher():
+            raise RuntimeError("prompt blew up")
+    except RuntimeError:
+        pass
+    assert interrupt._paused.is_set() is False
+
+
 def test_no_op_when_stdin_not_a_tty(monkeypatch):
     class _NotTTY:
         def isatty(self) -> bool:

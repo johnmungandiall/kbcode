@@ -22,7 +22,7 @@
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.
   kbcode now aggressively batches parallel reads (16 workers + prompt rules).
-- `pytest` — run the test suite (`tests/`, 30 files + conftest.py); `python -m compileall -q kbcode`
+- `pytest` — run the test suite (`tests/`, 33 files + conftest.py); `python -m compileall -q kbcode`
   for a fast syntax-only check (glob-free — `py_compile kbcode/*.py` breaks on
   Windows PowerShell, which doesn't expand `*`)
 
@@ -54,6 +54,8 @@
 - `/rollback` — undo edits from checkpoint
 - `/diff [n]` — working tree vs checkpoint (no n = newest)
 - `/sessions` / `/resume` — session history
+- `/copy [n]` — copy the last reply's code block (or block n; no blocks = whole
+  reply) to the system clipboard (`kbcode/clipboard.py`)
 - `/image [path]` or Alt+V — attach image
 - `/video <path>` — describe video via vision fallback
 

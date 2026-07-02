@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.14.0-2ea44f)
+![Version](https://img.shields.io/badge/version-1.15.0-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 [![CI](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml/badge.svg)](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml)
@@ -240,6 +240,7 @@ Session:
 - `/diff [n]` — show what the AI changed since a checkpoint (no `n` = newest)
 - `/sessions [query]` — list past chat sessions, or full-text search them for a query
 - `/export [id]` — export a session (current, or by id) as a markdown file
+- `/copy [n]` — copy the last reply's code block (or block n; no blocks = whole reply) to the clipboard
 - `/resume [id]` — resume a past session (no id = pick from a list)
 - `/reset` — clear the current chat (memory and kb are kept; starts a fresh saved session)
 - `/exit` — quit

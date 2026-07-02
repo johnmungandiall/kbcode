@@ -61,7 +61,7 @@ explicit "unbuilt KB ≠ empty project" warning so a model seeing fresh template
 checks the real files (repo_map / list) instead of declaring the project empty.
 Onboarding: `is_scaffold()` (`kbcode/knowledge_base.py:282`) is True while every
 note is still an untouched template; the REPL then prints a "type /init" hint at
-startup and after `/open` (`_kb_hint_if_unbuilt`, `kbcode/repl.py:220`), and the
+startup and after `/open` (`_kb_hint_if_unbuilt`, `kbcode/repl.py:221`), and the
 `/init` chat command runs the canned `_BUILD_KB_PROMPT` (`kbcode/repl.py:206`)
 that scans the code and fills the notes in, then refreshes the LIVE agent's
 system prompt via `cli._system_prompt()` (split out of `_build_agent`) so the

@@ -57,11 +57,13 @@ path iterates the SDK's event stream (synthetic `"text"` events for deltas,
 `content_block_start` with a `tool_use` block for names) instead of the old
 `text_stream`; the OpenAI path fires on the first name fragment per tool-call
 index. `Agent._complete()` forwards `on_tool` and `Agent.run` passes
-`ui.stream_tool_hint` (`kbcode/ui.py:548`), which prints one dim `⏺ name …`
-line — after stopping any live spinner and closing a half-printed streamed
-line (`TerminalUI._stream_open`), same thread rules as `stream_chunk` (see
-[[gotchas]]). The real described `tool_call()` line still follows when the
-response resolves.
+`ui.stream_tool_hint` (`kbcode/ui.py:566`), which prints one dim `⏺ name …`
+line after stopping any live spinner (it's the only mid-stream printer left —
+see [[gotchas]]). Text chunks themselves are NOT printed: `ui.stream_chunk`
+only feeds a `writing… N chars` progress label into the thinking spinner, and
+the complete reply is markdown-rendered by `ui.assistant_text` once the
+response resolves. The real described `tool_call()` line still follows when
+the response resolves.
 
 Tool schemas carry kbcode-only metadata (e.g. `parallel_safe`, see
 [[tools-and-repair]]) that the model APIs reject as unknown keys. The OpenAI path

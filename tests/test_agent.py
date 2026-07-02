@@ -195,18 +195,18 @@ def test_run_streams_text_through_ui_stream_chunk(tmp_path, monkeypatch):
     assert "".join(seen) == "streamed answer"
 
 
-def test_run_calls_stream_newline_only_when_text_was_streamed(tmp_path, monkeypatch):
+def test_run_renders_reply_as_markdown_only_when_text_present(tmp_path, monkeypatch):
     provider = FakeProvider(
         [LLMResponse(text="", tool_calls=[_call("read_file", {"path": "a.txt"})], raw={}), _final("done")]
     )
     agent, tools = _make_agent(tmp_path, provider)
     (tools.root / "a.txt").write_text("x", encoding="utf-8")
-    newline_calls = []
-    monkeypatch.setattr(agent.ui, "stream_newline", lambda: newline_calls.append(1))
+    rendered = []
+    monkeypatch.setattr(agent.ui, "assistant_text", lambda t: rendered.append(t))
     agent.run("read the file")
-    # first response had empty text (tool-call only) -> no newline for that step;
-    # second response ("done") had text -> one newline.
-    assert newline_calls == [1]
+    # first response had empty text (tool-call only) -> nothing rendered for
+    # that step; second response ("done") had text -> one markdown render.
+    assert rendered == ["done"]
 
 
 def test_complete_without_on_text_does_not_stream(tmp_path):

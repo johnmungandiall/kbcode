@@ -141,12 +141,14 @@ class Agent:
 
         ``on_text``, if given, switches to the provider's streaming call
         (#3.1/#7.1) and is invoked with each text chunk *from the worker
-        thread* as it arrives. Rich's Console has its own internal lock so
-        individual prints stay atomic, but the thinking() spinner is a
-        Live region redrawn from its own ticker thread — two threads writing
-        the terminal at once shred the streamed line. So ui.stream_chunk stops
-        the spinner on the first token; after that only the worker thread
-        prints. Left as None (the default): one blocking call, spinner intact.
+        thread* as it arrives. ui.stream_chunk doesn't print those chunks —
+        it feeds a "writing… N chars" progress label into the live thinking()
+        spinner, and the caller markdown-renders the complete reply via
+        ui.assistant_text once the response resolves. (Printing chunks raw
+        from the worker thread used to race the spinner's ticker-thread
+        redraw AND made markdown rendering impossible.) ``on_tool`` still
+        prints hint lines, so it stops the spinner first. Left as None (the
+        default): one blocking call, spinner intact.
         """
         box: dict = {}
         done = threading.Event()
@@ -289,7 +291,9 @@ class Agent:
                         continue
                     raise
                 if resp.text.strip():
-                    self.ui.stream_newline()  # chunks printed raw, with no trailing newline
+                    # Nothing was printed while streaming (see _complete) —
+                    # show the whole reply now, markdown-rendered.
+                    self.ui.assistant_text(resp.text)
                 self._record_usage(resp.usage)
 
                 self._append(
@@ -302,10 +306,9 @@ class Agent:
                 )
 
                 if not resp.tool_calls:
-                    # Note: promoted/cleaned text was already streamed above (raw,
-                    # tool-call markup and all) — it isn't re-shown here, since
-                    # streaming already showed *something* and re-rendering the
-                    # cleaned version would just duplicate it.
+                    # Note: promoted/cleaned text was already rendered above
+                    # (tool-call markup and all) — the cleaned version isn't
+                    # re-shown here, that would just duplicate it.
                     promoted, _cleaned = promote(resp.text, {s["name"] for s in self._mode_schemas()})
                     if promoted:
                         if promoted_recoveries >= _MAX_PROMOTED_RECOVERIES:
@@ -328,7 +331,7 @@ class Agent:
                     return
 
                 # Any preamble text (e.g. "let me check that file") was already
-                # streamed above, before the tool calls themselves execute.
+                # rendered above, before the tool calls themselves execute.
 
                 results = []
                 calls = resp.tool_calls

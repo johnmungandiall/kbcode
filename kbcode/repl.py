@@ -26,6 +26,7 @@ from .cli import (
     _system_prompt,
     ui,
 )
+from .clipboard import copy_to_clipboard, extract_code_blocks
 from .config import (
     PRESETS,
     Config,
@@ -609,6 +610,34 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             out_path = config.project_dir / f"kbcode-session-{export_id}.md"
             out_path.write_text(export_markdown(target_path), encoding="utf-8")
             ui.notice(f"Exported to {out_path}", style="green")
+            continue
+        if user.split() and user.split()[0] == "/copy":
+            parts = user.split()
+            last = next(
+                (m.get("text") or "" for m in reversed(agent.messages)
+                 if m.get("role") == "assistant" and (m.get("text") or "").strip()),
+                "",
+            )
+            if not last:
+                ui.notice("Nothing to copy yet — ask something first.", style="yellow")
+                continue
+            blocks = extract_code_blocks(last)
+            if len(parts) > 1:  # /copy <n> -> the nth code block
+                if not parts[1].isdigit() or not (1 <= int(parts[1]) <= len(blocks)):
+                    ui.error(f"usage: /copy [n]  (1-{len(blocks)})" if blocks
+                             else "the last reply has no code blocks")
+                    continue
+                chosen, which = blocks[int(parts[1]) - 1], f"code block {parts[1]} of {len(blocks)}"
+            elif blocks:  # bare /copy -> the last block; no blocks -> whole reply
+                chosen, which = blocks[-1], f"code block {len(blocks)} of {len(blocks)}"
+            else:
+                chosen, which = last, "the whole reply (it has no code blocks)"
+            err = copy_to_clipboard(chosen)
+            if err:
+                ui.error(f"couldn't copy: {err}")
+            else:
+                lines = chosen.count("\n") + 1
+                ui.notice(f"Copied {which} ({lines} lines) to the clipboard — paste anywhere.", style="green")
             continue
         if user.split() and user.split()[0] == "/resume":
             parts = user.split(maxsplit=1)

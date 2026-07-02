@@ -56,7 +56,7 @@ dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:68`, mir
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
 (`_EXCLUDES`, `kbcode/checkpoints.py:33`), same spirit as redaction. `/rollback`
-(`repl._rollback_menu`, `kbcode/repl.py:48`) opens an arrow-key picker built on
+(`repl._rollback_menu`, `kbcode/repl.py:49`) opens an arrow-key picker built on
 `prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:202`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
@@ -64,11 +64,15 @@ maintenance; deleting the `checkpoints/` folder is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:439`), which renders a context panel then
+`ui.permission(tool, detail)` (`kbcode/ui.py:449`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:465`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:484`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
-(`kbcode/permissions.py:26`) for headless use.
+(`kbcode/permissions.py:26`) for headless use. Because this prompt fires
+mid-turn, `ui.permission` stops the live `tool_running()` spinner and wraps
+the prompt in `pause_escape_watcher()` (`kbcode/interrupt.py:33`) so the Esc
+watcher can't eat its keystrokes — see [[gotchas]] "Mid-turn interactive
+prompts".
 
 ## Hooks (Claude Code idea — PreToolUse/PostToolUse/Stop)
 `HooksRunner` (`kbcode/hooks.py:40`) reimplements Claude Code's public,

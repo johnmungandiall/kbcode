@@ -37,7 +37,7 @@ skipped — never fatal (`start_all`). Normal shutdown is `Agent.close()`
 and `/open` all pass through it, so rebuilt agents don't leak old server
 subprocesses. `tools/list` runs once at startup and is cached. **Startup only
 starts what settings.json held at launch** — `/mcp reload`
-(`kbcode/repl.py:335`) re-reads the merged block via `load_mcp_servers()` and
+(`kbcode/repl.py:336`) re-reads the merged block via `load_mcp_servers()` and
 passes fresh configs to `MCPManager.reload()`, bootstrapping a manager if
 none was attached, so a server added mid-session works without restarting
 kbcode.

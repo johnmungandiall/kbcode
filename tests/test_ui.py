@@ -107,18 +107,53 @@ def test_describe_tool_unknown_falls_back_to_name_and_short_args():
 
 
 # -- streaming vs. the thinking spinner --------------------------------------
-# The spinner is a Rich Live region refreshed from a background ticker thread.
-# If it's still live while raw text streams in, the two racing writers shred the
-# reply into trailing fragments. stream_chunk() must stop the spinner on the
-# first real token so only one thread writes the terminal from then on.
+# stream_chunk() no longer prints chunks (the full reply is markdown-rendered
+# by assistant_text() once the response resolves). Instead it keeps the
+# thinking spinner ALIVE and feeds it a "writing… N chars" progress label —
+# the spinner's ticker thread stays the only terminal writer, so the old
+# two-writers shredding race can't happen. stream_tool_hint() still prints,
+# so it still must stop the spinner first.
 
-def test_stream_chunk_stops_active_spinner_on_first_token():
+def test_stream_chunk_keeps_spinner_alive_and_reports_progress():
     ui = _silent_ui()
     with ui.thinking() as status:
         assert ui._active_status is status
         ui.stream_chunk("hello")
+        ui.stream_chunk(" world")
+        assert ui._active_status is status      # spinner survives streaming
+        assert status._stopped is False
+        assert status._label == "writing"
+        assert "11" in status._hint             # len("hello world") chars counted
+
+
+def test_thinking_resets_the_writing_counter_between_model_calls():
+    ui = _silent_ui()
+    with ui.thinking():
+        ui.stream_chunk("first reply")
+    with ui.thinking() as status:
+        ui.stream_chunk("hi")
+        assert "2" in status._hint and "11" not in status._hint
+
+
+def test_stream_tool_hint_stops_active_spinner_before_printing():
+    ui = _silent_ui()
+    with ui.thinking() as status:
+        ui.stream_tool_hint("read_file")
         assert ui._active_status is None
         assert status._stopped is True
+
+
+def test_permission_prompt_stops_active_spinner_first(monkeypatch):
+    # The permission menu fires mid-turn under the tool_running() spinner —
+    # if the spinner stays live, its ticker redraw repaints over the menu and
+    # the approval looks stuck. permission() must kill it before prompting.
+    ui = _silent_ui()
+    monkeypatch.setattr("kbcode.ui.select", lambda *a, **k: (True, 0))
+    with ui.tool_running() as status:
+        answer = ui.permission("write_file", "some diff")
+        assert status._stopped is True
+        assert ui._active_status is None
+    assert answer == "y"
 
 
 def test_ticking_status_stop_is_idempotent():
@@ -137,12 +172,12 @@ def test_stream_chunk_is_a_noop_without_an_active_spinner():
     assert ui._active_status is None
 
 
-def test_stream_chunk_from_worker_thread_stops_spinner():
+def test_stream_chunk_from_worker_thread_updates_spinner_without_deadlock():
     # The provider streams on_text from a worker thread while the main thread
-    # waits — mirror that: stop the spinner from a *different* thread than the
-    # one that started it, and make sure it tears down without deadlocking.
+    # waits — mirror that: update the spinner's progress from a *different*
+    # thread than the one that started it, without deadlocking or stopping it.
     ui = _silent_ui()
-    with ui.thinking():
+    with ui.thinking() as status:
         done = threading.Event()
 
         def stream():
@@ -150,8 +185,9 @@ def test_stream_chunk_from_worker_thread_stops_spinner():
             done.set()
 
         threading.Thread(target=stream, daemon=True).start()
-        assert done.wait(2.0), "streaming worker deadlocked stopping the spinner"
-        assert ui._active_status is None
+        assert done.wait(2.0), "streaming worker deadlocked updating the spinner"
+        assert ui._active_status is status
+        assert status._label == "writing"
 
 
 # -- tool_result summaries (UX clarity for "what is the agent doing?") ---------
