@@ -21,11 +21,11 @@ shape), parsed by `parse_mcp_configs()` (`kbcode/tools/mcp.py:59`) into
 `timeout` (s, default 30), `trusted` (list of bare tool names to
 auto-approve), `read_only` (`parallel_safe` is accepted as an alias). Values
 get `${VAR}` env expansion. Bad/disabled/non-stdio entries are logged and
-skipped. Loaded via `load_mcp_servers()` (`kbcode/config.py:238`) — a
+skipped. Loaded via `load_mcp_servers()` (`kbcode/config.py:325`) — a
 **per-server deep merge** across home → launch → project, unlike every other
 settings key (whole-value shallow override), so a project can add one server
 without hiding home-level ones; carried as `Config.mcp`
-(`kbcode/config.py:119`). See [[config]], [[gotchas]].
+(`kbcode/config.py:204`). See [[config]], [[gotchas]].
 
 ## Lifecycle
 `_build_agent` (`kbcode/cli.py:148`) starts every server when `config.mcp`
@@ -70,7 +70,7 @@ only if the frontmatter lists explicit `mcp__server__tool` names
 `tools: read` subagents never see them. `/mcp` lists servers+tools,
 `/mcp reload` reconnects (`kbcode/repl.py:281`); `/status` appends an MCP
 line; activity lines fall back to a generic `MCP server:tool` describer
-(`kbcode/ui.py:241`). Tests: `tests/test_mcp.py` end-to-end against
+(`kbcode/ui.py:244`). Tests: `tests/test_mcp.py` end-to-end against
 `tests/fake_mcp_server.py`, a real stdio subprocess.
 
 See [[tools-and-repair]] for the dispatch seam, [[gotchas]] for the traps

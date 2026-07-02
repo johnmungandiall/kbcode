@@ -5,6 +5,7 @@ warning), and #6.4 (per-turn run_command rate limit).
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import pytest
@@ -114,6 +115,32 @@ def test_run_command_rate_limit_resets_on_new_turn(tmp_path):
     tools.new_turn()
     out = tools._tool_run_command({"command": "echo hi"})  # doesn't raise
     assert "exit code: 0" in out
+
+
+# --- hang-proofing (temp-file output + tree kill) ----------------------------
+
+
+def test_run_command_returns_when_a_grandchild_outlives_the_shell(tmp_path):
+    """A background child inheriting the output handles must NOT block the
+    return (the `taskkill && start explorer.exe` stuck-for-an-hour bug)."""
+    perm = _RecordingPermissions(allow=True)
+    tools = _make_tools(tmp_path, perm)
+    cmd = "start /b ping -n 30 127.0.0.1" if os.name == "nt" else "(sleep 30 &)"
+    start = time.monotonic()
+    out = tools._tool_run_command({"command": cmd})
+    assert time.monotonic() - start < 15  # old code blocked on pipe EOF
+    assert "exit code: 0" in out
+
+
+def test_run_command_timeout_kills_the_tree_and_reports(tmp_path, monkeypatch):
+    monkeypatch.setattr("kbcode.tools.file._COMMAND_TIMEOUT", 2)
+    perm = _RecordingPermissions(allow=True)
+    tools = _make_tools(tmp_path, perm)
+    cmd = "ping -n 30 127.0.0.1" if os.name == "nt" else "sleep 30"
+    start = time.monotonic()
+    out = tools._tool_run_command({"command": cmd})
+    assert time.monotonic() - start < 15
+    assert "timed out after 2s" in out
 
 
 # --- system-path warning ------------------------------------------------

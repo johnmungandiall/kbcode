@@ -92,3 +92,14 @@ def test_ensure_dirs_writes_self_ignoring_gitignore(tmp_path):
     gitignore.write_text("settings.json\n", encoding="utf-8")
     config.ensure_dirs()
     assert gitignore.read_text(encoding="utf-8") == "settings.json\n"
+
+
+def test_upsert_env_value_creates_missing_parent_dir(tmp_path):
+    """The wizard writes the API key to ~/.kbcode/.env BEFORE anything else has
+    created ~/.kbcode — on a fresh install this used to crash with
+    FileNotFoundError and leave no global folder at all."""
+    from kbcode.config import upsert_env_value
+
+    env = tmp_path / "kbhome" / ".env"  # kbhome does not exist yet
+    upsert_env_value(env, "MY_KEY", "abc")
+    assert env.read_text(encoding="utf-8") == "MY_KEY=abc\n"

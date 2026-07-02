@@ -11,9 +11,9 @@ from 3 levels: `~/.kbcode` → launch-dir `.kbcode` → project `.kbcode` (last 
 Env vars (`KBCODE_PROVIDER`, `KBCODE_MODEL`, etc.) beat all settings files.
 
 ## Persistence
-- `persist_choice()` ([config.py](../kbcode/config.py) `persist_choice:254`) — saves to
+- `persist_choice()` ([config.py](../kbcode/config.py) `persist_choice:363`) — saves to
   BOTH global `~/.kbcode` AND project `.kbcode/settings.json`. Used by `kb model` wizard.
-- `persist_global_choice()` ([config.py](../kbcode/config.py) `persist_global_choice:285`) —
+- `persist_global_choice()` ([config.py](../kbcode/config.py) `persist_global_choice:394`) —
   saves to global `~/.kbcode` ONLY. Used by REPL `/provider` and `/model` commands
   so switching in one project becomes the default for all projects (cross-project
   default). Project-level `.kbcode/settings.json` from an explicit `kb model` still

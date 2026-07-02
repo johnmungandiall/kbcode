@@ -5,8 +5,20 @@ Two per-turn caps stop a looping model from burning tokens forever: the agent
 loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
 `KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
 (`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
-in `_tool_run_command`, `kbcode/tools/file.py:381`). Both end the turn safely —
+in `_tool_run_command`, `kbcode/tools/file.py:401`). Both end the turn safely —
 the user says "continue" to resume. Details and history: [[gotchas]], [[config]].
+
+## run_command hang-proofing
+`_tool_run_command` (`kbcode/tools/file.py:401`) runs via `Popen` writing to
+temp FILES with `stdin=DEVNULL` — never `subprocess.run(capture_output=True)`.
+Pipes hang: a grandchild that outlives the shell (`taskkill && start
+explorer.exe`, a spawned dev server) inherits the pipe handles, so the pipe
+read blocks on EOF forever, sailing straight past the timeout (the real-world
+"running… 3142s" bug). Timeout is `_COMMAND_TIMEOUT` (180s,
+`kbcode/tools/file.py:22`); on expiry `_kill_process_tree()`
+(`kbcode/tools/file.py:66`) kills the whole tree (`taskkill /F /T` on Windows,
+`os.killpg` + `start_new_session` on POSIX) and the tool still returns the
+partial output captured so far. Trap stub: [[gotchas]].
 
 ## Secret redaction (Hermes idea)
 `redact.py` masks live credentials — API key prefixes (`sk-`, `ghp_`, `AKIA`,
@@ -52,9 +64,9 @@ so a hook script written for real Claude Code works here unchanged. Config
 comes from a `"hooks"` key in `.kbcode/settings.json`, shaped exactly like
 Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 [{"type": "command", "command": "..."}]}], "PostToolUse": [...], "Stop":
-[...]}`. `Config.hooks` (`kbcode/config.py:118`) carries it through the same
+[...]}`. `Config.hooks` (`kbcode/config.py:203`) carries it through the same
 settings merge as everything else (`load_config()`,
-`kbcode/config.py:365`) — no new file or precedence rule.
+`kbcode/config.py:497`) — no new file or precedence rule.
 
 `HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty

@@ -409,6 +409,13 @@ def main(argv: list[str] | None = None) -> int:
 
     config = load_config(project_dir or Path.cwd())
     config.auto_approve = auto
+    try:
+        # The README promises global data lives in ~/.kbcode; make sure the
+        # folder actually exists from the very first run (a legacy project
+        # whose state_dir stays project-local would otherwise never create it).
+        global_dir().mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass  # unwritable home — every consumer of global_dir() copes already
     setup_logging(config.state_dir)  # quiet on-disk trace for field debugging (#5)
     logging.getLogger(__name__).info(
         "kbcode %s starting — provider=%s model=%s dir=%s",

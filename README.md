@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.11.0-2ea44f)
+![Version](https://img.shields.io/badge/version-1.11.1-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 [![CI](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml/badge.svg)](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml)
@@ -538,6 +538,41 @@ DEEPSEEK_API_KEY=...
   ```bash
   pip install --upgrade --force-reinstall --no-cache-dir git+https://github.com/johnmungandiall/kbcode.git
   ```
+
+## 🗑️ Uninstall
+
+Three layers — remove as much or as little as you want:
+
+1. **The program itself:**
+
+   ```bash
+   pip uninstall kbcode
+   ```
+
+   This removes the `kbcode` and `kb` commands. (If you used the no-install
+   option, there's nothing to uninstall — just delete the cloned folder.)
+
+2. **Your global data** — API keys, saved model choice, and every project's
+   chat history / memory / logs all live in **one folder**. Delete it and
+   they're gone:
+
+   - Windows: `rmdir /s /q %USERPROFILE%\.kbcode` (or delete `~/.kbcode` in Explorer)
+   - macOS / Linux: `rm -rf ~/.kbcode`
+
+   > [!NOTE]
+   > The folder appears the first time you *run* kbcode (not at `pip install`) —
+   > if it isn't there, there's simply nothing to delete. If you set
+   > `KBCODE_HOME`, delete that folder instead — and remove the env var too.
+
+3. **Per-project leftovers (optional):** inside each project where you ran
+   `kbcode init`, you may have an `AGENT.md`, a `kb/` folder, and a `.kbcode/`
+   folder. They're plain files that do nothing without kbcode — the `kb/`
+   notes are readable project documentation, so many people keep them. Delete
+   them only if you want a fully clean project.
+
+Steps 2 and 3 are permanent — chat history and memory can't be recovered once
+those folders are deleted. Skipping them is also fine: if you reinstall later,
+kbcode picks up your old keys and history right where you left off.
 
 ## 🧪 Development
 

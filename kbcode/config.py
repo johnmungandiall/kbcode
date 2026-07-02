@@ -430,7 +430,9 @@ def persist_global_tuning(config: "Config") -> None:
 
 # --- .env helpers (internal but usable by wizard + repl for consistent pinning) ---
 def upsert_env_value(path: Path, key: str, value: str) -> None:
-    """Set KEY=value (replaces non-comment existing line). Creates file if needed."""
+    """Set KEY=value (replaces non-comment existing line). Creates the file —
+    and its folder (e.g. a not-yet-existing ``~/.kbcode``) — if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     out, found = [], False
     for line in lines:

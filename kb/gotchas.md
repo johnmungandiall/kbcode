@@ -22,7 +22,7 @@
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 
 ## Protected files
-- `kbcode/tools/file.py:91-109` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
+- `kbcode/tools/file.py:118-136` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
 - `.env.example` and `.gitignore` are explicitly allowed — see [[safety]]
 
 ## Compaction token estimate
@@ -148,7 +148,7 @@
   available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
-- `kbcode/tools/file.py:349` — `_tool_search_code` formats each hit through
+- `kbcode/tools/file.py:373` — `_tool_search_code` formats each hit through
   `self._display_path(fp)` (`kbcode/tools/core.py:170`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
@@ -187,10 +187,21 @@
 ## Avoiding search/exploration loops
 - When doing comparisons across directories (e.g. similar functions in broker/kotak vs broker/zerodha), the agent must start with `repo_map` (scoped to subdirs) then use `search_code` with the `path` argument for narrow, targeted searches. Batch different scoped searches in one step. Stop and summarize as soon as the pattern is found — do not repeat similar searches. Updated BASE_SYSTEM, search_code description, and code-explorer instructions enforce this (see prompts.py and schemas.py). This prevents the repetitive search loops that previously caused long-running or "stuck" turns.
 
+## run_command + pipes = infinite hang (Windows especially)
+- NEVER capture a shell command's output with pipes
+  (`subprocess.run(capture_output=True)`) in run_command-like code: a
+  grandchild that outlives the direct child (explorer.exe after `taskkill &&
+  start explorer.exe`, any backgrounded server) inherits the pipe handles, and
+  the read blocks on EOF *forever* — `subprocess.run`'s own post-timeout
+  cleanup does exactly this blocking read, so even `timeout=180` sailed past
+  3000s in the field. Fixed (2026-07-02) by writing output to temp files +
+  `proc.wait(timeout)` + `_kill_process_tree()` — see [[safety]] and
+  `kbcode/tools/file.py:401`.
+
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:377` — `_tool_run_command` caps calls per turn at
+- `kbcode/tools/file.py:401` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
-  `kbcode/config.py:35`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
+  `kbcode/config.py:116`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
   per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
   `Agent.run`). Exceeding it raises: "Refused: hit the safety limit of N
   run_command calls in one turn (a runaway loop guard)..."
@@ -211,17 +222,17 @@
   the env var name alone would silently 401 — see [[vision]]
 
 ## Runtime state lives in the user home; a legacy `.kbcode/memory.db` pins it local
-- `Config.state_dir` (`kbcode/config.py:131`) — memory db, sessions/, checkpoints/,
+- `Config.state_dir` (`kbcode/config.py:216`) — memory db, sessions/, checkpoints/,
   input history, and kbcode.log live at `~/.kbcode/projects/<slug>/` (Claude Code
   style), NOT in the project. Exception: a project carrying a legacy
   `.kbcode/memory.db` keeps the project-local `.kbcode` as its state dir —
   deleting that file silently switches the project to the (empty) home-dir
   location, "losing" its sessions/checkpoints/history. See [[config]].
 - `KBCODE_HOME` overrides `~/.kbcode` and is read on every `def global_dir`
-  call (`kbcode/config.py:220`) — set it BEFORE any Config path is touched (tests do,
+  call (`kbcode/config.py:307`) — set it BEFORE any Config path is touched (tests do,
   via the autouse fixture in `tests/conftest.py`), or state splits across two homes.
 - The project `.kbcode/` (config only) self-hides via an auto-written `*`
-  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:207`) — an existing,
+  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:294`) — an existing,
   user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
 ## `fix_pointers` anchors on the FIRST text match — verify its "fixes"
@@ -237,7 +248,7 @@
 
 ## MCP traps (see [[mcp]] for the full picture)
 - **`mcpServers` is the ONLY settings key merged per-server (deep)** across
-  home → launch → project (`kbcode/config.py:390-395`); every other key is a
+  home → launch → project (`kbcode/config.py:333-337`); every other key is a
   whole-value shallow override. Don't "unify" the merge loop — a shallow
   `mcpServers` override silently hides every home-level server the moment a
   project defines one of its own.
@@ -248,7 +259,7 @@
 - **So is the server list**: `_build_agent` only starts servers that were in
   settings.json at launch. An `mcpServers` block added mid-session does
   NOTHING until `/mcp reload`, which re-reads the merged config
-  (`load_mcp_servers()`, `kbcode/config.py:238`) and bootstraps the manager if
+  (`load_mcp_servers()`, `kbcode/config.py:325`) and bootstraps the manager if
   needed — don't tell users a settings edit alone activates a server.
 - **Requests are serialized per client** (`MCPClient._lock`). `read_only`
   servers get `parallel_safe` schemas, so pool threads CAN dispatch two calls

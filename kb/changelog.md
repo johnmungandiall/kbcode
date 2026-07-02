@@ -2,6 +2,20 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## v1.11.1 (2026-07-02)
+- **run_command can no longer hang forever.** Output now goes to temp files
+  instead of pipes (a grandchild like a relaunched `explorer.exe` inheriting
+  pipe handles used to block the EOF read indefinitely — seen live at 3142s
+  despite `timeout=180`), `stdin` is `DEVNULL`, and on timeout the whole
+  process tree is killed (`taskkill /F /T` / `os.killpg`) with partial output
+  still returned. See [[safety]], [[gotchas]].
+- **`~/.kbcode` now exists from the first run.** `main()` creates it at
+  startup, and `upsert_env_value()` creates missing parent folders — the `kb
+  model` wizard used to crash writing the API key to a not-yet-existing
+  `~/.kbcode/.env` on a fresh install.
+- README: new "🗑️ Uninstall" section (package / global data / per-project
+  leftovers, in that order).
+
 ## v1.11.0 (2026-07-02)
 - Thinking now supports `off` — use `/thinking off` or `KBCODE_THINKING=off` (also accepts `none`/`disable`). When off, no reasoning/thinking blocks are sent to Claude or OpenAI reasoning models.
 - Banner now shows current tuning settings on the right: `temp`, `thinking`, and `max_tokens` (fills the previously empty panel area).

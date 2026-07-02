@@ -31,13 +31,13 @@ Deep dive: [[mcp]].
 `_resolve()` (`kbcode/tools/core.py:128`) anchors a relative path to the
 project root but honors an absolute path exactly as given, even outside the
 project — kbcode is not sandboxed to the project folder. `_protected_reason()`
-(`kbcode/tools/file.py:88`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
-(`_PROTECTED_DIRS`, `kbcode/tools/file.py:24`), `.env`/secrets/private keys
-(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:25-26`), and
-kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:27`) — checked
+(`kbcode/tools/file.py:115`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
+(`_PROTECTED_DIRS`, `kbcode/tools/file.py:30`), `.env`/secrets/private keys
+(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:31-32`), and
+kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:33`) — checked
 against the full resolved path, not just relative to the project root — while
 allowing templates (`.env.example`, `_ENV_TEMPLATE_TAILS`,
-`kbcode/tools/file.py:28`), `.gitignore`, and user-authored `.kbcode/agents`/
+`kbcode/tools/file.py:34`), `.gitignore`, and user-authored `.kbcode/agents`/
 `modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:136`) drives
 the `-- OUTSIDE the project folder` flag on the permission prompt.
 `_display_path()` (`kbcode/tools/core.py:139`) formats a resolved path for tool

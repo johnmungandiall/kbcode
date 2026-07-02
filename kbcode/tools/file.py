@@ -4,10 +4,13 @@ edit files, list directories, search code, and run commands.
 
 from __future__ import annotations
 
+import locale
 import os
 import re
 import shutil
+import signal
 import subprocess
+import tempfile
 from pathlib import Path
 
 from ..config import DEFAULT_MAX_COMMANDS
@@ -15,6 +18,8 @@ from ..redact import redact_terminal_output_with_count, redact_with_count
 
 # Directories we never scan when searching code.
 _SKIP_DIRS = {".git", ".kbcode", "node_modules", ".venv", "venv", "__pycache__", "dist", "build"}
+_COMMAND_TIMEOUT = 180  # seconds per run_command call
+_OUTPUT_ENCODING = locale.getpreferredencoding(False)  # what text=True would have used
 _MAX_READ_CHARS = 60000
 _MIN_READ_CHARS = 2000  # never truncate a read this aggressively, even under context pressure
 
@@ -56,6 +61,25 @@ _DANGEROUS_COMMAND_PATTERNS = [
     re.compile(r"\bformat\s+[a-zA-Z]:", re.IGNORECASE),  # Windows `format C:`
     re.compile(r"\bRemove-Item\b.*-Recurse.*-Force\b.*[/\\]\s*$", re.IGNORECASE),
 ]
+
+
+def _kill_process_tree(proc: subprocess.Popen) -> None:
+    """Kill a timed-out command AND its descendants. ``proc.kill()`` alone only
+    hits the direct child (the shell), leaving grandchildren running."""
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        else:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+    except (OSError, subprocess.SubprocessError):
+        try:
+            proc.kill()
+        except OSError:
+            pass
 
 
 class FileToolsMixin:
@@ -375,7 +399,12 @@ class FileToolsMixin:
         return self._note_redactions("\n".join(hits) or "(no matches)", redacted)
 
     def _tool_run_command(self, inp: dict) -> str:
-        """Run a shell command in the project root, gated by rate limit, danger check, and permission."""
+        """Run a shell command in the project root, gated by rate limit, danger check, and permission.
+
+        Runs via Popen + temp files (not ``subprocess.run(capture_output=True)``):
+        on Windows, ``run``'s post-timeout cleanup blocks on the output pipes
+        until EOF, and a surviving grandchild that inherited the handles keeps
+        them open indefinitely — the "stuck at running… for an hour" bug."""
         command = inp["command"]
         self._run_command_count += 1
         limit = self.config.max_commands_per_turn
@@ -394,20 +423,46 @@ class FileToolsMixin:
         if not self.perm.check("run_command", f"$ {command}"):
             raise PermissionError("User denied permission to run the command.")
         self.checkpoints.ensure_checkpoint("before run_command")
-        try:
-            proc = subprocess.run(
-                command,
-                shell=True,
-                cwd=str(self.root),
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-        except subprocess.TimeoutExpired:
-            return "Command timed out after 180s."
-        out, n1 = redact_terminal_output_with_count((proc.stdout or "")[-8000:], command)
-        err, n2 = redact_terminal_output_with_count((proc.stderr or "")[-4000:], command)
-        result = f"exit code: {proc.returncode}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
+        # Output goes to temp FILES, not pipes: a grandchild that outlives the
+        # command (`taskkill && start explorer.exe`, a spawned dev server, ...)
+        # inherits pipe handles and keeps them open, so a pipe read blocks on
+        # EOF forever — even after the timeout killed the shell. A file read
+        # can't block; we just take whatever was written so far.
+        timed_out = False
+        with tempfile.TemporaryFile() as out_f, tempfile.TemporaryFile() as err_f:
+            try:
+                proc = subprocess.Popen(
+                    command,
+                    shell=True,
+                    cwd=str(self.root),
+                    stdin=subprocess.DEVNULL,  # a command waiting for input gets EOF, not a silent hang
+                    stdout=out_f,
+                    stderr=err_f,
+                    start_new_session=(os.name != "nt"),  # POSIX: own process group so the tree kill reaches everything
+                )
+            except OSError as exc:
+                return f"Failed to start command: {exc}"
+            try:
+                proc.wait(timeout=_COMMAND_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                _kill_process_tree(proc)
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass  # unkillable child; its output so far is still in the temp files
+            out_f.seek(0)
+            stdout = out_f.read().decode(_OUTPUT_ENCODING, errors="replace")
+            err_f.seek(0)
+            stderr = err_f.read().decode(_OUTPUT_ENCODING, errors="replace")
+        out, n1 = redact_terminal_output_with_count(stdout[-8000:], command)
+        err, n2 = redact_terminal_output_with_count(stderr[-4000:], command)
+        status = (
+            f"Command timed out after {_COMMAND_TIMEOUT}s; killed it and its process tree."
+            if timed_out
+            else f"exit code: {proc.returncode}"
+        )
+        result = f"{status}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
         return self._note_redactions(result, n1 + n2)
 
     def _tool_repo_map(self, inp: dict) -> str:
