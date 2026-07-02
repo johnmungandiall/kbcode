@@ -9,10 +9,14 @@ the pins so the selection actually applies (env vars otherwise beat settings).
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from .cli import _read, console
-from .config import PRESETS, Config, clear_env_key, global_dir, persist_choice, save_settings, upsert_env_value
+from .config import (
+    PRESETS,
+    Config,
+    global_dir,
+    persist_choice,
+    upsert_env_value,
+)
 
 
 def model_wizard(config: Config) -> int:

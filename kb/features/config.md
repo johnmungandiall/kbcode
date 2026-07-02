@@ -1,12 +1,12 @@
 # Config — precedence, presets, paths, project retargeting.
 
 ## Precedence
-`load_config()` (`kbcode/config.py:497`) resolves provider/model/base_url , temperature, thinking (incl. 'off'), max_tokens (model-aware auto) and the API
+`load_config()` (`kbcode/config.py:496`) resolves provider/model/base_url , temperature, thinking (incl. 'off'), max_tokens (model-aware auto) and the API
 key (via `.env`) as: **env vars > the project's `.kbcode`/.env > the launch
 folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:307`) > preset
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
 never overrides an already-set value; `settings.json` is merged the opposite
-way (low->high, `kbcode/config.py:517-525`). The launch-folder and global fallbacks are
+way (low->high, `kbcode/config.py:516-524`). The launch-folder and global fallbacks are
 what let you configure kbcode once. `python -m kbcode model` now writes the
 provider/model to both the global `~/.kbcode/settings.json` (future default)
 and the current project's `.kbcode/settings.json` (so the next `kb` here picks
@@ -43,7 +43,7 @@ stays the project-local `.kbcode` so old projects lose nothing — see [[gotchas
 `~/.kbcode` itself is guaranteed to exist from the very first run: `main()`
 mkdirs `global_dir()` right after `load_config` (`kbcode/cli.py:416`) — a
 legacy project's local `state_dir` would otherwise never create it — and
-`upsert_env_value()` (`kbcode/config.py:432`) mkdirs the target's parent, so
+`upsert_env_value()` (`kbcode/config.py:431`) mkdirs the target's parent, so
 the wizard's global-`.env` key write can't crash on a fresh install.
 
 ## Tuning knobs (int env vars, via `_int()`)
@@ -62,7 +62,7 @@ carried as `Config.max_steps` / `Config.max_commands_per_turn`
 (`kbcode/config.py:200-201`). `max_steps` caps tool round-trips per user message
 (`Agent.__init__`'s `max_steps` arg, passed from `kbcode/cli.py:165`);
 `max_commands_per_turn` caps `run_command` calls per turn (read in
-`_tool_run_command`, `kbcode/tools/file.py:401`). Hitting either pauses the turn
+`_tool_run_command`, `kbcode/tools/file.py:399`). Hitting either pauses the turn
 safely — "continue" resumes — see [[gotchas]] for why real tasks hit them.
 
 You can also set "compact_tokens" in .kbcode/settings.json (or global
@@ -82,7 +82,7 @@ See [[providers]] for how they reach the API calls.
 
 `KBCODE_LOG_LEVEL` (a *string*, not an `_int()` knob; default `INFO`) drives the
 diagnostic file log — `setup_logging(config.state_dir)` (`kbcode/logs.py`, called
-from `kbcode/cli.py:399` right after `load_config`) attaches a rotating handler
+from `kbcode/cli.py:419` right after `load_config`) attaches a rotating handler
 at `~/.kbcode/projects/<slug>/kbcode.log` (the state dir) to the `kbcode`
 logger. `DEBUG` = full traces for bug reports; `off`/`none`/`0` = write nothing.
 It's separate from `TerminalUI` on-screen output and never raises (unwritable
@@ -93,8 +93,8 @@ path → no log, run continues). Modules log via `logging.getLogger(__name__)`.
 `state_dir`, `memory_db`, `agent_md`, `settings_file`, ...) as a
 property off `project_dir` — so the project can be retargeted live. The CLI
 picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:259`) or
-`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:566`) mutates
-`config.project_dir` (`kbcode/repl.py:575`) then rebuilds `kb`, `memory`, and the
+`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:651`) mutates
+`config.project_dir` (`kbcode/repl.py:660`) then rebuilds `kb`, `memory`, and the
 agent — re-scaffolding the new folder, keeping the same provider/model/key. A
 REPL guard catches the common slip of typing the terminal-only `init`/`model`
 as a chat message and points at `/open` instead.

@@ -148,7 +148,7 @@
   available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
-- `kbcode/tools/file.py:373` — `_tool_search_code` formats each hit through
+- `kbcode/tools/file.py:371` — `_tool_search_code` formats each hit through
   `self._display_path(fp)` (`kbcode/tools/core.py:170`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
@@ -196,10 +196,10 @@
   cleanup does exactly this blocking read, so even `timeout=180` sailed past
   3000s in the field. Fixed (2026-07-02) by writing output to temp files +
   `proc.wait(timeout)` + `_kill_process_tree()` — see [[safety]] and
-  `kbcode/tools/file.py:401`.
+  `kbcode/tools/file.py:399`.
 
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:401` — `_tool_run_command` caps calls per turn at
+- `kbcode/tools/file.py:399` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
   `kbcode/config.py:116`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
   per-turn counter (reset in `ToolsCore.new_turn`, called at start of every

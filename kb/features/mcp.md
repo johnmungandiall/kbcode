@@ -37,7 +37,7 @@ skipped — never fatal (`start_all`). Normal shutdown is `Agent.close()`
 and `/open` all pass through it, so rebuilt agents don't leak old server
 subprocesses. `tools/list` runs once at startup and is cached. **Startup only
 starts what settings.json held at launch** — `/mcp reload`
-(`kbcode/repl.py:282`) re-reads the merged block via `load_mcp_servers()` and
+(`kbcode/repl.py:295`) re-reads the merged block via `load_mcp_servers()` and
 passes fresh configs to `MCPManager.reload()`, bootstrapping a manager if
 none was attached, so a server added mid-session works without restarting
 kbcode.
@@ -68,7 +68,7 @@ Full modes (`code`, `debug`) see MCP tools automatically; restricted modes
 only if the frontmatter lists explicit `mcp__server__tool` names
 (`_parse_tools` accepts explicit names, `kbcode/modes.py:98`). Default
 `tools: read` subagents never see them. `/mcp` lists servers+tools,
-`/mcp reload` reconnects (`kbcode/repl.py:281`); `/status` appends an MCP
+`/mcp reload` reconnects (`kbcode/repl.py:297`); `/status` appends an MCP
 line; activity lines fall back to a generic `MCP server:tool` describer
 (`kbcode/ui.py:244`). Tests: `tests/test_mcp.py` end-to-end against
 `tests/fake_mcp_server.py`, a real stdio subprocess.

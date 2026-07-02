@@ -5,17 +5,17 @@ Two per-turn caps stop a looping model from burning tokens forever: the agent
 loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
 `KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
 (`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
-in `_tool_run_command`, `kbcode/tools/file.py:401`). Both end the turn safely —
+in `_tool_run_command`, `kbcode/tools/file.py:399`). Both end the turn safely —
 the user says "continue" to resume. Details and history: [[gotchas]], [[config]].
 
 ## run_command hang-proofing
-`_tool_run_command` (`kbcode/tools/file.py:401`) runs via `Popen` writing to
+`_tool_run_command` (`kbcode/tools/file.py:399`) runs via `Popen` writing to
 temp FILES with `stdin=DEVNULL` — never `subprocess.run(capture_output=True)`.
 Pipes hang: a grandchild that outlives the shell (`taskkill && start
 explorer.exe`, a spawned dev server) inherits the pipe handles, so the pipe
 read blocks on EOF forever, sailing straight past the timeout (the real-world
 "running… 3142s" bug). Timeout is `_COMMAND_TIMEOUT` (180s,
-`kbcode/tools/file.py:22`); on expiry `_kill_process_tree()`
+`kbcode/tools/file.py:21`); on expiry `_kill_process_tree()`
 (`kbcode/tools/file.py:66`) kills the whole tree (`taskkill /F /T` on Windows,
 `os.killpg` + `start_new_session` on POSIX) and the tool still returns the
 partial output captured so far. Trap stub: [[gotchas]].
@@ -42,7 +42,7 @@ dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:68`, mir
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
 (`_EXCLUDES`, `kbcode/checkpoints.py:33`), same spirit as redaction. `/rollback`
-(`repl._rollback_menu`, `kbcode/repl.py:38`) opens an arrow-key picker built on
+(`repl._rollback_menu`, `kbcode/repl.py:47`) opens an arrow-key picker built on
 `prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:202`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
@@ -66,7 +66,7 @@ Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 [{"type": "command", "command": "..."}]}], "PostToolUse": [...], "Stop":
 [...]}`. `Config.hooks` (`kbcode/config.py:203`) carries it through the same
 settings merge as everything else (`load_config()`,
-`kbcode/config.py:497`) — no new file or precedence rule.
+`kbcode/config.py:496`) — no new file or precedence rule.
 
 `HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty

@@ -35,7 +35,7 @@ far from them in edit-distance for `_repair()`'s fuzzy match.
 home→launch→project (other keys do shallow whole-value override). Merged by
 `load_mcp_servers()`, called at startup and by `/mcp reload`.
 
-## `/mcp` command (`kbcode/repl.py:282`)
+## `/mcp` command (`kbcode/repl.py:295`)
 
 - `/mcp` — list connected servers and their tools
 - `/mcp reload` — re-read settings.json, reconnect (needed after adding servers mid-session)

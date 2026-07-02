@@ -26,9 +26,14 @@ from .cli import (
     ui,
 )
 from .config import (
-    PRESETS, Config, load_mcp_servers, persist_choice, persist_global_choice,
-    persist_global_tuning, load_model_cache, save_model_cache,
+    PRESETS,
+    Config,
     get_default_max_tokens,
+    load_mcp_servers,
+    load_model_cache,
+    persist_global_choice,
+    persist_global_tuning,
+    save_model_cache,
 )
 from .interrupt import interrupt_on_escape
 from .knowledge_base import KnowledgeBase

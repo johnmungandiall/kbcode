@@ -104,15 +104,15 @@ def _describe_read_file(a, g, full):
     if off or lim:
         try:
             o = int(off) if off else None
-            l = int(lim) if lim else None
+            n = int(lim) if lim else None
         except (TypeError, ValueError):
-            o = l = None
-        if o and l:
-            rng = f"{o}-{o + l - 1}"
+            o = n = None
+        if o and n:
+            rng = f"{o}-{o + n - 1}"
         elif o:
             rng = f"{o}+"
-        elif l:
-            rng = f"1-{l}"
+        elif n:
+            rng = f"1-{n}"
         else:
             rng = None
         if rng:

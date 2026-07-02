@@ -182,10 +182,8 @@ class FileToolsMixin:
             out = "\n".join(f"{i + 1}\t{line}" for i, line in enumerate(lines))
 
         # Apply char budget truncation (on the produced output)
-        truncated = False
         if len(out) > char_limit:
             out = out[:char_limit] + "\n[...file truncated...]"
-            truncated = True
 
         out, redacted = redact_with_count(out, code_file=True)
         return self._note_redactions(out, redacted)

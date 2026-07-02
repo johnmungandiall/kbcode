@@ -14,7 +14,7 @@ their tools as built-ins — see [[mcp]].
 
 ## Key entry points
 - `kbcode/cli.py:373` — `main()` entry point, parses args, dispatches to wizard/init/REPL
-- `kbcode/repl.py:213` — `repl()` the interactive chat loop
+- `kbcode/repl.py:222` — `repl()` the interactive chat loop
 - `kbcode/agent.py:72` — `Agent` class, the core tool-using loop
 - `kbcode/tools/core.py:26 — `ToolsCore`/`Tools`, all tool implementations + schemas
 

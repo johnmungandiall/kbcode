@@ -370,7 +370,6 @@ def persist_choice(config: "Config") -> None:
     the selection.
     The API key itself is never written by this helper.
     """
-    from pathlib import Path as _Path  # local alias to avoid shadowing
 
     home = global_dir()
     preset = PRESETS.get(config.provider, {})

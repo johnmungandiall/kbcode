@@ -26,14 +26,14 @@ model unchanged (see [[providers]]).
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `hooks.py` — `HooksRunner`, user-scriptable PreToolUse/PostToolUse/Stop hooks from `settings.json` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner with provider+settings on right, markdown, tool lines, menus). Banner now shows current temp / thinking / max_tokens on the right side (in the previously empty area). Tool activity now uses clean high-level summaries (e.g. "Search ... → 5 matches", relative paths) so users can follow what the agent is doing without seeing raw code in the log.
-- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:86`) + arrow-key menus (prompt_toolkit)
+- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:95`) + arrow-key menus (prompt_toolkit)
 - `logs.py` — `setup_logging(state_dir)`: quiet rotating file log at `~/.kbcode/projects/<slug>/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
 - `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
 - `redact.py` — regex secret redaction for tool output ([[safety]])
 - `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` (`kbcode/cli.py:373`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:213`)
+1. `main()` (`kbcode/cli.py:373`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:222`)
 2. User types a message → `Agent.run()` (`kbcode/agent.py:223`) → `Agent._complete()` (`kbcode/agent.py:126`) calls provider
 3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:97`) — built-ins via `_tool_<name>` methods, `mcp__*` names via the MCP fork ([[mcp]]) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls
