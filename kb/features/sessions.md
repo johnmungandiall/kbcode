@@ -24,13 +24,13 @@ attribute.
 ## Usage tally
 `Agent.usage` (`kbcode/agent.py:102`) accumulates `requests`/`input_tokens`/
 `output_tokens` from each response's usage (both providers populate it, see
-[[providers]]), written through `Agent._record_usage()` (`kbcode/agent.py:624`)
+[[providers]]), written through `Agent._record_usage()` (`kbcode/agent.py:625`)
 under `Agent._usage_lock` (a `threading.Lock()` set in `__init__`) since #4.3's
 `run_subagent` extension can now call it from multiple pool threads at once —
 see [[modes-subagents]], [[tools-and-repair]]. `Agent.insights()`
-(`kbcode/agent.py:631`) + `pricing.estimate_cost()`
+(`kbcode/agent.py:632`) + `pricing.estimate_cost()`
 (`kbcode/pricing.py:27`) back `/insights`. After every user turn `Agent._turn_summary()`
-(`kbcode/agent.py:611`) prints the `actions * tokens * elapsed` footer and records
+(`kbcode/agent.py:612`) prints the `actions * tokens * elapsed` footer and records
 usage so `/insights` reflects a session even if it never cleanly exits.
 `sessions.lifetime_stats()` (`kbcode/sessions.py:328`) rolls every saved session's
 last-known usage into an all-time total, pricing each with *its own* recorded

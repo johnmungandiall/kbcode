@@ -41,6 +41,7 @@ COMMANDS = [
     ("/status", "show provider, model, mode and context size"),
     ("/ping", "quick connectivity/auth check for the current provider"),
     ("/open <folder>", "switch to working on another project folder"),
+    ("/init", "scan this project's code and build (or refresh) the kb/ knowledge base"),
     ("/kb", "list knowledge-base notes"),
     ("/memory", "show recent long-term memory"),
     ("/memory-prune [days]", "remove duplicate memories (and, if given, anything older than [days])"),
@@ -413,7 +414,7 @@ class TerminalUI:
         desc = dict(COMMANDS)
         groups = [
             ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
-            ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
+            ("knowledge & memory", ["/init", "/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]", "/temperature <val>|none", "/thinking <level>", "/maxtokens <n>|auto"]),
         ]
@@ -468,7 +469,7 @@ class TerminalUI:
             return "a"
         return "y" if ans in ("y", "yes") else "n"
 
-    def status_line(self, provider: str, model: str, mode: str, tokens: int, limit: int = 0, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None) -> None:
+    def status_line(self, provider: str, model: str, mode: str, tokens: int, limit: int = 0, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None, kb_built: bool | None = None) -> None:
         ctx = f"~{_human_count(tokens)} tokens"
         if limit > 0:
             pct = min(100, round(tokens / limit * 100))
@@ -484,6 +485,9 @@ class TerminalUI:
         if max_tokens is not None:
             extra.append(("   max_tokens ", "dim"))
             extra.append((str(max_tokens), "bold"))
+        if kb_built is not None:
+            extra.append(("   kb ", "dim"))
+            extra.append(("built", "bold green") if kb_built else ("not built — /init", "bold yellow"))
         parts = [
             ("provider ", "dim"), (provider, "bold"),
             ("   model ", "dim"), (model, "bold"),

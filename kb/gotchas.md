@@ -9,7 +9,7 @@
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
-- `kbcode/cli.py:192-200` — `_resume_agent` restores the recorded provider/model from session meta
+- `kbcode/cli.py:193-200` — `_resume_agent` restores the recorded provider/model from session meta
 - If the recorded provider isn't configured, it falls back to the current one with a warning
 
 ## JSON serialization of SDK objects
@@ -22,7 +22,7 @@
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 
 ## Protected files
-- `kbcode/tools/file.py:119-137` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
+- `kbcode/tools/file.py:116-137` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
 - `.env.example` and `.gitignore` are explicitly allowed — see [[safety]]
 
 ## Compaction token estimate
@@ -37,25 +37,25 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:264`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:268`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:155`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:487`) calls `_active_status.stop()`
+- Fix: `stream_chunk` (`kbcode/ui.py:519`) calls `_active_status.stop()`
   (`kbcode/ui.py:303`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
-  `stream_tool_hint` (`kbcode/ui.py:512`) follows the same rules — spinner
+  `stream_tool_hint` (`kbcode/ui.py:544`) follows the same rules — spinner
   stopped first, half-printed stream line closed via `_stream_open`.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:483`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:515`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:226`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:227`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -96,7 +96,7 @@
   See [[providers]].
 
 ## Anthropic stream iterates EVENTS, not text_stream
-- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:349`) iterates
+- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:168`) iterates
   the SDK stream context itself — synthetic `"text"` events carry deltas,
   `content_block_start` events carry tool names for `on_tool` hints. Don't
   "simplify" it back to `stream_ctx.text_stream`: that silently drops the
@@ -121,10 +121,10 @@
   sandbox). See [[safety]].
 
 ## `_run_subagent`'s inline UI calls must stay quiet-flag-gated
-- `kbcode/agent.py:669` — `_run_subagent()` is used both sequentially (main
+- `kbcode/agent.py:670` — `_run_subagent()` is used both sequentially (main
   thread, normal path) and concurrently, one call per pool worker thread, from
-  `_run_subagents_parallel_batch()` (`kbcode/agent.py:445`) via
-  `_quiet_dispatch()` (`kbcode/agent.py:433`), which sets the per-thread
+  `_run_subagents_parallel_batch()` (`kbcode/agent.py:446`) via
+  `_quiet_dispatch()` (`kbcode/agent.py:434`), which sets the per-thread
   `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
   `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
   `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
@@ -132,7 +132,7 @@
   terminal when multiple subagents run in parallel. If you add a new inline
   UI call inside `_run_subagent()`, gate it on `quiet` too. See
   [[tools-and-repair]], [[modes-subagents]].
-- Related: `Agent._record_usage()` (`kbcode/agent.py:624`) is guarded by
+- Related: `Agent._record_usage()` (`kbcode/agent.py:625`) is guarded by
   `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
@@ -229,14 +229,14 @@
   deleting that file silently switches the project to the (empty) home-dir
   location, "losing" its sessions/checkpoints/history. See [[config]].
 - `KBCODE_HOME` overrides `~/.kbcode` and is read on every `def global_dir`
-  call (`kbcode/config.py:307`) — set it BEFORE any Config path is touched (tests do,
+  call (`kbcode/config.py:559`) — set it BEFORE any Config path is touched (tests do,
   via the autouse fixture in `tests/conftest.py`), or state splits across two homes.
 - The project `.kbcode/` (config only) self-hides via an auto-written `*`
   .gitignore (`_ensure_self_ignore`, `kbcode/config.py:294`) — an existing,
   user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
 ## `fix_pointers` anchors on the FIRST text match — verify its "fixes"
-- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:250`) relocates a
+- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:263`) relocates a
   drifted pointer by searching the target file for the symbol named on the
   note line — but it takes the *first* line containing that text, which can
   be a docstring/comment mention or a class header instead of the actual

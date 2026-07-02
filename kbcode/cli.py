@@ -166,6 +166,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id
     system = build_system_prompt(
         kb.read_all(), memory.list_skills(), memory.recent(), agent_md, orders,
         load_prompt_fragments(config.prompts_dir),
+        project_dir=config.project_dir,
     )
     agent = Agent(
         system,

@@ -108,9 +108,9 @@ class Agent:
         # its own inline UI output there — Rich's Live-backed spinner isn't
         # safe to have two open at once. Unset (falsy) on the main thread.
         self._quiet_subagents = threading.local()
-        # KB lifecycle hooks state: the reminder fires once per session (like
-        # claude-kb's session-scoped marker file); the drift check resets every
-        # turn (see run()).
+        # KB lifecycle hooks state: the reminder fires once per TURN (any turn
+        # that edits code gets nudged to update kb/ — reset in run()); the
+        # drift check also resets every turn (see run()).
         self._kb_reminder_done = False
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
@@ -241,6 +241,7 @@ class Agent:
         before = dict(self.usage)
         actions = 0
         promoted_recoveries = 0
+        self._kb_reminder_done = False
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
         self._stop_hook_checked = False
@@ -539,7 +540,7 @@ class Agent:
 
     def _with_kb_reminder(self, name: str, args: dict, content: str, is_error: bool) -> str:
         """PostToolUse idea (claude-kb): after a successful edit outside kb/,
-        remind the model (once per session) to keep the affected kb/ note in
+        remind the model (once per turn) to keep the affected kb/ note in
         sync — instead of relying on it to remember the auto-maintain rule."""
         if is_error or name not in _KB_WRITE_TOOLS:
             return content

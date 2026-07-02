@@ -29,7 +29,7 @@ frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:41`).
 ._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:53`) conditionally
 appends the `run_subagent` schema (`_subagent_schema`, `kbcode/tools/core.py:59`)
 only when subagents exist, roster baked into its description. `_run_subagent()`
-(`kbcode/agent.py:669`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
+(`kbcode/agent.py:670`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
 `kbcode/agent.py:27`) with the subagent's own system prompt + filtered schemas, shares
 the same `Tools` instance (file/KB side-effects land in the same project),
 blocks nested delegation, and returns only the final text. Token usage still
@@ -41,7 +41,7 @@ runs concurrently when every targeted subagent's `tools:` frontmatter stays
 within the schema-declared `parallel_safe` tool set (`read_file`, `list_dir`,
 `search_code`, `repo_map`, `kb_read`, `kb_search`, `web_search`, `fetch_url`,
 `recall`) plus the tolerated `manage_todos` (`_SUBAGENT_PARALLEL_EXTRAS`) —
-checked by `Agent._subagent_parallel_safe()` (`kbcode/agent.py:649`). The
+checked by `Agent._subagent_parallel_safe()` (`kbcode/agent.py:650`). The
 default `tools: read` (used when a subagent's frontmatter omits `tools:` —
 `load_subagents()`, `kbcode/subagents.py:79`) therefore QUALIFIES: Memory
 serializes its SQLite access behind an RLock (`kbcode/memory.py:21`), making

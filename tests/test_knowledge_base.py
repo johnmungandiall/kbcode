@@ -17,6 +17,27 @@ def test_scaffold_is_noop_if_notes_already_exist(tmp_path):
     assert kb.list_notes() == ["custom.md"]
 
 
+def test_is_scaffold_true_for_empty_or_untouched_templates(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    assert kb.is_scaffold()  # no notes yet
+    kb.scaffold()
+    assert kb.is_scaffold()  # untouched starter templates
+
+
+def test_is_scaffold_false_once_a_note_is_customized(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    kb.scaffold()
+    kb.write_note("overview", "# Overview\nA real project, indexed.")
+    assert not kb.is_scaffold()
+
+
+def test_is_scaffold_false_for_extra_non_template_note(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    kb.scaffold()
+    kb.write_note("features", "# Features\n- real content")
+    assert not kb.is_scaffold()
+
+
 def test_write_and_read_note_round_trip(tmp_path):
     kb = KnowledgeBase(tmp_path / "kb")
     kb.write_note("gotchas", "# Gotchas\n- watch out")

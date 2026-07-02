@@ -7,7 +7,7 @@ tool call written as plain text — `[read_file]\n{...}` (`_find_bracketed`,
 `kbcode/repair.py:136`), `<name>{...}</name>` (`_find_tagged`, `kbcode/repair.py:148`), or a
 bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.py:160`)
 — only for names the mode actually offers. `Agent._run_promoted()`
-(`kbcode/agent.py:506`) runs them and feeds outputs back as a plain `user` turn (no
+(`kbcode/agent.py:507`) runs them and feeds outputs back as a plain `user` turn (no
 native tool ids to replay) with a nudge to use the real format.
 
 *Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:102`) runs `_repair()`
@@ -79,14 +79,14 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:226`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:203`). Every describer
+directly; `_describe_tool()` (`kbcode/ui.py:227`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:204`). Every describer
 entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
 a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 
 ## Parallel-safe tools (#4.3)
 Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batch`,
-`kbcode/agent.py:398`); mutating tools stay sequential. Which tools are safe is
+`kbcode/agent.py:399`); mutating tools stay sequential. Which tools are safe is
 declared per-tool by a `"parallel_safe": True` key on the schema
 (`kbcode/tools/schemas.py`) — the single source of truth. `Agent.run` reads the
 set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:86`, a comprehension
@@ -99,8 +99,8 @@ the schema reaches the model API.
 **`run_subagent` conditional extension.** A run of 2+ consecutive `run_subagent`
 calls is also eligible for concurrent dispatch, but only when *every* targeted
 subagent qualifies — `Agent._is_parallel_subagent_call()`
-(`kbcode/agent.py:664`) checks `Agent._subagent_parallel_safe(name)`
-(`kbcode/agent.py:649`), which requires the subagent's own `tools:` frontmatter
+(`kbcode/agent.py:665`) checks `Agent._subagent_parallel_safe(name)`
+(`kbcode/agent.py:650`), which requires the subagent's own `tools:` frontmatter
 (a `frozenset[str]`, never `None`) to be a subset of the same
 `parallel_safe_tools` set above plus `_SUBAGENT_PARALLEL_EXTRAS`
 (`frozenset({"manage_todos"})`, `kbcode/agent.py:65`). The default `tools: read`
@@ -113,13 +113,13 @@ it — `kbcode/tools/planning.py:31`). Any write/exec tool or `tools: None`
 keeps a subagent sequential. `Agent.run`'s batching loop
 (`kbcode/agent.py:309-332`) checks this as a second, symmetric branch after the
 read-only-tool check; a qualifying run goes through
-`_run_subagents_parallel_batch()` (`kbcode/agent.py:445`), which mirrors
+`_run_subagents_parallel_batch()` (`kbcode/agent.py:446`), which mirrors
 `_run_parallel_batch`'s shape: a `ThreadPoolExecutor` (same
-`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:64`) runs `_quiet_dispatch()` (`kbcode/agent.py:433`)
+`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:64`) runs `_quiet_dispatch()` (`kbcode/agent.py:434`)
 per call, then call/result lines render sequentially afterward in the
 model's original order so `tool_results` stays aligned with tool_call ids.
 `_quiet_dispatch` sets a thread-local flag (`Agent._quiet_subagents`, a
-`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:669`) reads to
+`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:670`) reads to
 suppress its own inline `ui.notice`/`ui.tool_call`/`ui.tool_result`/
 `ui.tool_running()` calls — Rich's Live-backed spinner isn't safe to have two
 open at once. `_quiet_dispatch` still calls through `_dispatch_tool()`, the
@@ -127,13 +127,17 @@ same entry point the sequential path uses, so PreToolUse/PostToolUse hooks
 fire exactly as before (see [[safety]]). Anything else — a single
 `run_subagent` call, mixed eligibility in a run, or a subagent with
 `tools: None` or any write/exec tool — stays fully sequential through the
-normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:624`)
+normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:625`)
 is guarded by `Agent._usage_lock` (a `threading.Lock()` set in `__init__`)
 since it can now be called from multiple subagent pool threads at once — see
 [[modes-subagents]].
 
-## Date-awareness for `web_search`
-`build_system_prompt()` (`kbcode/prompts.py:42`) stamps a `## Current date &
+## Date- & folder-awareness
+`build_system_prompt()` (`kbcode/prompts.py:42`) takes a `project_dir:` kwarg
+(passed by `cli._build_agent`) and stamps a `## Project folder` section naming
+the absolute path and folder name — without it the model can't tell which
+project it is in (a live MiMo session answered generically for that reason).
+It also stamps a `## Current date &
 time` section with `datetime.now()` (injectable via a `now:` kwarg for tests)
 and tells the model its training data can be stale — don't guess a
 training-cutoff-era date, and use `web_search` for anything time-sensitive

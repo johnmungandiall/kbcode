@@ -34,6 +34,8 @@
   at the repo root (the package isn't installed there)
 
 ## Chat commands (type in chat)
+- `/init` — scan the project's code and build/refresh the kb/ knowledge base
+  (a fresh-templates KB also prints a startup hint pointing here)
 - `/mode code|architect|ask|debug` — switch personality
 - `/provider <name>` — switch model provider
 - `/model <id>` — switch model

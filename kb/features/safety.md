@@ -55,9 +55,9 @@ maintenance; deleting the `checkpoints/` folder is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:406`), which renders a context panel then
+`ui.permission(tool, detail)` (`kbcode/ui.py:435`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:432`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:461`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
 (`kbcode/permissions.py:26`) for headless use.
 
@@ -102,10 +102,10 @@ then `self.tools.execute()`, then `PostToolUse` (appends
 that used to call `self.tools.execute()` directly now goes through
 `_dispatch_tool()` instead — the sequential path in `Agent.run()`
 (`kbcode/agent.py:343`), the parallel-batch `ThreadPoolExecutor.submit` in
-`_run_parallel_batch()` (`kbcode/agent.py:398`), the plain-text-recovered
-path in `_run_promoted()` (`kbcode/agent.py:506`), two sites inside
+`_run_parallel_batch()` (`kbcode/agent.py:399`), the plain-text-recovered
+path in `_run_promoted()` (`kbcode/agent.py:507`), two sites inside
 `_run_subagent()` (`kbcode/agent.py:682` and `:719`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:433`), used
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:434`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
 `Agent._stop_hook_feedback()` (`kbcode/agent.py:561`) runs the `Stop` event

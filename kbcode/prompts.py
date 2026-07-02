@@ -47,8 +47,22 @@ def build_system_prompt(
     standing_orders: str = "",
     extra_prompts: str = "",
     now: datetime | None = None,
+    project_dir: Path | None = None,
 ) -> str:
     parts = [BASE_SYSTEM]
+
+    # Ground the model in WHERE it is working — without this it cannot name the
+    # project or tell "this folder" apart from any other (a live MiMo session
+    # answered generically because it had no idea it was inside a real project).
+    if project_dir is not None:
+        parts.append(
+            "## Project folder\n"
+            f"You are working inside: {project_dir}\n"
+            f"The project is named '{project_dir.name}' (the folder name). Relative "
+            "paths resolve against this folder. When the user says 'this project' "
+            "or 'this folder', they mean THIS folder's contents — inspect its real "
+            "files (repo_map / list) before making claims about it."
+        )
 
     # Ground the model in the real date so it doesn't guess a stale one (e.g.
     # its training-cutoff year) when reasoning about "latest"/"current" or

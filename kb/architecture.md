@@ -33,7 +33,7 @@ model unchanged (see [[providers]]).
 - `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` (`kbcode/cli.py:373`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:222`)
+1. `main()` (`kbcode/cli.py:374`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:222`)
 2. User types a message → `Agent.run()` (`kbcode/agent.py:228`) → `Agent._complete()` (`kbcode/agent.py:131`) calls provider
 3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:202`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:102`) — built-ins via `_tool_<name>` methods, `mcp__*` names via the MCP fork ([[mcp]]) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls

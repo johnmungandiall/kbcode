@@ -221,6 +221,19 @@ class KnowledgeBase:
         for name, body in _TEMPLATES.items():
             self.write_note(name, body)
 
+    def is_scaffold(self) -> bool:
+        """True while the KB is unbuilt — no notes yet, or every note is still
+        an untouched starter template. One customized or extra note -> False.
+        Drives the first-run "/init to build the knowledge base" hint."""
+        notes = self.list_notes()
+        if not notes:
+            return True
+        for filename in notes:
+            template = _TEMPLATES.get(filename[:-3])  # "overview.md" -> "overview"
+            if template is None or self.read_note(filename) != template:
+                return False
+        return True
+
     def check_pointers(self, project_dir: Path) -> list[str]:
         """Verify every `path:line` reference in the notes still resolves.
 

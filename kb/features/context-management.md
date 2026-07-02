@@ -32,31 +32,39 @@ passes** and returns `(messages, None)` only if none reduced anything:
 
 All passes preserve the alternation invariant (pass 0 trivially — nothing is
 added, removed, or reordered). Auto-triggered in
-`Agent._maybe_compact()` (`kbcode/agent.py:839`) and mid-turn by
-`_compact_mid_turn_or_stop()` (`kbcode/agent.py:484`); manual via `/compact` ->
-`Agent.compact_now()` (`kbcode/agent.py:859`).
+`Agent._maybe_compact()` (`kbcode/agent.py:840`) and mid-turn by
+`_compact_mid_turn_or_stop()` (`kbcode/agent.py:485`); manual via `/compact` ->
+`Agent.compact_now()` (`kbcode/agent.py:860`).
 
 ## Knowledge base (product feature)
 `KnowledgeBase` (`kbcode/knowledge_base.py:160`) holds `kb/` notes loaded into the
 system prompt (`kbcode/prompts.py:42` `build_system_prompt`) so the agent doesn't
 re-scan files; `read_all()` (`kbcode/knowledge_base.py:176`). `check_pointers()`
-(`kbcode/knowledge_base.py:224`, `/kb-check`) resolves every `path:line` reference and
+(`kbcode/knowledge_base.py:237`, `/kb-check`) resolves every `path:line` reference and
 flags missing files / stale lines; placeholder examples are skipped.
-`fix_pointers()` (`kbcode/knowledge_base.py:250`, `/kb-check --fix`) relocates a
+`fix_pointers()` (`kbcode/knowledge_base.py:263`, `/kb-check --fix`) relocates a
 drifted pointer by the code symbol named on the same note line (`_anchors`,
-`kbcode/knowledge_base.py:298`; `_relocate`, `kbcode/knowledge_base.py:310` — prefer a unique
+`kbcode/knowledge_base.py:311`; `_relocate`, `kbcode/knowledge_base.py:323` — prefer a unique
 definition line, then a unique call, then a unique mention).
 Scaffolded starter templates (`_TEMPLATES` + `AGENT_MD_TEMPLATE`) open with an
 explicit "unbuilt KB ≠ empty project" warning so a model seeing fresh templates
 checks the real files (repo_map / list) instead of declaring the project empty.
+Onboarding: `is_scaffold()` (`kbcode/knowledge_base.py:224`) is True while every
+note is still an untouched template; the REPL then prints a "type /init" hint at
+startup and after `/open` (`_kb_hint_if_unbuilt`, `kbcode/repl.py:219`), and the
+`/init` chat command runs the canned `_BUILD_KB_PROMPT` (`kbcode/repl.py:206`)
+that scans the code and fills the notes in. `is_scaffold()` doubles as the
+built/not-built flag surfaced in `/status` (`kb built` / `not built — /init`,
+`ui.status_line`'s `kb_built` kwarg) and at the top of `/kb`.
 
 ## KB lifecycle hooks (agent.py — baked-in default, no `.claude/settings.json`
 equivalent inside kbcode itself)
-`Agent._with_kb_reminder()` (`kbcode/agent.py:540`) is the PostToolUse equivalent —
+`Agent._with_kb_reminder()` (`kbcode/agent.py:541`) is the PostToolUse equivalent —
 after a successful `write_file`/`edit_file` outside `kb/`/`.kbcode/`/`.git/`/
-`node_modules/` and the top-level docs, it appends a once-per-session reminder
-(`_kb_reminder_done`, set `kbcode/agent.py:114`) nudging the model to update the
-matching note. `Agent._kb_drift_feedback()` (`kbcode/agent.py:567`) is the Stop
+`node_modules/` and the top-level docs, it appends a once-per-TURN reminder
+(`_kb_reminder_done`, reset in `run()` like the drift flags, `kbcode/agent.py:114`)
+nudging the model to update the matching note — so every code-editing turn gets
+the nudge, not just the first one of the session. `Agent._kb_drift_feedback()` (`kbcode/agent.py:568`) is the Stop
 equivalent — when the model tries to end a turn that touched files
 (`_kb_touched_this_run`, `kbcode/agent.py:115`), it runs `check_pointers()` and, on
 drift, feeds the broken pointers back as one more `user` turn instead of

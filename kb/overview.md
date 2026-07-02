@@ -13,7 +13,7 @@ Can also connect to external **MCP servers** (stdio, tools only) and expose
 their tools as built-ins — see [[mcp]].
 
 ## Key entry points
-- `kbcode/cli.py:373` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/cli.py:374` — `main()` entry point, parses args, dispatches to wizard/init/REPL
 - `kbcode/repl.py:222` — `repl()` the interactive chat loop
 - `kbcode/agent.py:77` — `Agent` class, the core tool-using loop
 - `kbcode/tools/core.py:26 — `ToolsCore`/`Tools`, all tool implementations + schemas

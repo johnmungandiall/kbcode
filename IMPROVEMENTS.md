@@ -58,7 +58,7 @@ The repo has no test suite. Every other improvement is riskier without one.
 
 | # | Suggestion | Files | Effort |
 |---|-----------|-------|--------|
-| 5.1 | **Auto-scaffold on first use** — when a user starts kbcode on a project with no `kb/`, prompt "Want me to build the knowledge base?" instead of just creating empty templates. | `cli.py`, `knowledge_base.py` | Low |
+| 5.1 | ✅ **Auto-scaffold on first use** — done as `/init` + a startup hint: while the kb/ notes are untouched templates (`KnowledgeBase.is_scaffold()`), the REPL prints "type /init to build the knowledge base"; `/init` scans the code and fills the notes. | `repl.py`, `ui.py`, `knowledge_base.py` | Low |
 | 5.2 | **Note diffing** — before `kb_write()` overwrites a note, show a diff and ask for approval (like file edits). Prevents accidental knowledge loss. | `tools.py`, `knowledge_base.py` | Low |
 | 5.3 | **Pointer check on write** — `check_pointers()` runs at end-of-turn, but a `kb_write` that introduces a bad pointer could be caught immediately. | `knowledge_base.py`, `tools.py` | Low |
 | 5.4 | **Search within KB** — add a `kb_search` tool so the model can find which note covers a topic without reading all notes (important as the KB grows). | `knowledge_base.py`, `tools.py` | Low |

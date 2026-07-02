@@ -2,6 +2,21 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased
+- **First-run onboarding + `/init`:** new `/init` chat command scans the project
+  (canned `_BUILD_KB_PROMPT`) and fills the kb/ notes with real facts; while the
+  KB is still untouched templates (`KnowledgeBase.is_scaffold()`), the REPL prints
+  a "type /init" hint at startup and after `/open`. Bare `init` in chat now points
+  at `/init`. Closes IMPROVEMENTS.md 5.1. See [[context-management]].
+- **KB built/not-built flag:** `is_scaffold()` is surfaced as `kb built` /
+  `kb not built — /init` in `/status` and at the top of `/kb`.
+- **Folder-awareness:** the system prompt now stamps a `## Project folder`
+  section (absolute path + folder name, `build_system_prompt(project_dir=...)`)
+  so the model always knows which project it is inside. See [[tools-and-repair]].
+- **KB reminder is per-turn:** the "update the affected kb/ note" nudge after a
+  code edit now fires once per TURN (was once per session), so long sessions
+  keep the KB in sync. See [[context-management]].
+
 ## v1.12.1 (2026-07-02)
 - Scaffold templates (`_TEMPLATES["overview"]` + `AGENT_MD_TEMPLATE`) now warn
   that an unbuilt KB does NOT mean an empty project — check real files

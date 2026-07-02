@@ -201,6 +201,33 @@ def _split_path_and_rest(text: str) -> tuple[str, str]:
     return parts[0], parts[1] if len(parts) > 1 else ""
 
 
+# The /init turn — sent to the agent verbatim. Kept as one canned prompt so the
+# "build the knowledge base" onboarding works the same for every model.
+_BUILD_KB_PROMPT = (
+    "Build (or refresh) this project's knowledge base. Start with repo_map on the "
+    "project root to see the real structure, read the key entry-point files, then "
+    "rewrite the kb/ notes with kb_write() using real facts and `path:line` pointers "
+    "(never the template placeholders): overview (what the project is, how to run it, "
+    "entry points, a `last indexed: <today's date>` line), architecture (components + "
+    "data/control flow), conventions, gotchas, cheatsheet, and glossary. Keep each "
+    "note under ~50 lines. If the notes are already filled in, only update what is "
+    "stale instead of rewriting everything. Finish with a one-paragraph summary of "
+    "what this project does."
+)
+
+
+def _kb_hint_if_unbuilt(kb: KnowledgeBase) -> None:
+    """First-run onboarding: a fresh kb/ full of starter templates means the
+    agent knows nothing about this project yet — tell the user the one command
+    that fixes that, instead of letting them guess."""
+    if kb.is_scaffold():
+        ui.notice(
+            "📘 new project? the kb/ notes are still starter templates — type /init to scan "
+            "the code and build the knowledge base, or just describe a task.",
+            style="yellow",
+        )
+
+
 def _read_multiline(read_line) -> str:
     """A bare ``\"\"\"`` line starts a multi-line block: keep reading (via
     ``read_line``) until a closing ``\"\"\"`` and return the lines joined with
@@ -237,6 +264,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
     cmd_input = make_input(COMMANDS, arg_options, history_file=config.history_file)  # None if no autocomplete available
     if cmd_input:
         ui.notice('type / for commands · Alt+V attaches an image · """ on its own line starts/ends a multi-line message')
+    _kb_hint_if_unbuilt(kb)
 
     pending_images: list[dict] = []  # vision attachments waiting for the next turn
     pending_notes: list[str] = []  # e.g. /video descriptions, prepended to the next turn
@@ -285,6 +313,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 temperature=config.temperature,
                 thinking=config.thinking,
                 max_tokens=config.max_tokens,
+                kb_built=not kb.is_scaffold(),
             )
             mgr = getattr(agent.tools, "mcp", None)
             if mgr is not None and mgr.clients:
@@ -439,6 +468,10 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             continue
         if user == "/kb":
             notes = kb.list_notes()
+            if kb.is_scaffold():
+                ui.notice("KB: not built yet (starter templates) — run /init to build it.", style="yellow")
+            else:
+                ui.notice("KB: built", style="green")
             ui.print("\n".join(f"- kb/{n}" for n in notes) or "(knowledge base is empty)")
             continue
         if user == "/memory":
@@ -473,6 +506,9 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             continue
         if user in ("/agents", "/subagents"):
             ui.agents(agent.subagents)
+            continue
+        if user == "/init":
+            agent.run(_BUILD_KB_PROMPT)
             continue
         if user.split() and user.split()[0] == "/learn":
             topic = user.split(maxsplit=1)[1].strip() if len(user.split()) > 1 else ""
@@ -667,6 +703,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             ui.notice(f"now working on {config.project_dir}", style="green")
             ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
               temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens)
+            _kb_hint_if_unbuilt(kb)
             continue
 
         # Guard a common mix-up: `init`/`model` are TERMINAL commands. Typed in
@@ -680,8 +717,10 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 f"'{first}' is a terminal command, not a chat message — in chat, commands start with /.",
                 style="yellow",
             )
-            if first == "init":
-                target = rest.strip().strip('"') or "<folder>"
+            if first == "init" and not rest.strip():
+                ui.print("Did you mean  [bold]/init[/bold]  — scan this project and build the kb/ knowledge base?")
+            elif first == "init":
+                target = rest.strip().strip('"')
                 ui.print(
                     f'To switch to it right now, type:  [bold]/open "{target}"[/bold]\n'
                     "(that also sets it up). Or from the terminal:  "

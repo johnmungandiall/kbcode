@@ -61,3 +61,17 @@ def test_build_system_prompt_includes_current_date_and_web_search_rule():
 def test_build_system_prompt_defaults_now_when_omitted():
     system = build_system_prompt(kb_text="", skills=[], memories=[])
     assert "## Current date & time" in system
+
+
+def test_build_system_prompt_names_the_project_folder(tmp_path):
+    project = tmp_path / "GrokProxy"
+    project.mkdir()
+    system = build_system_prompt(kb_text="", skills=[], memories=[], project_dir=project)
+    assert "## Project folder" in system
+    assert str(project) in system
+    assert "'GrokProxy'" in system
+
+
+def test_build_system_prompt_omits_folder_section_when_not_given():
+    system = build_system_prompt(kb_text="", skills=[], memories=[])
+    assert "## Project folder" not in system
