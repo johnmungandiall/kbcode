@@ -3,6 +3,8 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+
+## v1.17.0 (2026-07-02) — flexible edit matching + post-edit lint + output-budget writes
 - **Flexible search/replace with multiple strategies** (the Aider idea #3):
   `edit_file`/`edit_files` no longer fail when the model gets indentation
   slightly wrong or adds extra blank lines. New
