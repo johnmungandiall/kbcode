@@ -31,6 +31,7 @@ from dataclasses import asdict, is_dataclass
 from pathlib import Path
 
 from .pricing import estimate_cost
+from .redact import redact_with_count
 
 _ID_RE_LEN = 6  # hex chars of randomness appended to the timestamp
 
@@ -124,6 +125,12 @@ class SessionRecorder:
             return
         try:
             line = json.dumps(_jsonable(record), ensure_ascii=False, default=str)
+            # Tool OUTPUT is redacted at the tool layer, but the model's own
+            # reply (and the raw SDK blocks kept for replay) can still echo a
+            # secret it read or inferred. Mask the serialized line as a last
+            # gate before disk — masks are plain alphanumeric/`***` substrings,
+            # so the JSON stays valid.
+            line, _ = redact_with_count(line)
             with self.path.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
         except OSError:

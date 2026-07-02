@@ -10,6 +10,16 @@ def _make_session(sessions_dir, project_dir, provider="anthropic", model="claude
     return SessionRecorder(sessions_dir, project_dir, provider, model, "code")
 
 
+def test_session_file_masks_secrets_in_any_field(tmp_path):
+    secret = "sk-" + "a1b2c3d4e5" * 3
+    sessions_dir = tmp_path / "sessions"
+    rec = _make_session(sessions_dir, tmp_path)
+    rec.append({"role": "assistant", "text": f"your key is {secret}", "tool_calls": [], "raw": {"echo": secret}})
+    on_disk = rec.path.read_text(encoding="utf-8")
+    assert secret not in on_disk  # masked in text AND in the raw replay blocks
+    assert "sk-a1b" in on_disk  # mask keeps a debuggable 6-char prefix
+
+
 # --- search_sessions ---------------------------------------------------
 
 

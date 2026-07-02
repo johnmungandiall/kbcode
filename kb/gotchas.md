@@ -5,15 +5,15 @@
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls
-- `kbcode/agent.py:131-169` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
+- `kbcode/agent.py:132-169` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
-- `kbcode/cli.py:193-200` — `_resume_agent` restores the recorded provider/model from session meta
+- `kbcode/cli.py:200-200` — `_resume_agent` restores the recorded provider/model from session meta
 - If the recorded provider isn't configured, it falls back to the current one with a warning
 
 ## JSON serialization of SDK objects
-- `kbcode/sessions.py:58-86` — `_jsonable()` handles pydantic models, dataclasses, and plain types
+- `kbcode/sessions.py:59-86` — `_jsonable()` handles pydantic models, dataclasses, and plain types
 - New Anthropic SDK content-block shapes need `model_dump(mode="json")` fallback
 
 ## Tool-call repair is two layers
@@ -37,25 +37,25 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:268`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:269`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:155`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:519`) calls `_active_status.stop()`
-  (`kbcode/ui.py:303`) on the first token, so from then on only the worker thread
+- Fix: `stream_chunk` (`kbcode/ui.py:523`) calls `_active_status.stop()`
+  (`kbcode/ui.py:313`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
-  `stream_tool_hint` (`kbcode/ui.py:544`) follows the same rules — spinner
+  `stream_tool_hint` (`kbcode/ui.py:548`) follows the same rules — spinner
   stopped first, half-printed stream line closed via `_stream_open`.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:515`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:519`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:227`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:228`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -96,7 +96,7 @@
   See [[providers]].
 
 ## Anthropic stream iterates EVENTS, not text_stream
-- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:168`) iterates
+- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:361`) iterates
   the SDK stream context itself — synthetic `"text"` events carry deltas,
   `content_block_start` events carry tool names for `on_tool` hints. Don't
   "simplify" it back to `stream_ctx.text_stream`: that silently drops the
@@ -121,10 +121,10 @@
   sandbox). See [[safety]].
 
 ## `_run_subagent`'s inline UI calls must stay quiet-flag-gated
-- `kbcode/agent.py:670` — `_run_subagent()` is used both sequentially (main
+- `kbcode/agent.py:693` — `_run_subagent()` is used both sequentially (main
   thread, normal path) and concurrently, one call per pool worker thread, from
-  `_run_subagents_parallel_batch()` (`kbcode/agent.py:446`) via
-  `_quiet_dispatch()` (`kbcode/agent.py:434`), which sets the per-thread
+  `_run_subagents_parallel_batch()` (`kbcode/agent.py:469`) via
+  `_quiet_dispatch()` (`kbcode/agent.py:457`), which sets the per-thread
   `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
   `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
   `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
@@ -132,7 +132,7 @@
   terminal when multiple subagents run in parallel. If you add a new inline
   UI call inside `_run_subagent()`, gate it on `quiet` too. See
   [[tools-and-repair]], [[modes-subagents]].
-- Related: `Agent._record_usage()` (`kbcode/agent.py:625`) is guarded by
+- Related: `Agent._record_usage()` (`kbcode/agent.py:648`) is guarded by
   `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
@@ -167,8 +167,10 @@
   pass of `compact()`. The first pass (`_compact_exchanges`) summarizes whole
   *middle* exchanges and always protects the most recent one — but a turn that
   runs many tool round-trips and hits the step limit (`Agent.max_steps`,
-  default `_MAX_STEPS = 50`, `kbcode/agent.py:26`; `KBCODE_MAX_STEPS` tunes
-  it) is a **single** exchange (one user turn + ~50
+  default `_MAX_STEPS = 50`, `kbcode/agent.py:27`; `KBCODE_MAX_STEPS` tunes
+  it, and `0` disables the cap entirely — unlimited, the loop switches to
+  `itertools.count()`; the emergency context stop still fires, see [[safety]],
+  [[config]]) is a **single** exchange (one user turn + ~50
   assistant/tool_results pairs). Pass 1 can't touch it, so `/compact`
   (`Agent.compact_now`) and mid-turn auto-compaction did nothing after a
   step-limit stop — the classic "`/compact` is broken" report.
@@ -180,7 +182,7 @@
   `test_runaway_compaction_preserves_alternation_and_tool_pairing`).
 - Note the step limit itself is a flat cap: `actions` can read *above*
   `max_steps` in the "hit the step limit" notice because a parallel batch adds
-  `len(batch)` per loop iteration (`kbcode/agent.py:317`), and the turn-summary
+  `len(batch)` per loop iteration (`kbcode/agent.py:345`), and the turn-summary
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
 
@@ -201,15 +203,18 @@
 ## run_command per-turn limit (runaway guard)
 - `kbcode/tools/file.py:400` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
-  `kbcode/config.py:116`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
-  per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
-  `Agent.run`). Exceeding it raises: "Refused: hit the safety limit of N
-  run_command calls in one turn (a runaway loop guard)..."
+  `kbcode/config.py:117`; `KBCODE_MAX_COMMANDS` tunes it; `0` = unlimited —
+  the check is gated on `limit > 0`, so a zero cap disables the guard). It
+  increments a per-turn counter (reset in `ToolsCore.new_turn`, called at
+  start of every `Agent.run`). Exceeding a positive cap raises: "Refused: hit
+  the safety limit of N run_command calls in one turn (a runaway loop
+  guard)..."
 - Intended to stop infinite `ls` / `echo` / pointless loops. Real tasks (e.g.
   "check for compilation errors", analyze + build + targeted checks + logs +
   retries) legitimately need more than a tiny budget inside one user message.
   When hit, the model is told to wrap up the turn; user can continue in next
-  message — or raise `KBCODE_MAX_COMMANDS` in `.env` so long tasks pause less
+  message — or raise `KBCODE_MAX_COMMANDS` in `.env` (or set it to 0 for
+  unlimited) so long tasks pause less
   often. The count is shared with any `run_subagent` (they use the same
   `Tools` instance). Related to (and can combine with) the `max_steps` cap.
   See [[safety]], [[tools-and-repair]], [[config]].
@@ -222,29 +227,29 @@
   the env var name alone would silently 401 — see [[vision]]
 
 ## Runtime state lives in the user home; a legacy `.kbcode/memory.db` pins it local
-- `Config.state_dir` (`kbcode/config.py:216`) — memory db, sessions/, checkpoints/,
+- `Config.state_dir` (`kbcode/config.py:217`) — memory db, sessions/, checkpoints/,
   input history, and kbcode.log live at `~/.kbcode/projects/<slug>/` (Claude Code
   style), NOT in the project. Exception: a project carrying a legacy
   `.kbcode/memory.db` keeps the project-local `.kbcode` as its state dir —
   deleting that file silently switches the project to the (empty) home-dir
   location, "losing" its sessions/checkpoints/history. See [[config]].
 - `KBCODE_HOME` overrides `~/.kbcode` and is read on every `def global_dir`
-  call (`kbcode/config.py:559`) — set it BEFORE any Config path is touched (tests do,
+  call (`kbcode/config.py:308` `global_dir`) — set it BEFORE any Config path is touched (tests do,
   via the autouse fixture in `tests/conftest.py`), or state splits across two homes.
 - The project `.kbcode/` (config only) self-hides via an auto-written `*`
-  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:294`) — an existing,
+  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:295`) — an existing,
   user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
-## `fix_pointers` anchors on the FIRST text match — verify its "fixes"
-- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:263`) relocates a
-  drifted pointer by searching the target file for the symbol named on the
-  note line — but it takes the *first* line containing that text, which can
-  be a docstring/comment mention or a class header instead of the actual
-  `def`. Repeat offenders: `promote` → repair.py's module docstring,
-  `AnthropicProvider.complete` → the class line, `global_dir` → a call site.
-  After running it (or `/kb-check --fix`), eyeball every rewrite; phrasing a
-  note line as `` `def promote`, `path:line` `` steers the anchor to the
-  definition.
+## `fix_pointers` relocations are heuristic — still eyeball its "fixes"
+- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:324`) relocates a
+  drifted pointer by the symbol named on the note line. Hardened after real
+  mis-fixes (`promote` → repair.py's docstring, `_record_usage` → `class
+  Agent:`): matching is now case-insensitive, `_anchors` puts snake_case /
+  called tokens before bare capitalized words, and `_relocate` tries every
+  anchor at the definition stage before calls, then bare mentions. It's still
+  a text heuristic — a symbol mentioned once in a comment but defined nowhere
+  can attract a pointer, so after `/kb-check --fix`, skim the rewrites.
+  Phrasing a note line as `` `def promote`, `path:line` `` steers the anchor.
 
 ## MCP traps (see [[mcp]] for the full picture)
 - **`mcpServers` is the ONLY settings key merged per-server (deep)** across
@@ -259,7 +264,7 @@
 - **So is the server list**: `_build_agent` only starts servers that were in
   settings.json at launch. An `mcpServers` block added mid-session does
   NOTHING until `/mcp reload`, which re-reads the merged config
-  (`load_mcp_servers()`, `kbcode/config.py:325`) and bootstraps the manager if
+  (`load_mcp_servers()`, `kbcode/config.py:326`) and bootstraps the manager if
   needed — don't tell users a settings edit alone activates a server.
 - **Requests are serialized per client** (`MCPClient._lock`). `read_only`
   servers get `parallel_safe` schemas, so pool threads CAN dispatch two calls

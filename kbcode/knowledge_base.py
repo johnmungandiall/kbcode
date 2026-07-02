@@ -16,6 +16,7 @@ The note set and rules are modelled on claude-kb:
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from pathlib import Path
 
 AGENT_MD_TEMPLATE = """# AGENT.md
@@ -150,6 +151,20 @@ Tag each item [confirmed] (you told me) or [inferred] (my guess).
 _POINTER_RE = re.compile(r"([A-Za-z0-9_./\\-]+\.[A-Za-z0-9]+)[:#]L?(\d+)")
 # Placeholder examples in the templates use these — don't flag them as real refs.
 _PLACEHOLDER_PARTS = ("path/to", "path.ext", "<line>", "name(")
+# `0.0.0.0:8000` / `127.0.0.1:8080` are IP:port, not file:line — a "path" made
+# only of digits and dots is never a real file. Without this guard the drift
+# check cried wolf on a note that documented server addresses, and the model
+# burned a huge turn "fixing" notes that were fine.
+_IP_LIKE_RE = re.compile(r"[\d.]+")
+
+
+def _is_pointer_candidate(raw_path: str) -> bool:
+    """True if a _POINTER_RE match plausibly names a repo file."""
+    if any(part in raw_path for part in _PLACEHOLDER_PARTS):
+        return False
+    if "://" in raw_path or raw_path.startswith("//"):  # a URL (or its host part after `http:`), not a repo path
+        return False
+    return not _IP_LIKE_RE.fullmatch(raw_path.lstrip("/"))
 
 # For auto-fix: pull code-symbol-looking tokens off the note line, and spot
 # definition lines in the target file (the durable anchor a line number drifts from).
@@ -172,6 +187,20 @@ class KnowledgeBase:
 
     def list_notes(self) -> list[str]:
         return sorted(p.name for p in self.kb_dir.glob("*.md"))
+
+    def _all_note_files(self) -> list:
+        """Every note under kb/, INCLUDING subfolders (e.g. kb/features/), but
+        skipping dot-folders like kb/.history — used by the pointer check/fix
+        so notes organized into subfolders aren't silently skipped."""
+        return sorted(
+            p
+            for p in self.kb_dir.rglob("*.md")
+            if not any(part.startswith(".") for part in p.relative_to(self.kb_dir).parts)
+        )
+
+    def _note_label(self, p) -> str:
+        """`kb/overview.md` or `kb/features/mcp.md` — the display name for a note path."""
+        return f"kb/{p.relative_to(self.kb_dir).as_posix()}"
 
     def read_all(self, max_chars: int = 20000) -> str:
         if self._joined_cache is None:
@@ -210,9 +239,38 @@ class KnowledgeBase:
 
     def write_note(self, name: str, content: str) -> str:
         p = self.kb_dir / self._safe(name)
+        # Note versioning: an overwrite that CHANGES content first snapshots the
+        # old version into kb/.history/ so a bad kb_write can be undone with
+        # /kb-undo (files have /rollback; notes get this). Dot-folder, so
+        # list_notes()/read_all()/the pointer check never see the backups.
+        if p.exists():
+            old = p.read_text(encoding="utf-8", errors="replace")
+            if old != content:
+                hist = self.kb_dir / ".history"
+                hist.mkdir(exist_ok=True)
+                stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")  # %f: two writes in the same second must not share a backup name
+                (hist / f"{p.stem}.{stamp}.md").write_text(old, encoding="utf-8")
         p.write_text(content, encoding="utf-8")
         self._joined_cache = None
         return f"wrote kb/{p.name}"
+
+    def restore_note(self, name: str) -> str | None:
+        """Undo the last content-changing write to a note: restore its most
+        recent kb/.history/ snapshot (consuming it). Returns the restored
+        note's display name, or None if there is no backup to restore."""
+        p = self.kb_dir / self._safe(name)
+        hist = self.kb_dir / ".history"
+        backups = sorted(hist.glob(f"{p.stem}.*.md")) if hist.is_dir() else []
+        if not backups:
+            return None
+        latest = backups[-1]
+        # Write directly (not via write_note) so restoring doesn't snapshot the
+        # bad content back into history — a second /kb-undo then steps one
+        # version further back instead of toggling.
+        p.write_text(latest.read_text(encoding="utf-8", errors="replace"), encoding="utf-8")
+        self._joined_cache = None
+        latest.unlink()
+        return f"kb/{p.name}"
 
     def scaffold(self) -> None:
         """Create the starter note set if the KB is empty."""
@@ -243,15 +301,18 @@ class KnowledgeBase:
         stay true. Placeholder examples in the templates are skipped.
         """
         problems: list[str] = []
-        for note in self.kb_dir.glob("*.md"):
+        for note in self._all_note_files():
             text = note.read_text(encoding="utf-8", errors="replace")
-            for raw_path, raw_line in _POINTER_RE.findall(text):
-                if any(part in raw_path for part in _PLACEHOLDER_PARTS):
+            for m in _POINTER_RE.finditer(text):
+                raw_path, raw_line = m.group(1), m.group(2)
+                # `http://host.name:8080/...` — a host:port inside a URL is not
+                # a file:line ref, even when the host part isn't numeric.
+                if "://" in text[max(0, m.start() - 8) : m.start()]:
                     continue
-                if "://" in raw_path:  # a URL, not a repo path
+                if not _is_pointer_candidate(raw_path):
                     continue
                 target = (project_dir / raw_path.replace("\\", "/")).resolve()
-                where = f"kb/{note.name}: {raw_path}:{raw_line}"
+                where = f"{self._note_label(note)}: {raw_path}:{raw_line}"
                 if not target.is_file():
                     problems.append(f"{where} -> file not found")
                     continue
@@ -272,15 +333,17 @@ class KnowledgeBase:
         fixed: list[str] = []
         unresolved: list[str] = []
 
-        for note in self.kb_dir.glob("*.md"):
+        for note in self._all_note_files():
             text = note.read_text(encoding="utf-8", errors="replace")
 
             def repl(m: re.Match, _note=note) -> str:
                 raw_path, raw_line = m.group(1), m.group(2)
-                if any(part in raw_path for part in _PLACEHOLDER_PARTS) or "://" in raw_path:
+                if "://" in text[max(0, m.start() - 8) : m.start()]:
+                    return m.group(0)  # host:port inside a URL, not a file:line
+                if not _is_pointer_candidate(raw_path):
                     return m.group(0)
                 target = (project_dir / raw_path.replace("\\", "/")).resolve()
-                where = f"kb/{_note.name}: {raw_path}:{raw_line}"
+                where = f"{self._note_label(_note)}: {raw_path}:{raw_line}"
                 if not target.is_file():
                     unresolved.append(f"{where} -> file not found")
                     return m.group(0)
@@ -309,38 +372,56 @@ class KnowledgeBase:
 
     @staticmethod
     def _anchors(context: str, raw_path: str) -> list[str]:
-        """Code-symbol tokens on a note line, best candidates first."""
-        out: list[str] = []
+        """Code-symbol tokens on a note line, best candidates first.
+
+        Ordering matters: `_snake_case` names and explicit calls (`name(`) are
+        far more likely to be THE symbol the pointer means than a bare
+        capitalized word (prose like "Related" or a class name mentioned in
+        passing) — the fixer once relocated `_record_usage` to `class Agent:`
+        because "Related" and "Agent" came first. See [[gotchas]].
+        """
+        strong: list[str] = []  # snake_case or explicitly called on this line
+        weak: list[str] = []  # merely capitalized words
         for tok in _IDENT_RE.findall(context):
             if tok in raw_path or len(tok) < 3:
                 continue
-            looks_like_symbol = "_" in tok or tok != tok.lower() or (tok + "(") in context
-            if looks_like_symbol and tok not in out:
-                out.append(tok)
-        return out
+            if "_" in tok or (tok + "(") in context:
+                if tok not in strong:
+                    strong.append(tok)
+            elif tok != tok.lower() and tok not in weak:
+                weak.append(tok)
+        return strong + weak
 
     @staticmethod
     def _relocate(lines: list[str], anchors: list[str], current: int) -> int | None:
         """Where an anchor now lives (1-based), or None if not confident.
 
-        Returns ``current`` unchanged if the pointed-at line still holds the
-        anchor. Otherwise prefers a unique definition line, then a unique call,
-        then a unique mention.
+        Returns ``current`` unchanged if the pointed-at line still holds an
+        anchor (case-insensitive — a note may say `Promote` for `def promote`).
+        Otherwise tries every anchor at the DEFINITION stage before falling
+        back to calls, then bare mentions — so a strong anchor's `def` wins
+        over a weak anchor's stray mention (see _anchors' ordering rationale).
         """
         if not anchors:
             return current if 1 <= current <= len(lines) else None
-        if 1 <= current <= len(lines) and any(a in lines[current - 1] for a in anchors):
+        lower_lines = [line.lower() for line in lines]
+        lower_anchors = [a.lower() for a in anchors]
+        if 1 <= current <= len(lines) and any(a in lower_lines[current - 1] for a in lower_anchors):
             return current
-        for anchor in anchors:
-            defs = [i + 1 for i, line in enumerate(lines) if anchor in line and _DEF_RE.search(line)]
-            if len(defs) == 1:
-                return defs[0]
-            calls = [i + 1 for i, line in enumerate(lines) if (anchor + "(") in line]
-            if len(calls) == 1:
-                return calls[0]
-            hits = [i + 1 for i, line in enumerate(lines) if anchor in line]
-            if len(hits) == 1:
-                return hits[0]
+        for stage in ("def", "call", "mention"):
+            for anchor in lower_anchors:
+                if stage == "def":
+                    hits = [
+                        i + 1
+                        for i, line in enumerate(lower_lines)
+                        if anchor in line and _DEF_RE.search(lines[i])
+                    ]
+                elif stage == "call":
+                    hits = [i + 1 for i, line in enumerate(lower_lines) if (anchor + "(") in line]
+                else:
+                    hits = [i + 1 for i, line in enumerate(lower_lines) if anchor in line]
+                if len(hits) == 1:
+                    return hits[0]
         return None
 
     @staticmethod

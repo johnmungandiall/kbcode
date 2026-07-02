@@ -217,6 +217,41 @@ def test_complete_without_on_text_does_not_stream(tmp_path):
     assert resp.text == "hi"
 
 
+# --- step limit (max_steps) ---------------------------------------------
+
+
+def test_max_steps_zero_means_unlimited(tmp_path):
+    # 60 tool round-trips — past the default 50-step cap — then a final answer.
+    rounds = 60
+    responses = [
+        LLMResponse(text="", tool_calls=[_call("read_file", {"path": "a.txt"})], raw={})
+        for _ in range(rounds)
+    ] + [_final("done")]
+    provider = FakeProvider(responses)
+    agent, tools = _make_agent(tmp_path, provider)
+    agent.max_steps = 0  # KBCODE_MAX_STEPS=0 -> unlimited
+    (tools.root / "a.txt").write_text("x", encoding="utf-8")
+    agent.run("read it many times")
+    assert not provider.responses  # every scripted round-trip ran, no pause
+    assert agent.messages[-1]["text"] == "done"
+
+
+def test_max_steps_positive_still_pauses(tmp_path, monkeypatch):
+    responses = [
+        LLMResponse(text="", tool_calls=[_call("read_file", {"path": "a.txt"})], raw={})
+        for _ in range(5)
+    ]
+    provider = FakeProvider(responses)
+    agent, tools = _make_agent(tmp_path, provider)
+    agent.max_steps = 3
+    (tools.root / "a.txt").write_text("x", encoding="utf-8")
+    notices: list[str] = []
+    monkeypatch.setattr(agent.ui, "notice", lambda msg, style=None: notices.append(msg))
+    agent.run("loop forever")
+    assert any("step limit" in n for n in notices)
+    assert len(provider.responses) == 2  # stopped after 3 of the 5 rounds
+
+
 def test_complete_with_on_text_streams(tmp_path):
     provider = FakeProvider([_final("hi")])
     agent, _tools = _make_agent(tmp_path, provider)
@@ -747,3 +782,38 @@ def test_no_hooks_configured_leaves_tool_dispatch_unaffected(tmp_path):
     agent, tools = _make_agent(tmp_path, provider)
     agent.run("create hello.txt")
     assert (tools.root / "hello.txt").read_text(encoding="utf-8") == "hi"
+
+
+# --- budget-aware tool-result truncation ---------------------------------
+
+
+def test_huge_tool_result_truncated_to_remaining_context_budget(tmp_path):
+    provider = FakeProvider(
+        [
+            LLMResponse(text="reading", tool_calls=[_call("read_file", {"path": "big.txt"})], raw={}),
+            _final("done"),
+        ]
+    )
+    # Small compaction threshold => small remaining budget => the 8k-char floor
+    # applies instead of read_file's own 60k cap.
+    agent, tools = _make_agent(tmp_path, provider, compact_threshold=2500)
+    (tools.root / "big.txt").write_text("x" * 40_000, encoding="utf-8")
+    agent.run("read the big file")
+    results = [m for m in agent.messages if m.get("role") == "tool_results"]
+    assert results, "expected a tool_results message"
+    content = results[0]["results"][0]["content"]
+    assert "truncated" in content and len(content) < 12_000
+
+
+def test_small_tool_result_passes_untruncated(tmp_path):
+    provider = FakeProvider(
+        [
+            LLMResponse(text="reading", tool_calls=[_call("read_file", {"path": "small.txt"})], raw={}),
+            _final("done"),
+        ]
+    )
+    agent, tools = _make_agent(tmp_path, provider, compact_threshold=2500)
+    (tools.root / "small.txt").write_text("tiny content", encoding="utf-8")
+    agent.run("read the small file")
+    results = [m for m in agent.messages if m.get("role") == "tool_results"]
+    assert "truncated" not in results[0]["results"][0]["content"]

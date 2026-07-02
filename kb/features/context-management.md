@@ -18,7 +18,7 @@ passes** and returns `(messages, None)` only if none reduced anything:
    model round-trip.
 1. `_compact_exchanges()` (`kbcode/compaction.py:156`) — the original strategy:
    summarize the *middle exchanges* into one recap (`_summarize`,
-   `kbcode/compaction.py:146`, `_render`, `kbcode/compaction.py:125`) spliced onto the
+   `kbcode/compaction.py:125`, `_render`, `kbcode/compaction.py:125`) spliced onto the
    first kept tail turn, protecting the first + last exchanges.
 2. `_compact_within_last_exchange()` (`kbcode/compaction.py:194`) — shrink a single
    runaway exchange from the inside (one user turn + many assistant/tool_results
@@ -30,45 +30,57 @@ passes** and returns `(messages, None)` only if none reduced anything:
    only whole (assistant, tool_results) pairs, preserving tool-id pairing +
    alternation (see [[providers]], [[gotchas]]).
 
+Upstream of all passes, `Agent._fit_to_budget()` (called from
+`_dispatch_tool`) caps any single tool result at half the tokens left before
+auto-compaction (~4 chars/token, 8k-char floor) — one huge read/search can't
+blow the window in a single step.
+
 All passes preserve the alternation invariant (pass 0 trivially — nothing is
 added, removed, or reordered). Auto-triggered in
-`Agent._maybe_compact()` (`kbcode/agent.py:840`) and mid-turn by
-`_compact_mid_turn_or_stop()` (`kbcode/agent.py:485`); manual via `/compact` ->
-`Agent.compact_now()` (`kbcode/agent.py:860`).
+`Agent._maybe_compact()` (`kbcode/agent.py:863`) and mid-turn by
+`_compact_mid_turn_or_stop()` (`kbcode/agent.py:508`); manual via `/compact` ->
+`Agent.compact_now()` (`kbcode/agent.py:883`).
 
 ## Knowledge base (product feature)
-`KnowledgeBase` (`kbcode/knowledge_base.py:160`) holds `kb/` notes loaded into the
-system prompt (`kbcode/prompts.py:42` `build_system_prompt`) so the agent doesn't
-re-scan files; `read_all()` (`kbcode/knowledge_base.py:176`). `check_pointers()`
-(`kbcode/knowledge_base.py:237`, `/kb-check`) resolves every `path:line` reference and
-flags missing files / stale lines; placeholder examples are skipped.
-`fix_pointers()` (`kbcode/knowledge_base.py:263`, `/kb-check --fix`) relocates a
-drifted pointer by the code symbol named on the same note line (`_anchors`,
-`kbcode/knowledge_base.py:311`; `_relocate`, `kbcode/knowledge_base.py:323` — prefer a unique
-definition line, then a unique call, then a unique mention).
+`KnowledgeBase` (`kbcode/knowledge_base.py:175`) holds `kb/` notes loaded into the
+system prompt (`kbcode/prompts.py:43` `build_system_prompt`) so the agent doesn't
+re-scan files; `read_all()` (`kbcode/knowledge_base.py:205`). `check_pointers()`
+(`/kb-check`) and `fix_pointers()` (`/kb-check --fix`) walk ALL notes including
+subfolders via `_all_note_files()` (dot-folders like `.history` skipped) and
+skip non-file matches — `_is_pointer_candidate()` rejects placeholders, URLs,
+and IP:port / host:port shapes like `0.0.0.0:8000` (a live session once burned
+a ~150k-token turn "fixing" that false drift). Relocation anchors on code
+symbols from the note line: `_anchors` orders snake_case/called tokens before
+bare capitalized words, and `_relocate` matches case-insensitively, trying
+every anchor at the definition stage before calls, then bare mentions.
+Note versioning: a content-changing `write_note()` first snapshots the old
+version into `kb/.history/`; `/kb-undo <note>` -> `restore_note()` puts it back
+(repeat to step further back).
 Scaffolded starter templates (`_TEMPLATES` + `AGENT_MD_TEMPLATE`) open with an
 explicit "unbuilt KB ≠ empty project" warning so a model seeing fresh templates
 checks the real files (repo_map / list) instead of declaring the project empty.
-Onboarding: `is_scaffold()` (`kbcode/knowledge_base.py:224`) is True while every
+Onboarding: `is_scaffold()` (`kbcode/knowledge_base.py:282`) is True while every
 note is still an untouched template; the REPL then prints a "type /init" hint at
-startup and after `/open` (`_kb_hint_if_unbuilt`, `kbcode/repl.py:219`), and the
+startup and after `/open` (`_kb_hint_if_unbuilt`, `kbcode/repl.py:220`), and the
 `/init` chat command runs the canned `_BUILD_KB_PROMPT` (`kbcode/repl.py:206`)
-that scans the code and fills the notes in. `is_scaffold()` doubles as the
-built/not-built flag surfaced in `/status` (`kb built` / `not built — /init`,
-`ui.status_line`'s `kb_built` kwarg) and at the top of `/kb`.
+that scans the code and fills the notes in, then refreshes the LIVE agent's
+system prompt via `cli._system_prompt()` (split out of `_build_agent`) so the
+new notes take effect without a restart. `is_scaffold()` doubles as the
+built/not-built flag surfaced in the banner, `/status` (`kb built` /
+`not built — /init`) and at the top of `/kb`.
 
 ## KB lifecycle hooks (agent.py — baked-in default, no `.claude/settings.json`
 equivalent inside kbcode itself)
-`Agent._with_kb_reminder()` (`kbcode/agent.py:541`) is the PostToolUse equivalent —
+`Agent._with_kb_reminder()` (`kbcode/agent.py:564`) is the PostToolUse equivalent —
 after a successful `write_file`/`edit_file` outside `kb/`/`.kbcode/`/`.git/`/
 `node_modules/` and the top-level docs, it appends a once-per-TURN reminder
-(`_kb_reminder_done`, reset in `run()` like the drift flags, `kbcode/agent.py:114`)
+(`_kb_reminder_done`, reset in `run()` like the drift flags, `kbcode/agent.py:115`)
 nudging the model to update the matching note — so every code-editing turn gets
-the nudge, not just the first one of the session. `Agent._kb_drift_feedback()` (`kbcode/agent.py:568`) is the Stop
+the nudge, not just the first one of the session. `Agent._kb_drift_feedback()` (`kbcode/agent.py:591`) is the Stop
 equivalent — when the model tries to end a turn that touched files
-(`_kb_touched_this_run`, `kbcode/agent.py:115`), it runs `check_pointers()` and, on
+(`_kb_touched_this_run`, `kbcode/agent.py:116`), it runs `check_pointers()` and, on
 drift, feeds the broken pointers back as one more `user` turn instead of
-returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:116`) so it nudges at most
+returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:117`) so it nudges at most
 once per turn.
 
 See [[sessions]] for how compaction interacts with session replay,

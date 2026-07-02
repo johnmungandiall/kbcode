@@ -6,7 +6,12 @@ loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
 `KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
 (`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
 in `_tool_run_command`, `kbcode/tools/file.py:400`). Both end the turn safely —
-the user says "continue" to resume. Details and history: [[gotchas]], [[config]].
+the user says "continue" to resume. **Setting either env var to 0 disables that
+guard (unlimited)**: `Agent.run()` then loops on `itertools.count()` instead of
+`range(max_steps)`, and `_tool_run_command`'s cap check is skipped via its
+`limit > 0` guard. The emergency context stop (`_EMERGENCY_STOP_MULTIPLIER`)
+and the subagent step budget (`_SUBAGENT_MAX_STEPS`) are deliberately NOT
+disabled by 0. Details and history: [[gotchas]], [[config]].
 
 ## run_command hang-proofing
 `_tool_run_command` (`kbcode/tools/file.py:400`) runs via `Popen` writing to
@@ -15,7 +20,7 @@ Pipes hang: a grandchild that outlives the shell (`taskkill && start
 explorer.exe`, a spawned dev server) inherits the pipe handles, so the pipe
 read blocks on EOF forever, sailing straight past the timeout (the real-world
 "running… 3142s" bug). Timeout is `_COMMAND_TIMEOUT` (180s,
-`kbcode/tools/file.py:22`); on expiry `_kill_process_tree()`
+`kbcode/tools/file.py:67`); on expiry `_kill_process_tree()`
 (`kbcode/tools/file.py:67`) kills the whole tree (`taskkill /F /T` on Windows,
 `os.killpg` + `start_new_session` on POSIX) and the tool still returns the
 partial output captured so far. Trap stub: [[gotchas]].
@@ -36,6 +41,10 @@ field passes that are otherwise skipped via `code_file=True` to avoid mangling
 source like `MAX_TOKENS=100`); `read_file`/`search_code` redact with
 `code_file=True` too (`redact_with_count()`, `kbcode/redact.py:86`). On by default;
 `KBCODE_REDACT_SECRETS=false` opts out (`_REDACT_ENABLED`, `kbcode/redact.py:20`).
+Last gate: `SessionRecorder._write()` (`kbcode/sessions.py:90`) masks each
+serialized JSONL line before it hits disk — catches a secret the MODEL echoed
+in its own reply (and the raw replay blocks), which tool-layer redaction can't
+see. Masks are plain alphanumeric/`***` substrings, so the JSON stays valid.
 
 ## Checkpoints (right-sized Hermes port)
 `Checkpoints` (`kbcode/checkpoints.py:58`) auto-snapshots the project into a hidden
@@ -47,7 +56,7 @@ dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:68`, mir
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
 (`_EXCLUDES`, `kbcode/checkpoints.py:33`), same spirit as redaction. `/rollback`
-(`repl._rollback_menu`, `kbcode/repl.py:47`) opens an arrow-key picker built on
+(`repl._rollback_menu`, `kbcode/repl.py:48`) opens an arrow-key picker built on
 `prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:202`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
@@ -55,9 +64,9 @@ maintenance; deleting the `checkpoints/` folder is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:435`), which renders a context panel then
+`ui.permission(tool, detail)` (`kbcode/ui.py:439`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:461`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:465`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
 (`kbcode/permissions.py:26`) for headless use.
 
@@ -69,9 +78,9 @@ so a hook script written for real Claude Code works here unchanged. Config
 comes from a `"hooks"` key in `.kbcode/settings.json`, shaped exactly like
 Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 [{"type": "command", "command": "..."}]}], "PostToolUse": [...], "Stop":
-[...]}`. `Config.hooks` (`kbcode/config.py:203`) carries it through the same
+[...]}`. `Config.hooks` (`kbcode/config.py:204`) carries it through the same
 settings merge as everything else (`load_config()`,
-`kbcode/config.py:496`) — no new file or precedence rule.
+`kbcode/config.py:497`) — no new file or precedence rule.
 
 `HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty
@@ -95,26 +104,26 @@ for every hook command in that project.
 `ToolsCore.__init__` builds `self.hooks = HooksRunner(config.hooks,
 self.root)` (`kbcode/tools/core.py:31`) right next to `self.checkpoints` —
 no timeout arg passed, so it always picks up the settings-driven value.
-`Agent._dispatch_tool()` (`kbcode/agent.py:202`) wraps one tool call: runs
+`Agent._dispatch_tool()` (`kbcode/agent.py:203`) wraps one tool call: runs
 `PreToolUse` (blocks without calling the tool if `HookOutcome.blocked`),
 then `self.tools.execute()`, then `PostToolUse` (appends
 `HookOutcome.message` to the result content if present). Every call site
 that used to call `self.tools.execute()` directly now goes through
 `_dispatch_tool()` instead — the sequential path in `Agent.run()`
-(`kbcode/agent.py:343`), the parallel-batch `ThreadPoolExecutor.submit` in
-`_run_parallel_batch()` (`kbcode/agent.py:399`), the plain-text-recovered
-path in `_run_promoted()` (`kbcode/agent.py:507`), two sites inside
-`_run_subagent()` (`kbcode/agent.py:682` and `:719`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:434`), used
+(`kbcode/agent.py:371`), the parallel-batch `ThreadPoolExecutor.submit` in
+`_run_parallel_batch()` (`kbcode/agent.py:422`), the plain-text-recovered
+path in `_run_promoted()` (`kbcode/agent.py:530`), two sites inside
+`_run_subagent()` (`kbcode/agent.py:739` and `:781`), and — #4.3 extension,
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:457`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
-`Agent._stop_hook_feedback()` (`kbcode/agent.py:561`) runs the `Stop` event
+`Agent._stop_hook_feedback()` (`kbcode/agent.py:618`) runs the `Stop` event
 once per turn (gated by `self._stop_hook_checked`, reset in `run()` alongside
 `self._kb_drift_checked`) right after the KB-drift check — a configured
 `Stop` hook can veto ending the turn (e.g. to demand a missing test run),
 and the agent feeds `HookOutcome.message` back as a nudge to continue. This
 general, user-scriptable hooks system is distinct from the baked-in
-KB-lifecycle pseudo-hooks (`_KB_WRITE_TOOLS`, `kbcode/agent.py:72`) that
+KB-lifecycle pseudo-hooks (`_KB_WRITE_TOOLS`, `kbcode/agent.py:73`) that
 mirror claude-kb's PostToolUse/Stop behavior but aren't configurable.
 
 ## MCP calls ride the same rails

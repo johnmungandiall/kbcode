@@ -407,11 +407,11 @@ class FileToolsMixin:
         command = inp["command"]
         self._run_command_count += 1
         limit = self.config.max_commands_per_turn
-        if self._run_command_count > limit:
+        if limit > 0 and self._run_command_count > limit:
             raise ValueError(
                 f"Refused: hit the safety limit of {limit} run_command calls in "
                 "one turn (a runaway loop guard). Wrap up this turn and continue in the next message "
-                "if you genuinely need more. (KBCODE_MAX_COMMANDS in .env raises the cap.)"
+                "if you genuinely need more. (KBCODE_MAX_COMMANDS in .env raises the cap; 0 = unlimited.)"
             )
         if self._is_dangerous_command(command):
             raise ValueError(

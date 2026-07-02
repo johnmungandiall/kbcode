@@ -516,7 +516,8 @@ DEEPSEEK_API_KEY=...
 > - `KBCODE_MAX_STEPS` (default `50`) and `KBCODE_MAX_COMMANDS` (default `25`)
 >   are the runaway-loop guards: tool round-trips per message and shell commands
 >   per turn. Hitting one pauses the turn safely — saying "continue" resumes —
->   so raise them if long tasks keep pausing on you.
+>   so raise them if long tasks keep pausing on you, or set `0` to disable a
+>   guard entirely (unlimited).
 > - `KBCODE_LOG_LEVEL` (default `INFO`) writes a quiet diagnostic log to
 >   `~/.kbcode/projects/<slug>/kbcode.log` — set `DEBUG` for full detail when
 >   reporting a bug, or `off` to write nothing. Separate from the on-screen output.

@@ -9,6 +9,7 @@ through a TerminalUI (see ui.py), so this file stays about logic, not looks.
 
 from __future__ import annotations
 
+import itertools
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -23,7 +24,7 @@ from .subagents import Subagent
 from .tools import Tools
 from .ui import TerminalUI
 
-_MAX_STEPS = 50  # default cap on tool round-trips per user message (Config.max_steps / KBCODE_MAX_STEPS overrides)
+_MAX_STEPS = 50  # default cap on tool round-trips per user message (Config.max_steps / KBCODE_MAX_STEPS overrides; 0 = unlimited)
 _SUBAGENT_MAX_STEPS = 30  # a delegated task gets its own, smaller budget
 _MAX_PROMOTED_RECOVERIES = 3  # give up auto-repairing plain-text tool calls after this many/turn
 
@@ -90,7 +91,7 @@ class Agent:
         self.provider = provider
         self.tools = tools
         self.compact_threshold = compact_threshold  # tokens; 0 disables auto-compaction
-        self.max_steps = max(1, max_steps)  # runaway guard; KBCODE_MAX_STEPS tunes it
+        self.max_steps = max(0, max_steps)  # runaway guard; KBCODE_MAX_STEPS tunes it, 0 = unlimited
         self.ui = ui or TerminalUI()
         self.modes = modes or builtin_modes()
         self.mode = self.modes[DEFAULT_MODE]
@@ -212,7 +213,26 @@ class Agent:
         post = self.tools.hooks.run("PostToolUse", name, args, tool_output=content, is_error=is_error)
         if post.message:
             content = f"{content}\n\n[hook: {post.message}]"
-        return content, is_error
+        return self._fit_to_budget(content), is_error
+
+    def _fit_to_budget(self, content: str) -> str:
+        """Cap a single tool result relative to the REMAINING context headroom,
+        not just the tool's own fixed limit — so one huge read/search can't
+        blow the window in one step. Allows up to half the tokens left before
+        auto-compaction (~4 chars/token), with a floor so results stay useful
+        even when the context is nearly full (compaction then handles it)."""
+        if not self.compact_threshold:
+            return content
+        remaining = max(0, self.compact_threshold - self.context_tokens())
+        max_chars = max(8_000, remaining * 4 // 2)
+        if len(content) <= max_chars:
+            return content
+        cut = len(content) - max_chars
+        return (
+            content[:max_chars]
+            + f"\n\n[...truncated {cut} chars to fit the remaining context budget — "
+            "re-read the specific part you need with offset/limit or a narrower query...]"
+        )
 
     def _append(self, message: dict) -> None:
         self.messages.append(message)
@@ -249,7 +269,10 @@ class Agent:
         self.tools.new_turn()
 
         try:
-            for _ in range(self.max_steps):
+            # max_steps == 0 means unlimited: loop until the model stops calling
+            # tools (or the user interrupts / the emergency context stop fires).
+            steps = itertools.count() if self.max_steps == 0 else range(self.max_steps)
+            for _ in steps:
                 self._update_read_budget()
                 # Proactive auto-compact before each model call (in case previous
                 # tool results or text pushed us over without a mid-turn check yet).
@@ -358,7 +381,7 @@ class Agent:
             self.ui.notice(
                 f"Stopped: hit the step limit ({self.max_steps} tool round-trips) for one "
                 "request. Say 'continue' to pick up where it left off; KBCODE_MAX_STEPS in "
-                ".env raises the cap.",
+                ".env raises the cap (0 = unlimited).",
                 style="yellow",
             )
             self._turn_summary(start, actions, before)

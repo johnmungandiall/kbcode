@@ -111,7 +111,8 @@ DEFAULT_REQUEST_TIMEOUT = 120
 # Per-turn runaway-loop guards: tool round-trips per user message (the agent
 # loop's step cap) and run_command calls per turn. Both stop the turn safely —
 # saying "continue" resumes — but a long, legitimate task can hit them, so they
-# are tunable: KBCODE_MAX_STEPS / KBCODE_MAX_COMMANDS.
+# are tunable: KBCODE_MAX_STEPS / KBCODE_MAX_COMMANDS. Setting either to 0
+# disables that guard entirely (unlimited).
 DEFAULT_MAX_STEPS = 50
 DEFAULT_MAX_COMMANDS = 25
 

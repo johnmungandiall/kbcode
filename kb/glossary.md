@@ -1,6 +1,6 @@
 # Glossary — project-specific terms.
 
-- **Normalized message format** — provider-agnostic message shape used by the agent loop (`kbcode/agent.py:97`) — see [[providers]]
+- **Normalized message format** — provider-agnostic message shape used by the agent loop (`kbcode/agent.py:4`) — see [[providers]]
 - **Tool-call repair** — two-layer fix: execute-time name/arg repair + parse-time plain-text recovery — see [[tools-and-repair]]
 - **Promote** — recovering tool calls a model wrote as text into real `tool_calls` (`def promote`, `kbcode/repair.py:48`)
 - **Compaction** — summarizing old chat turns to stay within context window (`kbcode/compaction.py:156`) — see [[context-management]]

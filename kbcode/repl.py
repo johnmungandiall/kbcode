@@ -23,6 +23,7 @@ from .cli import (
     _resume_agent,
     _scaffold,
     _session_picker,
+    _system_prompt,
     ui,
 )
 from .config import (
@@ -250,7 +251,8 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
     """The interactive chat loop: read a line, dispatch slash commands, or run it as a turn."""
     agent = agent or _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
-              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens)
+              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens,
+              kb_built=not kb.is_scaffold())
 
     provider_args, model_args = _model_completion_sources(config)
     arg_options = {
@@ -258,6 +260,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         "/model": model_args,  # current provider's models
         "/mode": list(agent.modes),
         "/kb-check": ["--fix"],
+        "/kb-undo": [n[:-3] for n in kb.list_notes()],
         "/resume": [r["id"] for r in list_sessions(config.sessions_dir)],
         "/mcp": ["reload"],
     }
@@ -509,6 +512,21 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             continue
         if user == "/init":
             agent.run(_BUILD_KB_PROMPT)
+            # The system prompt was built when the KB was still templates —
+            # refresh it so the freshly filled notes take effect NOW, not
+            # after a restart.
+            agent.system = _system_prompt(config, kb, memory)
+            continue
+        if user.split() and user.split()[0] == "/kb-undo":
+            parts = user.split(maxsplit=1)
+            if len(parts) < 2 or not parts[1].strip():
+                ui.error("usage: /kb-undo <note>   (e.g. /kb-undo overview)")
+                continue
+            restored = kb.restore_note(parts[1].strip())
+            if restored:
+                ui.notice(f"restored {restored} from its last backup.", style="green")
+            else:
+                ui.error("no backup found for that note (backups appear in kb/.history after an overwrite).")
             continue
         if user.split() and user.split()[0] == "/learn":
             topic = user.split(maxsplit=1)[1].strip() if len(user.split()) > 1 else ""
@@ -702,7 +720,8 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             agent = _build_agent(config, kb, memory)
             ui.notice(f"now working on {config.project_dir}", style="green")
             ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
-              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens)
+              temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens,
+              kb_built=not kb.is_scaffold())
             _kb_hint_if_unbuilt(kb)
             continue
 

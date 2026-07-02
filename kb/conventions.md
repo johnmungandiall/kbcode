@@ -37,7 +37,7 @@
 - **An interactive picker:** reuse `prompt_input.select()` (returns
   `(available, index)`); always handle `available is False` with a
   non-interactive fallback, as `TerminalUI.permission` does.
-- **A new provider:** prefer adding a `PRESETS` entry (`kbcode/config.py:121`); only
+- **A new provider:** prefer adding a `PRESETS` entry (`kbcode/config.py:122`); only
   write a new `LLMProvider` subclass if it isn't OpenAI-compatible.
 
 ## Notes rules

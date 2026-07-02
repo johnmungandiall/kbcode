@@ -48,6 +48,15 @@ def test_runaway_guard_env_overrides(tmp_path, monkeypatch):
     assert config.max_commands_per_turn == 100
 
 
+def test_runaway_guard_zero_means_unlimited(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)  # keep the repo's own .env out of load_dotenv's reach
+    monkeypatch.setenv("KBCODE_MAX_STEPS", "0")
+    monkeypatch.setenv("KBCODE_MAX_COMMANDS", "0")
+    config = load_config(tmp_path)
+    assert config.max_steps == 0  # 0 passes through — Agent treats it as no cap
+    assert config.max_commands_per_turn == 0
+
+
 def test_use_provider_unknown_raises():
     config = Config(project_dir=Path("."))
     try:

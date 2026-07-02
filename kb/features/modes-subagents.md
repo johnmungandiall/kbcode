@@ -5,7 +5,7 @@
 `READ`/`NOTES`/`EDIT`/`EXEC` groups (`kbcode/modes.py:23-29` — `manage_todos`,
 `web_search`, `fetch_url`, and `repo_map` live in `READ` so they work even
 read-only; `EXEC` = `run_command` + `check_task`). `Agent.run` rebuilds
-`_system_for_mode()` (`kbcode/agent.py:222`) and `_mode_schemas()` (`kbcode/agent.py:225`) on
+`_system_for_mode()` (`kbcode/agent.py:242`) and `_mode_schemas()` (`kbcode/agent.py:245`) on
 **every** model call. Enforcement is two-layer: disallowed tools are never shown
 to the model, and `run()` guards again at execute time. Builtins
 (`_BUILTINS`, `kbcode/modes.py:43`): `code`/`debug` (all tools), `architect` (read +
@@ -24,13 +24,14 @@ tools that can qualify a subagent for parallel dispatch. See [[mcp]].
 
 ## Subagents delegate into a fresh context
 `load_subagents()` (`kbcode/subagents.py:52`) reads `.kbcode/agents/*.md` (same
-frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:41`).
-`Agent.__init__` (`kbcode/agent.py:78`) wires `tools.subagents` and `tools.delegate = self
-._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:53`) conditionally
-appends the `run_subagent` schema (`_subagent_schema`, `kbcode/tools/core.py:59`)
+frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:75`).
+`Agent.__init__` (`kbcode/agent.py:79`) wires `tools.subagents` and `tools.delegate = self
+._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:94`) conditionally
+appends the `run_subagent` schema (`_subagent_schema`, `kbcode/tools/core.py:67`)
 only when subagents exist, roster baked into its description. `_run_subagent()`
-(`kbcode/agent.py:670`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
-`kbcode/agent.py:27`) with the subagent's own system prompt + filtered schemas, shares
+(`kbcode/agent.py:693`) runs a separate bounded loop (`_SUBAGENT_MAX_STEPS`,
+`kbcode/agent.py:28` — a fixed budget, NOT disabled by `KBCODE_MAX_STEPS=0`,
+see [[config]]) with the subagent's own system prompt + filtered schemas, shares
 the same `Tools` instance (file/KB side-effects land in the same project),
 blocks nested delegation, and returns only the final text. Token usage still
 accrues to `Agent.usage`, now under `Agent._usage_lock` since it can be
@@ -41,10 +42,10 @@ runs concurrently when every targeted subagent's `tools:` frontmatter stays
 within the schema-declared `parallel_safe` tool set (`read_file`, `list_dir`,
 `search_code`, `repo_map`, `kb_read`, `kb_search`, `web_search`, `fetch_url`,
 `recall`) plus the tolerated `manage_todos` (`_SUBAGENT_PARALLEL_EXTRAS`) —
-checked by `Agent._subagent_parallel_safe()` (`kbcode/agent.py:650`). The
+checked by `Agent._subagent_parallel_safe()` (`kbcode/agent.py:673`). The
 default `tools: read` (used when a subagent's frontmatter omits `tools:` —
-`load_subagents()`, `kbcode/subagents.py:79`) therefore QUALIFIES: Memory
-serializes its SQLite access behind an RLock (`kbcode/memory.py:21`), making
+`load_subagents()`, `kbcode/subagents.py:52`) therefore QUALIFIES: Memory
+serializes its SQLite access behind an RLock (`kbcode/memory.py:31`), making
 `recall` parallel-safe, and `manage_todos`'s whole-list replacement is atomic.
 Any write/exec tool or `tools: None` ("every tool") keeps a subagent
 sequential. This is the same #4.3 parallel-tool-call mechanism extended to
@@ -66,9 +67,9 @@ Higher parallelism (16 workers) + strong batching instructions = much fewer
 slow LLM turns, closer to Cursor responsiveness on the same model.
 
 ## Standing orders
-`build_system_prompt()` (`kbcode/prompts.py:42`) injects an optional `standing_orders`
+`build_system_prompt()` (`kbcode/prompts.py:43`) injects an optional `standing_orders`
 string (from `.kbcode/standing-orders.md`) right after the base rules, so it
-takes priority. `cli._build_agent` (`kbcode/cli.py:143`) ignores the untouched scaffold
+takes priority. `cli._build_agent` (`kbcode/cli.py:162`) ignores the untouched scaffold
 template (`_STANDING_ORDERS_TEMPLATE`, `kbcode/cli.py:113`) so its examples never become
 live orders.
 

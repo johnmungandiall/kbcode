@@ -2,6 +2,32 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased
+- 2026-07-02 — **`KBCODE_MAX_STEPS=0` / `KBCODE_MAX_COMMANDS=0` now mean
+  UNLIMITED** (that runaway guard is disabled): the agent loop switches to
+  `itertools.count()` and the `run_command` cap check is skipped. The emergency
+  context stop and `_SUBAGENT_MAX_STEPS` are unchanged. Documented in
+  `.env.example` + README. See [[config]], [[safety]], [[gotchas]].
+- **KB pointer check hardened** (from a live GrokProxy session that burned a
+  ~150k-token turn on false drift): `0.0.0.0:8000`-style IP:port and URL
+  host:port matches are no longer treated as `path:line`; check/fix now walk
+  kb/ SUBFOLDERS too; relocation is case-insensitive with snake_case-first
+  anchor priority. See [[context-management]], [[gotchas]].
+- **Note versioning:** content-changing `kb_write` snapshots the old note into
+  `kb/.history/`; new `/kb-undo <note>` restores it.
+- **/init now refreshes the live system prompt** (via `cli._system_prompt`)
+  so freshly built notes apply without a restart; banner also shows the
+  `kb built / not built — /init` flag.
+- **Budget-aware tool results:** `Agent._fit_to_budget()` caps one tool result
+  at half the remaining pre-compaction budget (8k-char floor).
+- **Session-line secret masking:** `SessionRecorder._write()` redacts every
+  serialized JSONL line — covers secrets echoed in the model's own reply/raw
+  blocks. See [[safety]].
+- **System prompt teaches native MCP:** "install an MCP server" now points the
+  model at `.kbcode/settings.json` `mcpServers` (+ `/mcp reload`), not IDE
+  configs like `.cursor/mcp.json`.
+- IMPROVEMENTS.md refreshed against v1.13.0 reality (open items only).
+
 ## v1.13.0 (2026-07-02)
 - **First-run onboarding + `/init`:** new `/init` chat command scans the project
   (canned `_BUILD_KB_PROMPT`) and fills the kb/ notes with real facts; while the

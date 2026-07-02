@@ -21,23 +21,23 @@ shape), parsed by `parse_mcp_configs()` (`kbcode/tools/mcp.py:59`) into
 `timeout` (s, default 30), `trusted` (list of bare tool names to
 auto-approve), `read_only` (`parallel_safe` is accepted as an alias). Values
 get `${VAR}` env expansion. Bad/disabled/non-stdio entries are logged and
-skipped. Loaded via `load_mcp_servers()` (`kbcode/config.py:325`) — a
+skipped. Loaded via `load_mcp_servers()` (`kbcode/config.py:326`) — a
 **per-server deep merge** across home → launch → project, unlike every other
 settings key (whole-value shallow override), so a project can add one server
 without hiding home-level ones; carried as `Config.mcp`
-(`kbcode/config.py:204`). See [[config]], [[gotchas]].
+(`kbcode/config.py:205`). See [[config]], [[gotchas]].
 
 ## Lifecycle
-`_build_agent` (`kbcode/cli.py:148`) starts every server when `config.mcp`
+`_build_agent` (`kbcode/cli.py:162`) starts every server when `config.mcp`
 is non-empty, attaches the `MCPManager` (`kbcode/tools/mcp.py:265`) to
 `Tools.mcp`, registers `atexit` stop as a crash backstop, and prints
 "MCP: git (7 tools), ...". A server that fails to start warns and is
 skipped — never fatal (`start_all`). Normal shutdown is `Agent.close()`
-(`kbcode/agent.py:789`) → `stop_all()` (idempotent) — `/exit`, `/provider`
+(`kbcode/agent.py:846`) → `stop_all()` (idempotent) — `/exit`, `/provider`
 and `/open` all pass through it, so rebuilt agents don't leak old server
 subprocesses. `tools/list` runs once at startup and is cached. **Startup only
 starts what settings.json held at launch** — `/mcp reload`
-(`kbcode/repl.py:295`) re-reads the merged block via `load_mcp_servers()` and
+(`kbcode/repl.py:335`) re-reads the merged block via `load_mcp_servers()` and
 passes fresh configs to `MCPManager.reload()`, bootstrapping a manager if
 none was attached, so a server added mid-session works without restarting
 kbcode.
@@ -48,7 +48,7 @@ Tools are namespaced `mcp__<server>__<tool>` (`MCP_PREFIX`,
 edit-distance so `_repair()`'s difflib match never "corrects" across the
 namespace boundary; repair works on MCP names for free once schemas are in.
 `ToolsCore.schemas` appends `mcp.schemas()` (`kbcode/tools/core.py:62`);
-`execute()` forks on the prefix (`kbcode/tools/core.py:109`) into
+`execute()` forks on the prefix (`kbcode/tools/core.py:102`) into
 `_execute_mcp()` (`kbcode/tools/core.py:121`). Requests are serialized by a
 per-client lock — parallel-safe dispatch threads would otherwise interleave
 writes on one stdin pipe.
@@ -66,7 +66,7 @@ servers run with full user privileges — the permission gate is the backstop.
 ## Modes, subagents, UI
 Full modes (`code`, `debug`) see MCP tools automatically; restricted modes
 only if the frontmatter lists explicit `mcp__server__tool` names
-(`_parse_tools` accepts explicit names, `kbcode/modes.py:98`). Default
+(`_parse_tools` accepts explicit names, `kbcode/modes.py:85`). Default
 `tools: read` subagents never see them. `/mcp` lists servers+tools,
 `/mcp reload` reconnects (`kbcode/repl.py:297`); `/status` appends an MCP
 line; activity lines fall back to a generic `MCP server:tool` describer

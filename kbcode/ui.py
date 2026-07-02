@@ -55,6 +55,7 @@ COMMANDS = [
     ("/insights", "show tokens used and estimated cost (this chat + all saved sessions)"),
     ("/cost", "one-line cost summary — model · tokens · $ (see /insights for detail)"),
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
+    ("/kb-undo <note>", "restore a kb/ note from its last pre-overwrite backup (kb/.history)"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/rollback", "undo AI edits — pick a checkpoint from a menu (auto-saved before every edit)"),
     ("/diff [n]", "show what the AI changed since a checkpoint (no n = newest; list them with /rollback)"),
@@ -358,7 +359,8 @@ class TerminalUI:
 
     # -- chrome ---------------------------------------------------------
     def banner(self, provider: str, model: str, cwd: Path, mode: str = "code",
-               *, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None) -> None:
+               *, temperature: float | None = None, thinking: str | None = None, max_tokens: int | None = None,
+               kb_built: bool | None = None) -> None:
         info = Table.grid(padding=(0, 2))
         info.add_column(justify="right", style="dim")
         info.add_column(style="bold")
@@ -366,6 +368,8 @@ class TerminalUI:
         info.add_row("model", model)
         info.add_row("mode", mode)
         info.add_row("folder", str(cwd))
+        if kb_built is not None:
+            info.add_row("kb", Text("built", style="green") if kb_built else Text("not built — /init", style="yellow"))
 
         settings = Table.grid(padding=(0, 2))
         settings.add_column(justify="right", style="dim")
@@ -414,7 +418,7 @@ class TerminalUI:
         desc = dict(COMMANDS)
         groups = [
             ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
-            ("knowledge & memory", ["/init", "/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
+            ("knowledge & memory", ["/init", "/kb", "/kb-check [--fix]", "/kb-undo <note>", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]", "/temperature <val>|none", "/thinking <level>", "/maxtokens <n>|auto"]),
         ]

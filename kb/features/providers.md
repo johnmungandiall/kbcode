@@ -1,10 +1,10 @@
 # Providers — normalized messages, translation, resilience, interrupts.
 
 ## Normalized messages + `raw` replay
-`Agent.messages` (`kbcode/agent.py:97`) is provider-agnostic, never a provider's native
+`Agent.messages` (`kbcode/agent.py:98`) is provider-agnostic, never a provider's native
 shape: `{"role":"user","content"}` (+ optional `"images"`), `{"role":"assistant",
 "text","tool_calls","raw"}`, `{"role":"tool_results","results"}`. Each provider's
-`_to_native` (Anthropic `kbcode/provider.py:187`, OpenAI-compatible `kbcode/provider.py:430`)
+`_to_native` (Anthropic `kbcode/provider.py:187`, OpenAI-compatible `kbcode/provider.py:442`)
 translates to/from its own API and stores the model's own assistant payload back
 in `raw` so the next request replays it losslessly (Claude thinking blocks vs
 OpenAI `tool_calls` differ structurally). **Invariant:** normalized<->native must
@@ -13,10 +13,10 @@ surgery (see [[context-management]] on compaction). A session uses exactly one
 provider, so `raw` is always that provider's shape — session replay requires a
 matching provider (see [[sessions]]).
 
-`get_provider()` (`kbcode/provider.py:566`) dispatches on `config.kind`. Every
+`get_provider()` (`kbcode/provider.py:596`) dispatches on `config.kind`. Every
 non-Claude provider (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom) is the
-*same* `OpenAICompatibleProvider` (`kbcode/provider.py:396`) with a different
-`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:293`) tries a staged
+*same* `OpenAICompatibleProvider` (`kbcode/provider.py:408`) with a different
+`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:144`) tries a staged
 kwargs fallback (`thinking`+`output_config` -> `thinking` -> plain), catching
 `TypeError` per attempt for older SDKs. Temperature (if set) and thinking level
 (from `config.thinking`) are included **only if not "off"** (Anthropic output_config.effort,
@@ -57,7 +57,7 @@ path iterates the SDK's event stream (synthetic `"text"` events for deltas,
 `content_block_start` with a `tool_use` block for names) instead of the old
 `text_stream`; the OpenAI path fires on the first name fragment per tool-call
 index. `Agent._complete()` forwards `on_tool` and `Agent.run` passes
-`ui.stream_tool_hint` (`kbcode/ui.py:507`), which prints one dim `⏺ name …`
+`ui.stream_tool_hint` (`kbcode/ui.py:548`), which prints one dim `⏺ name …`
 line — after stopping any live spinner and closing a half-printed streamed
 line (`TerminalUI._stream_open`), same thread rules as `stream_chunk` (see
 [[gotchas]]). The real described `tool_call()` line still follows when the
@@ -78,20 +78,20 @@ out (see [[config]]). The resulting timeout error is transient, so `_with_retry`
 backs off and retries it.
 
 ## Resilience
-Every real API call goes through `_with_retry()` (`kbcode/provider.py:100`): transient
+Every real API call goes through `_with_retry()` (`kbcode/provider.py:103`): transient
 failures (429/5xx/connection/timeout, classified by `_classify()` at
 `kbcode/provider.py:62` from SDK-agnostic `status_code`+message) retry with exponential
-backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:58-59`). Hard errors
+backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:49-59`). Hard errors
 (401/403/4xx) raise `ProviderError` (`kbcode/provider.py:42`) immediately, no retry.
 `_with_retry` deliberately re-raises `TypeError` untouched so the Anthropic
 staged fallback still works.
 
 ## Interrupt mid-request
-`Agent._complete()` (`kbcode/agent.py:131`) runs the blocking `provider.complete`/
+`Agent._complete()` (`kbcode/agent.py:132`) runs the blocking `provider.complete`/
 `stream` call on a daemon worker thread and polls `done.wait(0.05)` on the main
 thread — a blocking socket read swallows `KeyboardInterrupt` until it returns, so
 without the poll, Esc would feel dead while "thinking...". `interrupt_on_escape()`
-(`kbcode/interrupt.py:26`) is the watcher that raises it (Windows `msvcrt`, POSIX
+(`kbcode/interrupt.py:58`) is the watcher that raises it (Windows `msvcrt`, POSIX
 `termios`+`select`); the orphaned worker just finishes and its result is dropped.
 At turn end the watcher is **joined**, not just signalled (`kbcode/interrupt.py:47-48`):
 it reads the console / holds the tty, so leaving it alive would race the next prompt

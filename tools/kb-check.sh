@@ -48,7 +48,7 @@ BEGIN{ while((getline l<idx)>0){ b=l; sub(/.*\//,"",b); cnt[b]++; pth[b]=l } }
     print FILENAME"\t"FNR"\tA\t"join(dir,rel)"\t"ln"\t"ids"\t"m }
   t=s; while(match(t,/`[A-Za-z0-9_.\/-]+:[0-9]+`/)){ m=substr(t,RSTART,RLENGTH); t=substr(t,RSTART+RLENGTH)
     z=m; gsub(/`/,"",z); p=z; sub(/:[0-9]+$/,"",p); ln=z; sub(/.*:/,"",ln)
-    if(p ~ /[\/.]/) print FILENAME"\t"FNR"\tB\t"p"\t"ln"\t"ids"\t"m }
+    if(p ~ /[\/.]/ && p !~ /^[0-9.]+$/) print FILENAME"\t"FNR"\tB\t"p"\t"ln"\t"ids"\t"m }  # skip IP:port like 0.0.0.0:8000
   cf=(ctx!=""?ctx:(hint!=""?hint:def))
   t=s; while(match(t,/`[^`]+`:[0-9]+/)){ m=substr(t,RSTART,RLENGTH); t=substr(t,RSTART+RLENGTH)
     nm=m; sub(/`:[0-9]+$/,"",nm); sub(/^`/,"",nm); ln=m; sub(/.*:/,"",ln)

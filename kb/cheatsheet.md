@@ -48,6 +48,7 @@
 - `/mcp [reload]` — list connected MCP servers & tools; reload re-reads
   settings.json + reconnects (needed after adding a server mid-session, [[mcp]])
 - `/kb-check [--fix]` — verify/repair kb/ pointers
+- `/kb-undo <note>` — restore a kb/ note from its last pre-overwrite backup
 - `/insights` — token/cost usage
 - `/compact` — summarize old turns
 - `/rollback` — undo edits from checkpoint

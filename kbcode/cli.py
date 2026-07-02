@@ -140,8 +140,27 @@ gets your summary, not your steps.
 """
 
 
+def _system_prompt(config: Config, kb: KnowledgeBase, memory: Memory) -> str:
+    """Build the full system prompt (kb + skills + memory + AGENT.md + standing
+    orders + fragments + project folder). Split out of _build_agent so /init can
+    refresh a LIVE agent's prompt after the kb/ notes are filled in — otherwise
+    the prompt keeps the stale starter templates until a restart."""
+    agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
+    orders = ""
+    if config.standing_orders_file.exists():
+        raw = config.standing_orders_file.read_text(encoding="utf-8")
+        # Ignore the untouched scaffold (its examples are not real orders).
+        if raw.strip() and raw.strip() != _STANDING_ORDERS_TEMPLATE.strip():
+            orders = raw
+    return build_system_prompt(
+        kb.read_all(), memory.list_skills(), memory.recent(), agent_md, orders,
+        load_prompt_fragments(config.prompts_dir),
+        project_dir=config.project_dir,
+    )
+
+
 def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id: str | None = None) -> Agent:
-    """Wire up a fresh Agent: tools, system prompt (kb + skills + memory + AGENT.md + standing orders), provider, modes, subagents, and its session recorder."""
+    """Wire up a fresh Agent: tools, system prompt (via _system_prompt), provider, modes, subagents, and its session recorder."""
     ui.root = config.project_dir  # so file tool-lines show the full path
     perm = Permissions(auto_approve=config.auto_approve, ui=ui)
     tools = Tools(config, memory, kb, perm)
@@ -156,20 +175,8 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id
             ui.notice(
                 "MCP: " + ", ".join(f"{n} ({c} tool{'s' if c != 1 else ''})" for n, c in manager.summary())
             )
-    agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
-    orders = ""
-    if config.standing_orders_file.exists():
-        raw = config.standing_orders_file.read_text(encoding="utf-8")
-        # Ignore the untouched scaffold (its examples are not real orders).
-        if raw.strip() and raw.strip() != _STANDING_ORDERS_TEMPLATE.strip():
-            orders = raw
-    system = build_system_prompt(
-        kb.read_all(), memory.list_skills(), memory.recent(), agent_md, orders,
-        load_prompt_fragments(config.prompts_dir),
-        project_dir=config.project_dir,
-    )
     agent = Agent(
-        system,
+        _system_prompt(config, kb, memory),
         get_provider(config, ui),
         tools,
         compact_threshold=config.compact_threshold,

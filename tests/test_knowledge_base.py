@@ -38,6 +38,74 @@ def test_is_scaffold_false_for_extra_non_template_note(tmp_path):
     assert not kb.is_scaffold()
 
 
+def test_check_pointers_skips_ip_ports_and_url_hosts(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    kb.write_note(
+        "overview",
+        "# O\n"
+        "- uvicorn listens on 0.0.0.0:8000\n"
+        "- curl http://127.0.0.1:8080/v1/models\n"
+        "- upstream is https://grok.com:443/api\n",
+    )
+    assert kb.check_pointers(tmp_path) == []
+
+
+def test_check_and_fix_pointers_cover_subfolder_notes(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    features = tmp_path / "kb" / "features"
+    features.mkdir()
+    (features / "x.md").write_text("see `missing/app.py:3`", encoding="utf-8")
+    problems = kb.check_pointers(tmp_path)
+    assert any(p.startswith("kb/features/x.md: ") for p in problems)
+
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("# intro\n\n\ndef handler():\n    pass\n", encoding="utf-8")
+    (features / "y.md").write_text("`handler()` lives at `src/app.py:2`", encoding="utf-8")
+    fixed, unresolved = kb.fix_pointers(tmp_path)
+    assert any("kb/features/y.md" in f and "line 4" in f for f in fixed)
+
+
+def test_relocate_keeps_pointer_when_note_capitalizes_the_symbol(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    (tmp_path / "mod.py").write_text('"""Promote helper docs."""\n\n\ndef promote():\n    pass\n', encoding="utf-8")
+    kb.write_note("glossary", "- **Promote** — recovers calls (`mod.py:4`)")
+    fixed, unresolved = kb.fix_pointers(tmp_path)
+    assert fixed == [] and unresolved == []  # line 4 still holds `def promote` — no bogus "fix" to the docstring
+
+
+def test_anchor_priority_prefers_snake_case_over_class_name(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    (tmp_path / "core.py").write_text(
+        "class Agent:\n    pass\n\n\ndef _record_usage():\n    pass\n", encoding="utf-8"
+    )
+    kb.write_note("sessions", "Related: `Agent._record_usage()` writes usage (`core.py:99`)")
+    fixed, _ = kb.fix_pointers(tmp_path)
+    assert any("line 5" in f for f in fixed)  # the def, not `class Agent:` at line 1
+
+
+def test_write_note_backs_up_old_version_and_restore_note_undoes(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    kb.write_note("overview", "version one")
+    kb.write_note("overview", "version two")
+    backups = list((tmp_path / "kb" / ".history").glob("overview.*.md"))
+    assert len(backups) == 1 and backups[0].read_text(encoding="utf-8") == "version one"
+    assert kb.restore_note("overview") == "kb/overview.md"
+    assert kb.read_note("overview") == "version one"
+    assert kb.restore_note("overview") is None  # backup was consumed
+    # rewriting identical content makes no backup
+    kb.write_note("overview", "version one")
+    assert not list((tmp_path / "kb" / ".history").glob("overview.*.md"))
+
+
+def test_history_backups_are_invisible_to_notes_and_pointer_check(tmp_path):
+    kb = KnowledgeBase(tmp_path / "kb")
+    kb.write_note("overview", "clean note")
+    kb.write_note("overview", "see `missing/file.py:9`")  # backup now holds "clean note"
+    kb.write_note("overview", "clean again")  # backup #2 holds the bad pointer text
+    assert kb.list_notes() == ["overview.md"]
+    assert kb.check_pointers(tmp_path) == []  # bad pointer lives only in .history — not flagged
+
+
 def test_write_and_read_note_round_trip(tmp_path):
     kb = KnowledgeBase(tmp_path / "kb")
     kb.write_note("gotchas", "# Gotchas\n- watch out")
