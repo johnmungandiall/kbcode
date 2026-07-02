@@ -592,6 +592,60 @@ def test_subagent_parallel_safe_edge_cases(tmp_path):
     assert agent._subagent_parallel_safe("mixed") is False
 
 
+# --- interrupt must not wedge the transcript ------------------------------
+
+
+def test_interrupt_mid_tool_seals_dangling_tool_calls(tmp_path):
+    """Esc during dispatch (classically: at an open permission prompt) used to
+    leave an assistant tool_calls message with no tool_results — every later
+    request then failed with provider HTTP 400 ('insufficient tool messages
+    following tool_calls'), wedging the whole session."""
+    import pytest
+
+    call = _call("read_file", {"path": "a.txt"})
+    provider = FakeProvider(
+        [
+            LLMResponse(text="reading", tool_calls=[call], raw={}),
+            _final("recovered."),
+        ]
+    )
+    agent, _tools = _make_agent(tmp_path, provider)
+
+    def interrupted_dispatch(name, inp):
+        raise KeyboardInterrupt
+
+    agent._dispatch_tool = interrupted_dispatch  # Esc lands mid-dispatch
+    with pytest.raises(KeyboardInterrupt):
+        agent.run("read something")
+
+    sealed = agent.messages[-1]
+    assert sealed["role"] == "tool_results"
+    assert [r["id"] for r in sealed["results"]] == [call.id]
+    assert all(r["is_error"] for r in sealed["results"])
+
+    # ...and the very next turn must go through cleanly.
+    del agent.__dict__["_dispatch_tool"]  # restore the real method
+    agent.run("continue")
+    assert agent.messages[-1]["text"] == "recovered."
+
+
+def test_run_seals_a_wedged_resumed_transcript(tmp_path):
+    """A session saved in the wedged state (interrupted before the seal
+    existed) gets repaired at the start of the next run() after --resume."""
+    provider = FakeProvider([_final("recovered.")])
+    agent, _tools = _make_agent(tmp_path, provider)
+    agent.messages = [
+        _user("hi"),
+        {"role": "assistant", "text": "", "tool_calls": [_call("read_file", {"path": "a.txt"})], "raw": {}},
+    ]
+
+    agent.run("continue")
+
+    roles = [m["role"] for m in agent.messages]
+    assert roles == ["user", "assistant", "tool_results", "user", "assistant"]
+    assert agent.messages[2]["results"][0]["is_error"]
+
+
 def test_record_usage_thread_safe_under_concurrency(tmp_path):
     provider = FakeProvider([])
     agent, _tools = _make_agent(tmp_path, provider)

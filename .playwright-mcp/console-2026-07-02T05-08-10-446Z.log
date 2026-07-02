@@ -1,0 +1,5 @@
+[    1526ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://rpachallenge.com/Roboto-Regular.woff2:0
+[    1530ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://rpachallenge.com/Roboto-Regular.woff:0
+[    1627ms] [LOG] Velocity is already loaded. You may be needlessly importing Velocity again; note that Materialize includes Velocity. @ https://rpachallenge.com/vendor.js:90984
+[    1738ms] [LOG] Angular is running in the development mode. Call enableProdMode() to enable the production mode. @ https://rpachallenge.com/vendor.js:52550
+[  279409ms] [WARNING] Form submission canceled because the form is not connected @ https://rpachallenge.com/:0

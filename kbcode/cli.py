@@ -10,6 +10,7 @@ own top level.
 
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import re
@@ -35,6 +36,7 @@ from .provider import ProviderError, get_provider
 from .sessions import SessionRecorder, list_sessions, load_session
 from .subagents import load_subagents
 from .tools import Tools
+from .tools.mcp import MCPManager, parse_mcp_configs
 from .ui import TerminalUI
 
 console = Console()
@@ -143,6 +145,17 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id
     ui.root = config.project_dir  # so file tool-lines show the full path
     perm = Permissions(auto_approve=config.auto_approve, ui=ui)
     tools = Tools(config, memory, kb, perm)
+    if config.mcp:
+        manager = MCPManager()
+        manager.start_all(parse_mcp_configs(config.mcp), warn=lambda m: ui.notice(m, style="yellow"))
+        tools.mcp = manager
+        # Backstop for crash paths; the normal path is Agent.close() -> stop_all
+        # (idempotent), which /exit, /provider and /open all go through.
+        atexit.register(manager.stop_all)
+        if manager.clients:
+            ui.notice(
+                "MCP: " + ", ".join(f"{n} ({c} tool{'s' if c != 1 else ''})" for n, c in manager.summary())
+            )
     agent_md = config.agent_md.read_text(encoding="utf-8") if config.agent_md.exists() else ""
     orders = ""
     if config.standing_orders_file.exists():

@@ -1,12 +1,12 @@
 # Config — precedence, presets, paths, project retargeting.
 
 ## Precedence
-`load_config()` (`kbcode/config.py:364`) resolves provider/model/base_url and the API
+`load_config()` (`kbcode/config.py:365`) resolves provider/model/base_url and the API
 key (via `.env`) as: **env vars > the project's `.kbcode`/.env > the launch
-folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:219`) > preset
+folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:220`) > preset
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
 never overrides an already-set value; `settings.json` is merged the opposite
-way (low->high, `kbcode/config.py:385-389`). The launch-folder and global fallbacks are
+way (low->high, `kbcode/config.py:400-408`). The launch-folder and global fallbacks are
 what let you configure kbcode once. `python -m kbcode model` now writes the
 provider/model to both the global `~/.kbcode/settings.json` (future default)
 and the current project's `.kbcode/settings.json` (so the next `kb` here picks
@@ -15,18 +15,27 @@ via `KBCODE_PROVIDER` etc, the wizard updates those pins so the choice sticks.
 `PRESETS` (`kbcode/config.py:40`) is the source of truth for built-in providers
 (anthropic, openai, gemini, deepseek, openrouter, mimo, ollama, custom).
 
+**Exception to the shallow merge: `mcpServers`.** MCP server definitions are
+merged PER SERVER across home → launch → project (a union, higher scope wins
+per server name — `load_mcp_servers()`, `kbcode/config.py:238`, carried as
+`Config.mcp`, `kbcode/config.py:119`), unlike every other settings key where
+the higher-priority file's whole value replaces the lower one. The helper is
+separate from `load_config` so `/mcp reload` can re-read it mid-session.
+Claude Code-compatible shape; fields and semantics in [[mcp]], the trap in
+[[gotchas]].
+
 ## Where files live (config vs runtime state)
 The project's `.kbcode/` holds **config only** (settings.json, standing-orders.md,
 agents/, modes/, prompts/, .env) and self-hides from the host project's git:
-`_ensure_self_ignore()` (`kbcode/config.py:206`) drops a `*` .gitignore inside it
+`_ensure_self_ignore()` (`kbcode/config.py:207`) drops a `*` .gitignore inside it
 (only if absent — a user-customized one is left alone; OSError swallowed), called
-from `ensure_dirs()` (`kbcode/config.py:181`) and `save_settings()`
-(`kbcode/config.py:247`). **Machine-local runtime state** — `memory_db`,
+from `ensure_dirs()` (`kbcode/config.py:182`) and `save_settings()`
+(`kbcode/config.py:248`). **Machine-local runtime state** — `memory_db`,
 `sessions_dir`, `checkpoints_dir`, `history_file`, kbcode.log — hangs off
-`Config.state_dir` (`kbcode/config.py:130`): `~/.kbcode/projects/<slug>/`,
+`Config.state_dir` (`kbcode/config.py:131`): `~/.kbcode/projects/<slug>/`,
 mirroring Claude Code's `~/.claude/projects/`, so launching kbcode never dumps
 runtime files into the project working tree. `project_slug()`
-(`kbcode/config.py:229`) encodes the resolved absolute path — every
+(`kbcode/config.py:230`) encodes the resolved absolute path — every
 non-alphanumeric char becomes `-`. `KBCODE_HOME` overrides `~/.kbcode` entirely
 (read in `global_dir()`; the autouse fixture in `tests/conftest.py` sets it
 per-test). Legacy fallback: if `<project>/.kbcode/memory.db` exists, `state_dir`
@@ -68,8 +77,8 @@ path → no log, run continues). Modules log via `logging.getLogger(__name__)`.
 `state_dir`, `memory_db`, `agent_md`, `settings_file`, ...) as a
 property off `project_dir` — so the project can be retargeted live. The CLI
 picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:259`) or
-`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:509`) mutates
-`config.project_dir` (`kbcode/repl.py:518`) then rebuilds `kb`, `memory`, and the
+`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:566`) mutates
+`config.project_dir` (`kbcode/repl.py:575`) then rebuilds `kb`, `memory`, and the
 agent — re-scaffolding the new folder, keeping the same provider/model/key. A
 REPL guard catches the common slip of typing the terminal-only `init`/`model`
 as a chat message and points at `/open` instead.

@@ -8,9 +8,9 @@
 - Tool methods follow `_tool_<name>(self, inp: dict) -> str` pattern
 
 ## Module organization
-- Tools register via `_base_schemas` property (`kbcode/tools/core.py:77`) +
+- Tools register via `_base_schemas` property (`kbcode/tools/core.py:26`) +
   `_tool_*` methods across `kbcode/tools/{file,kb,memory,planning,subagent,web}.py`
-- Provider dispatch: `get_provider()` returns `AnthropicProvider` or `OpenAICompatibleProvider` (`kbcode/provider.py:489`) — see [[providers]]
+- Provider dispatch: `get_provider()` returns `AnthropicProvider` or `OpenAICompatibleProvider` (`kbcode/provider.py:566`) — see [[providers]]
 - Mode/subagent definitions: YAML frontmatter between `---` fences + markdown body — see [[modes-subagents]]
 
 ## When adding things
@@ -33,7 +33,7 @@
 - **A new subagent or mode:** ship a markdown file (`.kbcode/agents/*.md` or
   `.kbcode/modes/*.md`) with `description:`/`tools:` frontmatter — no code
   change needed. A starter `code-explorer` subagent is scaffolded by
-  `cli._scaffold` (`kbcode/cli.py:95`).
+  `cli._scaffold` (`kbcode/cli.py:97`).
 - **An interactive picker:** reuse `prompt_input.select()` (returns
   `(available, index)`); always handle `available is False` with a
   non-interactive fallback, as `TerminalUI.permission` does.

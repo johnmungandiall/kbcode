@@ -30,7 +30,7 @@ dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:68`, mir
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
 (`_EXCLUDES`, `kbcode/checkpoints.py:33`), same spirit as redaction. `/rollback`
-(`repl._rollback_menu`, `kbcode/repl.py:37`) opens an arrow-key picker built on
+(`repl._rollback_menu`, `kbcode/repl.py:38`) opens an arrow-key picker built on
 `prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:202`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
@@ -54,7 +54,7 @@ Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 [{"type": "command", "command": "..."}]}], "PostToolUse": [...], "Stop":
 [...]}`. `Config.hooks` (`kbcode/config.py:118`) carries it through the same
 settings merge as everything else (`load_config()`,
-`kbcode/config.py:364`) — no new file or precedence rule.
+`kbcode/config.py:365`) — no new file or precedence rule.
 
 `HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty
@@ -99,6 +99,19 @@ and the agent feeds `HookOutcome.message` back as a nudge to continue. This
 general, user-scriptable hooks system is distinct from the baked-in
 KB-lifecycle pseudo-hooks (`_KB_WRITE_TOOLS`, `kbcode/agent.py:67`) that
 mirror claude-kb's PostToolUse/Stop behavior but aren't configurable.
+
+## MCP calls ride the same rails
+Every `mcp__server__tool` call goes through `ToolsCore._execute_mcp()`
+(`kbcode/tools/core.py:116`): permission prompt by default (side-effects are
+opaque, like `run_command`), `ensure_checkpoint("before MCP tool: ...")`
+before anything that may mutate, and the result through
+`redact_terminal_output_with_count` + `_note_redactions` — MCP servers can
+return file content or command output. Server config can relax this:
+`read_only: true` skips prompt+checkpoint (and marks the tools
+`parallel_safe`); `trusted: ["tool"]` skips only the prompt. MCP servers run
+with the user's full privileges (no sandbox — same trust model as hooks and
+`run_command`), and PreToolUse/PostToolUse hooks fire for them for free
+since `_dispatch_tool` matches by tool name. Full picture: [[mcp]].
 
 See [[tools-and-repair]] for what gets gated through these, [[gotchas]] for the
 protected-files list and the hooks trust model.

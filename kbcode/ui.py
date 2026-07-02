@@ -44,6 +44,7 @@ COMMANDS = [
     ("/skills", "list learned skills"),
     ("/todo", "show the agent's current task checklist"),
     ("/agents", "list available subagents (.kbcode/agents/)"),
+    ("/mcp [reload]", "list connected MCP servers & their tools (reload = re-read settings.json + reconnect)"),
     ("/image [path]", "attach an image (clipboard, or a file) for your next message — also Alt+V"),
     ("/video <path> [question]", "describe a local video (via an auxiliary vision model) for your next message"),
     ("/learn [topic]", "save what we just did as a reusable skill"),
@@ -237,6 +238,10 @@ def _describe_tool(name: str, args: dict, root: Path | None = None) -> tuple[str
 
     describer = _TOOL_DESCRIBERS.get(name)
     if describer is None:
+        if name.startswith("mcp__"):  # mcp__server__tool -> "MCP  server:tool args"
+            server, _, tool = name[len("mcp__"):].partition("__")
+            target = f"{server}:{tool}"
+            return "MCP", f"{target} {_short(a)}" if a else target
         return name, (_short(a) if a else "")
     if not callable(describer):
         # A static label was registered instead of a describer fn — degrade

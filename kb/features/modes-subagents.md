@@ -11,6 +11,16 @@ to the model, and `run()` guards again at execute time. Builtins
 notes), `ask` (read-only). Custom modes load from `.kbcode/modes/*.md` via
 `load_custom_modes()` (`kbcode/modes.py:102`).
 
+**MCP tools in modes/subagents.** Namespaced `mcp__server__tool` schemas join
+`Tools.schemas` like built-ins, so full modes (`code`/`debug`, allowed=None)
+see them automatically; restricted modes and subagents only see one if its
+explicit prefixed name is listed in `tools:` frontmatter (`_parse_tools`
+accepts explicit names, `kbcode/modes.py:98`). The default `tools: read`
+subagent set therefore NEVER includes MCP tools — deliberate, so a delegated
+explorer can't trigger opaque external actions. Only `read_only: true` MCP
+servers mark their tools `parallel_safe`, so those are also the only MCP
+tools that can qualify a subagent for parallel dispatch. See [[mcp]].
+
 ## Subagents delegate into a fresh context
 `load_subagents()` (`kbcode/subagents.py:53`) reads `.kbcode/agents/*.md` (same
 frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:42`).
@@ -54,8 +64,8 @@ slow LLM turns, closer to Cursor responsiveness on the same model.
 ## Standing orders
 `build_system_prompt()` (`kbcode/prompts.py:42`) injects an optional `standing_orders`
 string (from `.kbcode/standing-orders.md`) right after the base rules, so it
-takes priority. `cli._build_agent` (`kbcode/cli.py:141`) ignores the untouched scaffold
-template (`_STANDING_ORDERS_TEMPLATE`, `kbcode/cli.py:111`) so its examples never become
+takes priority. `cli._build_agent` (`kbcode/cli.py:143`) ignores the untouched scaffold
+template (`_STANDING_ORDERS_TEMPLATE`, `kbcode/cli.py:113`) so its examples never become
 live orders.
 
 See [[architecture]] for how this fits the agent loop, [[conventions]] for how

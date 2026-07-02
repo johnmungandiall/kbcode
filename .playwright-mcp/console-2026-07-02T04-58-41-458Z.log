@@ -1,0 +1,25 @@
+[    1496ms] Error: Minified React error #425; visit https://react.dev/errors/425 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at sq (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:146769)
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:101027
+    at iu (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:103871)
+    at ia (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:95227)
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91092
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91099
+    at oZ (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91204)
+    at MessagePort.M (https://bebee.com/_next/static/chunks/52117-a9f06b428591b797.js:1:84953)
+[    1497ms] Error: Minified React error #422; visit https://react.dev/errors/422 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:63991
+    at lZ (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:65342)
+    at iZ (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:121137)
+    at ia (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:95166)
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91092
+    at https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91099
+    at oZ (https://bebee.com/_next/static/chunks/fd9d1056-29d1d384b3d93fb6.js:1:91204)
+    at MessagePort.M (https://bebee.com/_next/static/chunks/52117-a9f06b428591b797.js:1:84953)
+[    1805ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Hiring%3A+Online+Arduino+%26+IoT+Electronics+Trainer+%28Contractual+%7C+Remote%29&country=IN&keywords=actuators%2Carduino%2Cat-t-internet-of-things%2Caws-iot%2Cclubs-organizations%2Ccoaching-mentoring%2Ccrane-aerospace-electronics%2Cdebugging%2Ceducation-training%2Cembedded-control-automation%2Cesp32%2Cinsurance-consulting-and-technology%2Cinternet-of-things-iot%2Cmechatronics%2Cmentoring%2Cmotors-actuators-motion-control%2Conline%2Craspberry-pi%2Csensors-feedback-devices%2Csensors-test-measurement%2Ctinkercad:0
+[    2524ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=IOT+Teacher&country=IN:0
+[    2524ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Embedded+Systems+Intructor+Internship&country=IN:0
+[    2530ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Trainee+Engineer+%28Electronics%29&country=IN:0
+[    2531ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Electronics+Engineer+Intern+%28Hardware+%26+PCB+Design%29&country=IN:0
+[    2531ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Internet+of+Things+Specialist&country=IN:0
+[    2545ms] [ERROR] Failed to load resource: the server responded with a status of 401 () @ https://bebee.com/api/salaries/estimate?title=Electronics+Engineer&country=IN:0

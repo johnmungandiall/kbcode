@@ -6,6 +6,7 @@ subagent — see the sibling modules in this package).
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 from pathlib import Path
 
@@ -15,6 +16,8 @@ from ..hooks import HooksRunner
 from ..knowledge_base import KnowledgeBase
 from ..memory import Memory
 from ..permissions import Permissions
+from ..redact import redact_terminal_output_with_count
+from .mcp import MCP_PREFIX, MCPManager
 from .schemas import BASE_SCHEMAS
 
 log = logging.getLogger(__name__)
@@ -33,6 +36,9 @@ class ToolsCore:
         # Subagent delegation is wired up by the Agent (see agent.py).
         self.subagents: dict = {}
         self.delegate = None  # callable(name, task) -> (summary, is_error)
+        # MCP servers are started (or not) by _build_agent (cli.py), which
+        # attaches the manager here; None = no MCP configured.
+        self.mcp: MCPManager | None = None
         self._run_command_count = 0  # per-turn safety rail, reset by new_turn()
         # Set per-turn by Agent as context fills up (#4.2); None = fixed default.
         self.context_budget_chars: int | None = None
@@ -47,6 +53,8 @@ class ToolsCore:
     @property
     def schemas(self) -> list[dict]:
         base = self._base_schemas
+        if self.mcp is not None:
+            base = base + self.mcp.schemas()
         if self.subagents and self.delegate is not None:
             return base + [self._subagent_schema()]
         return base
@@ -93,6 +101,9 @@ class ToolsCore:
         if guidance is not None:
             return guidance, True
 
+        if name.startswith(MCP_PREFIX):
+            return self._execute_mcp(name, inp)
+
         method = getattr(self, f"_tool_{name}", None)
         try:
             return method(inp), False
@@ -101,6 +112,26 @@ class ToolsCore:
         except Exception as exc:  # noqa: BLE001 - surface error back to the model
             log.debug("tool %r raised %s", name, exc, exc_info=True)
             return f"Error: {exc}", True
+
+    def _execute_mcp(self, name: str, inp: dict) -> tuple[str, bool]:
+        """Dispatch a namespaced ``mcp__server__tool`` call through the same
+        safety rails as built-ins: permission prompt (side-effects are
+        opaque, so default-prompt like run_command), a checkpoint before
+        anything that may mutate, and redaction on the result — MCP servers
+        can return file content or command output. ``read_only`` servers
+        skip prompt+checkpoint; ``trusted`` tools skip only the prompt."""
+        mgr = self.mcp
+        if mgr is None:  # unreachable via _repair, but never crash on it
+            return "No MCP servers are configured.", True
+        if not mgr.is_read_only(name):
+            if not mgr.is_trusted(name):
+                detail = f"{name}({json.dumps(inp, default=str)[:300]})"
+                if not self.perm.check(name, detail):
+                    return "User denied permission to run this MCP tool.", True
+            self.checkpoints.ensure_checkpoint(f"before MCP tool: {name}")
+        result, is_error = mgr.call(name, inp)
+        result, redacted = redact_terminal_output_with_count(result)
+        return self._note_redactions(result, redacted), is_error
 
     def _schema_for(self, name: str) -> dict | None:
         return next((s for s in self.schemas if s["name"] == name), None)

@@ -11,7 +11,7 @@ model unchanged (see [[providers]]).
 - `wizard.py` — `model_wizard()`, the `kbcode model` provider/key/model setup flow
 - `agent.py` — the agent loop (`Agent.run`), subagent delegation, `/insights`
 - `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC ([[providers]])
-- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search`, [[gotchas]]), `schemas.py` ([[tools-and-repair]])
+- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search`, [[gotchas]]), `mcp.py` (stdio MCP client + `MCPManager`, [[mcp]]), `schemas.py` ([[tools-and-repair]])
 - `config.py` — `Config` dataclass, `load_config()`, provider presets, `~/.kbcode` settings; per-project runtime state lives in `Config.state_dir` = `~/.kbcode/projects/<slug>/`, project `.kbcode/` is config-only + self-gitignored ([[config]])
 - `modes.py` — `Mode` dataclass + 4 builtins + custom mode loader from `.kbcode/modes/` ([[modes-subagents]])
 - `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md` ([[modes-subagents]])
@@ -26,16 +26,16 @@ model unchanged (see [[providers]]).
 - `checkpoints.py` — shadow git store for auto pre-edit snapshots + `/rollback` ([[safety]])
 - `hooks.py` — `HooksRunner`, user-scriptable PreToolUse/PostToolUse/Stop hooks from `settings.json` ([[safety]])
 - `ui.py` — `TerminalUI` (Rich-based banner, markdown, tool lines, menus). Tool activity now uses clean high-level summaries (e.g. "Search ... → 5 matches", relative paths) so users can follow what the agent is doing without seeing raw code in the log.
-- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:85`) + arrow-key menus (prompt_toolkit)
+- `prompt_input.py` — `/` autocomplete (commands + file-path completion for `/open`/`/image`/`/video` via `PATH_COMMANDS`; `/provider`/`/model` complete live model ids, fetched once per provider on `ThreadedCompleter`'s background thread and cached — `_model_completion_sources`, `kbcode/repl.py:86`) + arrow-key menus (prompt_toolkit)
 - `logs.py` — `setup_logging(state_dir)`: quiet rotating file log at `~/.kbcode/projects/<slug>/kbcode.log` for field debugging (`KBCODE_LOG_LEVEL`, [[config]])
 - `images.py` / `videos.py` / `vision_fallback.py` — clipboard/file image + video loading, auxiliary vision model fallback ([[vision]])
 - `redact.py` — regex secret redaction for tool output ([[safety]])
 - `interrupt.py` — Esc key interrupt watcher (Windows + POSIX) ([[providers]])
 
 ## Data / control flow
-1. `main()` (`kbcode/cli.py:360`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:212`)
+1. `main()` (`kbcode/cli.py:373`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:213`)
 2. User types a message → `Agent.run()` (`kbcode/agent.py:223`) → `Agent._complete()` (`kbcode/agent.py:126`) calls provider
-3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:89`) — see [[safety]]
+3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:97`) — built-ins via `_tool_<name>` methods, `mcp__*` names via the MCP fork ([[mcp]]) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 
@@ -46,7 +46,7 @@ any message-list surgery (compaction, subagent delegation) — see [[providers]]
 
 ## Deep dives
 [[providers]] · [[vision]] · [[modes-subagents]] · [[sessions]] · [[config]] ·
-[[context-management]] · [[tools-and-repair]] · [[safety]]
+[[context-management]] · [[tools-and-repair]] · [[safety]] · [[mcp]]
 
 See [[overview]] for setup, [[conventions]] for structure rules, [[about-kb]]
 for how this KB is maintained.

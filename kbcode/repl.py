@@ -7,6 +7,7 @@ _find_session, _require_key, _read) that this module imports from cli.py.
 
 from __future__ import annotations
 
+import atexit
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -24,7 +25,7 @@ from .cli import (
     _session_picker,
     ui,
 )
-from .config import PRESETS, Config, persist_choice, persist_global_choice, load_model_cache, save_model_cache
+from .config import PRESETS, Config, load_mcp_servers, persist_choice, persist_global_choice, load_model_cache, save_model_cache
 from .interrupt import interrupt_on_escape
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
@@ -221,6 +222,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         "/mode": list(agent.modes),
         "/kb-check": ["--fix"],
         "/resume": [r["id"] for r in list_sessions(config.sessions_dir)],
+        "/mcp": ["reload"],
     }
     cmd_input = make_input(COMMANDS, arg_options, history_file=config.history_file)  # None if no autocomplete available
     if cmd_input:
@@ -271,6 +273,41 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 config.provider, config.model, agent.mode.name,
                 agent.context_tokens(), config.compact_threshold,
             )
+            mgr = getattr(agent.tools, "mcp", None)
+            if mgr is not None and mgr.clients:
+                ui.notice(
+                    "MCP: " + ", ".join(f"{n} ({c} tool{'s' if c != 1 else ''})" for n, c in mgr.summary())
+                )
+            continue
+        if user == "/mcp" or user.startswith("/mcp "):
+            mgr = getattr(agent.tools, "mcp", None)
+            if user.strip() == "/mcp reload":
+                # Re-read the merged mcpServers config from disk so servers
+                # added/edited mid-session work without restarting kbcode —
+                # startup only starts what settings.json held at launch.
+                from .tools.mcp import MCPManager, parse_mcp_configs
+
+                config.mcp = load_mcp_servers(config.project_dir)
+                if not config.mcp:
+                    ui.notice('no MCP servers configured — add an "mcpServers" block to .kbcode/settings.json, then /mcp reload')
+                    continue
+                if mgr is None:
+                    mgr = MCPManager()
+                    agent.tools.mcp = mgr  # Agent.close() now stops these too
+                    atexit.register(mgr.stop_all)
+                mgr.reload(parse_mcp_configs(config.mcp), warn=lambda m: ui.notice(m, style="yellow"))
+                ui.notice("MCP reloaded.", style="green")
+            if mgr is None:
+                ui.notice('no MCP servers configured — add an "mcpServers" block to .kbcode/settings.json, then /mcp reload')
+                continue
+            if not mgr.clients:
+                ui.notice("no MCP servers connected (check .kbcode/settings.json / their logs)")
+                continue
+            for server, count in mgr.summary():
+                ui.print(f"  ● [bold cyan]{server}[/bold cyan] — {count} tool{'s' if count != 1 else ''}")
+                names = mgr.tools_for(server)
+                if names:
+                    ui.print("      " + ", ".join(names))
             continue
         if user == "/ping":
             _ping(agent)

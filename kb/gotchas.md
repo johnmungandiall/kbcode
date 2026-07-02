@@ -1,7 +1,7 @@
 # Gotchas — traps specific to this repo. Read before editing.
 
 ## Anthropic SDK kwargs
-- `kbcode/provider.py:226-241` — `AnthropicProvider.complete`'s staged `attempts` list tries thinking/effort kwargs with SDK fallbacks (see [[providers]])
+- the staged `attempts` list in `complete` (`kbcode/provider.py:303-320`) tries thinking/effort kwargs with SDK fallbacks (see [[providers]])
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls
@@ -9,7 +9,7 @@
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
-- `kbcode/cli.py:179-200` — `_resume_agent` restores the recorded provider/model from session meta
+- `kbcode/cli.py:192-200` — `_resume_agent` restores the recorded provider/model from session meta
 - If the recorded provider isn't configured, it falls back to the current one with a warning
 
 ## JSON serialization of SDK objects
@@ -17,12 +17,12 @@
 - New Anthropic SDK content-block shapes need `model_dump(mode="json")` fallback
 
 ## Tool-call repair is two layers
-- `kbcode/tools/core.py:106-123` — `_repair()` fixes name typos + missing required args (execute-time)
+- `kbcode/tools/core.py:139` — `_repair()` fixes name typos + missing required args (execute-time)
 - `kbcode/repair.py:48` — `promote()` recovers tool calls written as plain text (parse-time)
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 
 ## Protected files
-- `kbcode/tools/file.py:88-109` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
+- `kbcode/tools/file.py:91-109` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
 - `.env.example` and `.gitignore` are explicitly allowed — see [[safety]]
 
 ## Compaction token estimate
@@ -37,25 +37,25 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:280`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:254`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:150`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:472`) calls `_active_status.stop()`
+- Fix: `stream_chunk` (`kbcode/ui.py:477`) calls `_active_status.stop()`
   (`kbcode/ui.py:293`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
-  `stream_tool_hint` (`kbcode/ui.py:497`) follows the same rules — spinner
+  `stream_tool_hint` (`kbcode/ui.py:502`) follows the same rules — spinner
   stopped first, half-printed stream line closed via `_stream_open`.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:468`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:473`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:212`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:213`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -96,7 +96,7 @@
   See [[providers]].
 
 ## Anthropic stream iterates EVENTS, not text_stream
-- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:333`) iterates
+- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:349`) iterates
   the SDK stream context itself — synthetic `"text"` events carry deltas,
   `content_block_start` events carry tool names for `on_tool` hints. Don't
   "simplify" it back to `stream_ctx.text_stream`: that silently drops the
@@ -148,8 +148,8 @@
   available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
-- `kbcode/tools/file.py:255` — `_tool_search_code` formats each hit through
-  `self._display_path(fp)` (`kbcode/tools/core.py:139`), **not** a raw
+- `kbcode/tools/file.py:349` — `_tool_search_code` formats each hit through
+  `self._display_path(fp)` (`kbcode/tools/core.py:170`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
   [[kbcode-write-anywhere]] intent), so a search/list base can point outside
@@ -188,7 +188,7 @@
 - When doing comparisons across directories (e.g. similar functions in broker/kotak vs broker/zerodha), the agent must start with `repo_map` (scoped to subdirs) then use `search_code` with the `path` argument for narrow, targeted searches. Batch different scoped searches in one step. Stop and summarize as soon as the pattern is found — do not repeat similar searches. Updated BASE_SYSTEM, search_code description, and code-explorer instructions enforce this (see prompts.py and schemas.py). This prevents the repetitive search loops that previously caused long-running or "stuck" turns.
 
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:381` — `_tool_run_command` caps calls per turn at
+- `kbcode/tools/file.py:377` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
   `kbcode/config.py:35`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
   per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
@@ -211,21 +211,60 @@
   the env var name alone would silently 401 — see [[vision]]
 
 ## Runtime state lives in the user home; a legacy `.kbcode/memory.db` pins it local
-- `Config.state_dir` (`kbcode/config.py:130`) — memory db, sessions/, checkpoints/,
+- `Config.state_dir` (`kbcode/config.py:131`) — memory db, sessions/, checkpoints/,
   input history, and kbcode.log live at `~/.kbcode/projects/<slug>/` (Claude Code
   style), NOT in the project. Exception: a project carrying a legacy
   `.kbcode/memory.db` keeps the project-local `.kbcode` as its state dir —
   deleting that file silently switches the project to the (empty) home-dir
   location, "losing" its sessions/checkpoints/history. See [[config]].
-- `KBCODE_HOME` overrides `~/.kbcode` and is read on every `global_dir()` call
-  (`kbcode/config.py:219`) — set it BEFORE any Config path is touched (tests do,
+- `KBCODE_HOME` overrides `~/.kbcode` and is read on every `def global_dir`
+  call (`kbcode/config.py:220`) — set it BEFORE any Config path is touched (tests do,
   via the autouse fixture in `tests/conftest.py`), or state splits across two homes.
 - The project `.kbcode/` (config only) self-hides via an auto-written `*`
-  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:206`) — an existing,
+  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:207`) — an existing,
   user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
+## `fix_pointers` anchors on the FIRST text match — verify its "fixes"
+- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:243`) relocates a
+  drifted pointer by searching the target file for the symbol named on the
+  note line — but it takes the *first* line containing that text, which can
+  be a docstring/comment mention or a class header instead of the actual
+  `def`. Repeat offenders: `promote` → repair.py's module docstring,
+  `AnthropicProvider.complete` → the class line, `global_dir` → a call site.
+  After running it (or `/kb-check --fix`), eyeball every rewrite; phrasing a
+  note line as `` `def promote`, `path:line` `` steers the anchor to the
+  definition.
+
+## MCP traps (see [[mcp]] for the full picture)
+- **`mcpServers` is the ONLY settings key merged per-server (deep)** across
+  home → launch → project (`kbcode/config.py:390-395`); every other key is a
+  whole-value shallow override. Don't "unify" the merge loop — a shallow
+  `mcpServers` override silently hides every home-level server the moment a
+  project defines one of its own.
+- **The tool list is a startup cache.** `tools/list` runs once in
+  `MCPManager.start_all`; `tools/list_changed` notifications are discarded
+  (`_read_stdout`, `kbcode/tools/mcp.py`). A server that grows a tool
+  mid-session stays invisible until `/mcp reload` — that's UX, not a bug.
+- **So is the server list**: `_build_agent` only starts servers that were in
+  settings.json at launch. An `mcpServers` block added mid-session does
+  NOTHING until `/mcp reload`, which re-reads the merged config
+  (`load_mcp_servers()`, `kbcode/config.py:238`) and bootstraps the manager if
+  needed — don't tell users a settings edit alone activates a server.
+- **Requests are serialized per client** (`MCPClient._lock`). `read_only`
+  servers get `parallel_safe` schemas, so pool threads CAN dispatch two calls
+  at one server concurrently — without the lock their writes interleave on a
+  single stdin pipe and corrupt the JSON-RPC stream. Don't remove it.
+- **`parallel_safe: true` in server config is an alias for `read_only`**
+  (`parse_mcp_configs`): skipping the permission prompt and concurrent
+  dispatch are only safe under the same "never mutates" assertion, so they're
+  deliberately one flag.
+- **MCP servers run with full user privileges** — same trust model as
+  `run_command` and hooks: no sandbox, the permission gate is the backstop.
+  Old-agent leak is handled: `/provider`/`/open` rebuild goes through
+  `Agent.close()` → `stop_all()`; don't bypass close() when adding rebuilds.
+
 ## `kbcode update` needs force-reinstall; bump `__version__` every release
-- `kbcode/cli.py:48` — `_self_update()` installs from a moving git branch, not a
+- `kbcode/cli.py:50` — `_self_update()` installs from a moving git branch, not a
   pinned commit. A bare `pip install --upgrade git+URL` is a **silent no-op**
   when `__version__` is unchanged: pip sees the same version already installed
   and skips, so a fix pushed to GitHub without a version bump never reaches

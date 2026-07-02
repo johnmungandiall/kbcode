@@ -407,6 +407,7 @@ kbcode/
     planning.py     manage_todos
     subagent.py     run_subagent
     web.py          web_search (DuckDuckGo via the ddgs package, no API key)
+    mcp.py          MCP client — external tool servers over stdio (Claude Code idea)
   repair.py         recover tool calls a weak model wrote as plain text (openclaw idea)
   pricing.py        rough per-model USD pricing for /insights (Hermes idea)
   prompts.py        the system prompt (+ standing orders, + .kbcode/prompts/ fragments)
@@ -416,6 +417,40 @@ kbcode/
   hooks.py          PreToolUse/PostToolUse/Stop hook runner (Claude Code idea, see settings.json)
   config.py         paths + settings
 ```
+
+## 🔌 MCP servers (external tools)
+
+kbcode can connect to [MCP](https://modelcontextprotocol.io) servers and use
+their tools as if built-in — filesystem, git, Playwright, SQLite, and the rest
+of the community-server ecosystem — with zero per-tool code. Add a Claude
+Code-compatible `mcpServers` block to `.kbcode/settings.json` (project, or
+`~/.kbcode/settings.json` for all projects — entries merge per server,
+project wins on a name clash):
+
+```json
+{
+  "mcpServers": {
+    "git":  { "command": "uvx", "args": ["mcp-server-git", "--repository", "."] },
+    "fs":   { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+              "read_only": true }
+  }
+}
+```
+
+Tools show up namespaced (`mcp__git__git_status`) and go through the same
+safety rails as built-ins: a permission prompt by default, an automatic
+checkpoint before anything that may mutate, and secret redaction on results.
+Optional per-server fields: `read_only: true` (pure-read server — no prompts,
+runs in parallel batches), `trusted: ["tool"]` (auto-approve specific tools),
+`env`, `cwd`, `timeout`, `enabled`. `/mcp` lists connected servers,
+`/mcp reload` reconnects (a server that changes its tool set mid-session
+needs this — change notifications aren't consumed).
+
+Scope & prerequisites: **local stdio servers, tools only** — no remote
+HTTP/OAuth servers, resources, or prompts (yet). `npx ...` servers need
+Node.js installed, `uvx ...` needs Python 3.10+ with uv; kbcode just runs the
+command you configure. A server that fails to start is skipped with a warning
+— it never blocks the agent.
 
 ## 🧠 Choose your AI model
 

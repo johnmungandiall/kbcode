@@ -116,6 +116,7 @@ class Config:
     max_commands_per_turn: int = DEFAULT_MAX_COMMANDS
     auto_approve: bool = False
     hooks: dict = field(default_factory=dict)  # PreToolUse/PostToolUse/Stop config, from settings.json (see hooks.py)
+    mcp: dict = field(default_factory=dict)  # MCP servers from settings.json "mcpServers" (see tools/mcp.py)
 
     # --- derived paths -------------------------------------------------
     @property
@@ -232,6 +233,21 @@ def project_slug(project_dir: Path) -> str:
     letter or digit becomes a dash (``d:\\AI Agents\\kb`` -> ``d--AI-Agents-kb``)."""
     resolved = str(Path(project_dir).resolve())
     return re.sub(r"[^A-Za-z0-9]", "-", resolved)
+
+
+def load_mcp_servers(project_dir: Path, launch_dir: Path | None = None) -> dict:
+    """The merged ``mcpServers`` blocks from home → launch → project — a
+    PER-SERVER union (higher scope wins per server *name*, like Claude Code),
+    unlike the whole-value shallow override every other settings key gets in
+    ``load_config``. Split out so ``/mcp reload`` can re-read servers added
+    mid-session without rebuilding the whole Config."""
+    launch = (launch_dir or Path.cwd()).resolve()
+    merged: dict = {}
+    for kbdir in (global_dir(), launch / ".kbcode", Path(project_dir).resolve() / ".kbcode"):
+        block = load_settings(kbdir).get("mcpServers")
+        if isinstance(block, dict):
+            merged.update(block)
+    return merged
 
 
 def load_settings(kbcode_dir: Path) -> dict:
@@ -382,9 +398,12 @@ def load_config(project_dir: Path | None = None) -> Config:
     load_dotenv(home / ".env")
 
     # Merge settings.json the same way: read low→high priority, let higher win.
+    # Exception: "mcpServers" is merged PER SERVER by load_mcp_servers().
     settings: dict = {}
     for kbdir in (home, launch_dir / ".kbcode", project_dir / ".kbcode"):
         for key, value in load_settings(kbdir).items():
+            if key == "mcpServers":
+                continue  # merged per-server below, not whole-block
             if value is not None:
                 settings[key] = value
 
@@ -413,6 +432,7 @@ def load_config(project_dir: Path | None = None) -> Config:
         max_steps=_int("KBCODE_MAX_STEPS", DEFAULT_MAX_STEPS),
         max_commands_per_turn=_int("KBCODE_MAX_COMMANDS", DEFAULT_MAX_COMMANDS),
         hooks=settings.get("hooks") or {},
+        mcp=load_mcp_servers(project_dir, launch_dir),
     )
     config.use_provider(provider, model=model, base_url=base_url)
     return config

@@ -3,6 +3,25 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased / next
+- **2026-07-02: v1.10.0 — MCP support (stdio, tools only)** — new
+  `kbcode/tools/mcp.py`: a lean newline-JSON-RPC stdio client (no SDK, no new
+  deps; `initialize`/`tools/list`/`tools/call` only) + `MCPManager`. Servers
+  come from a Claude Code-compatible `mcpServers` block in settings.json,
+  merged PER SERVER across home→launch→project (the only deep-merged settings
+  key). Tools appear as `mcp__server__tool` in `Tools.schemas` (repair +
+  parallel_safe work for free); dispatch forks on the prefix into
+  `_execute_mcp` — permission prompt by default, checkpoint before mutating
+  calls, redaction on results; `read_only`/`trusted` config relaxes per
+  server/tool. `/mcp [reload]` command, startup notice, `/status` line;
+  `Agent.close()` stops servers (no leak across `/provider` rebuilds) with an
+  atexit backstop. `tools/list_changed` notifications are discarded — reload
+  to pick up changed tool sets. Tests: `tests/test_mcp.py` end-to-end against
+  `tests/fake_mcp_server.py`. See [[mcp]].
+  Follow-up fix (same day, found in live use): an `mcpServers` block added
+  mid-session did nothing — servers only started at launch and `/mcp` said
+  "no MCP servers configured" until restart. `/mcp reload` now re-reads the
+  merged block from disk (new `load_mcp_servers()` helper, also used by
+  `load_config`) and bootstraps the manager if none existed.
 - **2026-07-02: Anthropic prompt caching now covers the conversation, not just
   system+tools** — `_add_cache_breakpoints()` marks the newest 3 user-role
   native messages with `cache_control`, so each tool round-trip re-reads the
@@ -56,7 +75,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   - Added unit tests covering the new high-level `tool_result` summaries (search/read/list/repo_map) and long-pattern truncation in `_describe_tool`.
   - Fixed stale version strings across docs (overview intro, README badge, KB pointers) for release hygiene.
   - Direct execution verification + import smoke of UI/agent/tools for the recent changes.
-- **UX (from 1.9.11 carried)**: Agent activity log is now user-friendly: clean counts instead of raw internal code/match lines. Paths relative, patterns truncated. Users can finally tell what the agent is doing (e.g. `Search ... ↳ 7 matches`, `Read some_file.py:11+ ↳ 42 lines`).
+- **UX (from 1.9.11 carried)**: Agent activity log is now user-friendly: clean counts instead of raw internal code/match lines. Paths relative, patterns truncated. Users can finally tell what the agent is doing (e.g. `Search ... ↳ 7 matches`, `Read some_file.py:<line>+ ↳ 42 lines`).
 
 ## v1.9.11
 - `read_file` now supports `offset` (1-based) + `limit` for reading slices of large files. Range reads use efficient line-by-line streaming (no full file load) to avoid the old shell-chunking pattern (`powershell Get-Content | Select -Skip`). Still respects context budget and preserves original line numbers in output. Directly addresses step-limit issues on huge files (e.g. 2000+ line main.dart). UI display updated, tests added.

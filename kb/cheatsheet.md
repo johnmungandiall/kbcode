@@ -14,7 +14,7 @@
   log — lives in `~/.kbcode/projects/<slug>/`; `KBCODE_HOME` overrides `~/.kbcode`)
 - `kbcode -c` — continue most recent saved session
 - `kbcode --resume` — pick from past sessions
-- `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:48`)
+- `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:50`)
 - `kbcode --version` — show version; single source is `kbcode.__version__`
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.
@@ -36,6 +36,8 @@
 - `/status` — provider, model, mode, context size
 - `/todo` — show task checklist
 - `/kb` — list kb/ notes
+- `/mcp [reload]` — list connected MCP servers & tools; reload re-reads
+  settings.json + reconnects (needed after adding a server mid-session, [[mcp]])
 - `/kb-check [--fix]` — verify/repair kb/ pointers
 - `/insights` — token/cost usage
 - `/compact` — summarize old turns

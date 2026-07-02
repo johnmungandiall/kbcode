@@ -30,7 +30,7 @@ Map of the KB:
 - kb/about-kb.md — full KB-maintenance + sub-agent + user-map rules (read before maintaining)
 - kb/architecture.md — component map, control flow, the normalized-message invariant, links into kb/features/
 - kb/about-you.md — what the USER prefers: working style, tech, goals, rules
-- kb/features/ — deep-dives: providers, vision, modes-subagents, sessions, config, context-management, tools-and-repair, safety
+- kb/features/ — deep-dives: providers, vision, modes-subagents, sessions, config, context-management, tools-and-repair, safety, mcp
 - kb/conventions.md, kb/glossary.md — code/note style rules; project-specific terms
 - kb/gotchas.md, kb/changelog.md, kb/cheatsheet.md — traps, KB/release history, command cheatsheet
 

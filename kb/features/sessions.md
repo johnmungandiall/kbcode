@@ -8,7 +8,7 @@ inside the project tree (see [[config]] "Where files live").
 happens** — `Agent._append()` (`kbcode/agent.py:212`) wraps every
 `self.messages.append`, so a crash loses at most the in-flight message. Three
 other record types share the file: `meta` (written once by `cli._build_agent`,
-`kbcode/cli.py:141`, capturing provider/model/mode/git branch), `usage` (written after
+`kbcode/cli.py:143`, capturing provider/model/mode/git branch), `usage` (written after
 every turn), and `reset` (written by `Agent.reset()`, `kbcode/agent.py:778` — a marker,
 not a new file, so replay only reconstructs what happened after the last reset
 while the file keeps a full audit trail underneath).

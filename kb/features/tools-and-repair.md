@@ -10,11 +10,22 @@ bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.p
 (`kbcode/agent.py:468`) runs them and feeds outputs back as a plain `user` turn (no
 native tool ids to replay) with a nudge to use the real format.
 
-*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:89`) runs `_repair()`
-(`kbcode/tools/core.py:108`) first — unknown tool name -> closest match via
+*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:97`) runs `_repair()`
+(`kbcode/tools/core.py:139`) first — unknown tool name -> closest match via
 `difflib`; missing required args -> names them. Every call site wraps
 `execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs
 configured PreToolUse/PostToolUse hooks around it — see [[safety]].
+
+## MCP tools (external servers, namespaced `mcp__server__tool`)
+When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
+an `MCPManager` to `Tools.mcp` (`kbcode/tools/core.py:41`); `ToolsCore.schemas`
+appends the live server schemas (`kbcode/tools/core.py:57`) so `_repair()` and
+`parallel_safe_tools` cover them for free, and `execute()` forks on the
+`mcp__` prefix (`kbcode/tools/core.py:104`) into `_execute_mcp()`
+(`kbcode/tools/core.py:116`) — permission gate, checkpoint, redaction, then
+the JSON-RPC call. The prefix keeps MCP names far from built-ins in
+edit-distance, so difflib never "corrects" across the namespace boundary.
+Deep dive: [[mcp]].
 
 ## Path resolution & protected files
 `_resolve()` (`kbcode/tools/core.py:128`) anchors a relative path to the
@@ -51,8 +62,8 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:212`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:191`). Every describer
+directly; `_describe_tool()` (`kbcode/ui.py:213`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:192`). Every describer
 entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
 a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 

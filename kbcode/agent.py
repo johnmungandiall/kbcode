@@ -221,6 +221,10 @@ class Agent:
         return [s for s in self.tools.schemas if self.mode.allows(s["name"])]
 
     def run(self, user_input: str, images: list[dict] | None = None) -> None:
+        # A resumed (or otherwise inherited) transcript may end mid-pair if a
+        # previous turn was interrupted before this fix sealed it — repair
+        # BEFORE compaction so its pairing invariant holds too.
+        self._seal_dangling_tool_calls()
         self._maybe_compact()
         msg: dict = {"role": "user", "content": user_input}
         if images:  # vision attachments (Alt+V / /image) — see images.py
@@ -353,9 +357,38 @@ class Agent:
             )
             self._turn_summary(start, actions, before)
         except KeyboardInterrupt:
+            self._seal_dangling_tool_calls()
             self.ui.notice("interrupted.", style="yellow")
             self._turn_summary(start, actions, before)
             raise
+
+    def _seal_dangling_tool_calls(self) -> None:
+        """Close an unanswered assistant ``tool_calls`` message with synthetic
+        cancelled results. Esc can land between the assistant append and the
+        tool_results append (classically: while a permission prompt is open),
+        leaving a tool_use with no matching result — both provider APIs then
+        reject EVERY later request with HTTP 400 ("insufficient tool messages
+        following tool_calls"), wedging the session and its saved transcript.
+        Called on interrupt AND at the start of run() (for transcripts wedged
+        before the interrupt-time seal existed, e.g. via --resume)."""
+        if not self.messages:
+            return
+        last = self.messages[-1]
+        if last.get("role") != "assistant" or not last.get("tool_calls"):
+            return
+        self._append(
+            {
+                "role": "tool_results",
+                "results": [
+                    {
+                        "id": call.id,
+                        "content": "[cancelled — the user interrupted before this tool call ran]",
+                        "is_error": True,
+                    }
+                    for call in last["tool_calls"]
+                ],
+            }
+        )
 
     def _run_parallel_batch(self, calls: list) -> list[dict]:
         """Run a run of consecutive read-only tool calls concurrently (#4.3).
@@ -782,10 +815,16 @@ class Agent:
             self.session.reset_marker()
 
     def close(self) -> None:
-        """Flush a final usage snapshot to the transcript. Call once at process
-        exit (and before replacing this Agent with a freshly built one)."""
+        """Flush a final usage snapshot to the transcript and stop any MCP
+        server subprocesses. Call once at process exit (and before replacing
+        this Agent with a freshly built one — /provider and /open rebuild the
+        agent, and without this the old build's MCP servers would leak until
+        exit)."""
         if self.session:
             self.session.record_usage(dict(self.usage))
+        mcp = getattr(self.tools, "mcp", None)
+        if mcp is not None:
+            mcp.stop_all()
 
     def _maybe_compact(self) -> None:
         """Auto-summarize old turns once the transcript crosses the threshold."""

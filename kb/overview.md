@@ -1,6 +1,6 @@
 # Overview
 
-**kbcode** is a terminal-based AI coding agent (v1.9.12) that blends five ideas
+**kbcode** is a terminal-based AI coding agent (v1.10.0) that blends five ideas
 (cloned for study, gitignored, into `references/`):
 1. **Hands** (Claude Code) — reads/writes files, runs commands
 2. **Memory + skills** (Hermes) — persistent SQLite memory across sessions
@@ -9,12 +9,14 @@
 5. **Tool-call repair** (openclaw) — fixes malformed calls from weaker models
 
 Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, Ollama, custom).
+Can also connect to external **MCP servers** (stdio, tools only) and expose
+their tools as built-ins — see [[mcp]].
 
 ## Key entry points
-- `kbcode/cli.py:360` — `main()` entry point, parses args, dispatches to wizard/init/REPL
-- `kbcode/repl.py:212` — `repl()` the interactive chat loop
+- `kbcode/cli.py:373` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/repl.py:213` — `repl()` the interactive chat loop
 - `kbcode/agent.py:72` — `Agent` class, the core tool-using loop
-- `kbcode/tools/core.py:23 — `ToolsCore`/`Tools`, all tool implementations + schemas
+- `kbcode/tools/core.py:26 — `ToolsCore`/`Tools`, all tool implementations + schemas
 
 See [[architecture]] for the full component map and its "Deep dives" links into
 the `kb/features/` notes.
@@ -27,9 +29,9 @@ the `kb/features/` notes.
 See [[cheatsheet]] for the full command list.
 
 ## Version
-- `kbcode/__init__.py:9` — `__version__ = "1.9.12"`; release history in [[changelog]]
+- `kbcode/__init__.py:9` — `__version__ = "1.10.0"`; release history in [[changelog]]
 
-last indexed: 2026-07-02 (uncommitted: per-project runtime state — memory.db, sessions/, checkpoints/, history, kbcode.log — moved to `~/.kbcode/projects/<slug>/` via `Config.state_dir`; project `.kbcode/` is config-only and self-gitignored; new `KBCODE_HOME` override + `tests/conftest.py` autouse fixture)
+last indexed: 2026-07-02 (uncommitted: MCP support — `kbcode/tools/mcp.py` stdio client/manager, `mcpServers` settings block with per-server deep merge, `mcp__` dispatch fork in ToolsCore, `/mcp` command; see [[mcp]])
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

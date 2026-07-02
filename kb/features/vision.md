@@ -35,7 +35,7 @@ none at all), so `describe_video()` (`kbcode/vision_fallback.py:146`) skips
 with a `video_url` part. `videos.load_video_file()` (`kbcode/videos.py:31`) base64s a
 local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:334` `_describe_videos`) /
 `--video` (one-shot, `_take_video`, `kbcode/cli.py:319`) call this synchronously; the description is
-threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:230`) —
+threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:232`) —
 the main model never sees raw video.
 
 See [[providers]] for the retry/translation layer these routes reuse,

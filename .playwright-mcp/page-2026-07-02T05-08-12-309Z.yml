@@ -1,0 +1,59 @@
+- generic [ref=e2]:
+  - navigation [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: RPA Challenge
+      - list [ref=e7]:
+        - listitem [ref=e8]:
+          - link "Input Forms" [ref=e9] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e10]:
+          - link "Shortest Path" [ref=e11] [cursor=pointer]:
+            - /url: ./assets/shortestPath/public/shortestpath.html
+        - listitem [ref=e12]:
+          - link "Movie Search" [ref=e13] [cursor=pointer]:
+            - /url: /movieSearch
+        - listitem [ref=e14]:
+          - link "Invoice Extraction" [ref=e15] [cursor=pointer]:
+            - /url: https://rpachallengeocr.azurewebsites.net
+        - listitem [ref=e16]:
+          - link "RPA Stock Market" [ref=e17] [cursor=pointer]:
+            - /url: ./assets/rpaStockMarket/index.html
+  - generic [ref=e20]:
+    - generic [ref=e21]:
+      - generic [ref=e22]:
+        - generic [ref=e23]: Instructions
+        - generic [ref=e25] [cursor=pointer]: EN
+      - generic [ref=e26]: 1. The goal of this challenge is to create a workflow that will input data from a spreadsheet into the form fields on the screen.
+      - generic [ref=e27]: 2. Beware! The fields will change position on the screen after every submission throughout 10 rounds thus the workflow must correctly identify where each spreadsheet record must be typed every time.
+      - generic [ref=e28]: 3. The actual countdown of the challenge will begin once you click the Start button until then you may submit the form as many times as you wish without receiving penalties.
+      - generic [ref=e29]: Good luck!
+      - generic [ref=e30]:
+        - link "Download Excel cloud_download" [ref=e31] [cursor=pointer]:
+          - /url: ./assets/downloadFiles/challenge.xlsx
+          - text: Download Excel
+          - generic [ref=e32]: cloud_download
+        - button "Start" [ref=e33] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e39]:
+          - text: Email
+          - textbox [ref=e40]
+        - generic [ref=e43]:
+          - text: First Name
+          - textbox [ref=e44]
+        - generic [ref=e47]:
+          - text: Phone Number
+          - textbox [ref=e48]
+        - generic [ref=e51]:
+          - text: Last Name
+          - textbox [ref=e52]
+        - generic [ref=e55]:
+          - text: Address
+          - textbox [ref=e56]
+        - generic [ref=e59]:
+          - text: Role in Company
+          - textbox [ref=e60]
+        - generic [ref=e63]:
+          - text: Company Name
+          - textbox [ref=e64]
+      - button "Submit" [ref=e65] [cursor=pointer]

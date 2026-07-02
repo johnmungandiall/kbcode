@@ -1,0 +1,511 @@
+- generic [ref=f2e1]:
+  - generic:
+    - generic:
+      - link "Skip to main content" [ref=f2e2] [cursor=pointer]
+      - link "Accessibility help" [ref=f2e3] [cursor=pointer]:
+        - /url: https://support.google.com/websearch/answer/181196?hl=en-IN
+  - generic [ref=f2e8]:
+    - search [ref=f2e9]:
+      - generic [ref=f2e11]:
+        - generic:
+          - generic:
+            - generic:
+              - img
+        - 'link "ICC Women''s T20 World Cup: Semi-finals" [ref=f2e13] [cursor=pointer]':
+          - /url: https://www.google.com/webhp?hl=en&ictx=2&sa=X&ved=0ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQPQgK
+          - 'img "ICC Women''s T20 World Cup: Semi-finals" [ref=f2e14]'
+        - generic [ref=f2e15]:
+          - generic [ref=f2e16]:
+            - combobox "Search" [ref=f2e19]: arduino jobs arduino jobs
+            - generic [ref=f2e20]:
+              - button "Clear" [ref=f2e22] [cursor=pointer]:
+                - img [ref=f2e24]
+              - generic [ref=f2e27]:
+                - button "Search by voice" [ref=f2e28] [cursor=pointer]:
+                  - img [ref=f2e29]
+                - button "Search by image" [ref=f2e31] [cursor=pointer]:
+                  - img [ref=f2e32]
+          - button "Search" [ref=f2e34] [cursor=pointer]:
+            - img [ref=f2e37]
+    - generic [ref=f2e39]:
+      - button "Settings" [ref=f2e41] [cursor=pointer]:
+        - img [ref=f2e44]
+      - button "Share" [ref=f2e47] [cursor=pointer]:
+        - img [ref=f2e51]
+      - generic [ref=f2e53]:
+        - button "Google apps" [ref=f2e55] [cursor=pointer]:
+          - img [ref=f2e56]
+        - link "Sign in" [ref=f2e60] [cursor=pointer]:
+          - /url: https://accounts.google.com/ServiceLogin?hl=en&passive=true&continue=https://www.google.com/search%3Fq%3Darduino%2Bjobs%26sei%3D2O9FatGIIOKrxc8Pk9-N4Qk&ec=futura_srp_og_si_72236_p
+  - generic [ref=f2e62]:
+    - navigation [ref=f2e68]:
+      - generic [ref=f2e74]:
+        - list [ref=f2e75]:
+          - listitem [ref=f2e76]:
+            - link "AI Mode" [ref=f2e79] [cursor=pointer]:
+              - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&udm=50&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&aep=1&ntc=1&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ2J8OegQIEBAD
+              - generic [ref=f2e82]: AI Mode
+          - listitem [ref=f2e83]:
+            - link "All" [disabled] [ref=f2e84]:
+              - generic [ref=f2e86]: All
+          - listitem [ref=f2e87]:
+            - link "Jobs" [ref=f2e88] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&udm=8&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&q=arduino+jobs&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQs6gLegQIFhAB
+              - generic [ref=f2e90]: Jobs
+          - listitem [ref=f2e91]:
+            - link "Images" [ref=f2e92] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&udm=2&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&q=arduino+jobs&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQtKgLegQIFRAB
+              - generic [ref=f2e94]: Images
+          - listitem [ref=f2e95]:
+            - link "Videos" [ref=f2e96] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&udm=7&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&q=arduino+jobs&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQtKgLegQIExAB
+              - generic [ref=f2e98]: Videos
+          - listitem [ref=f2e99]:
+            - link "News" [ref=f2e100] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&q=arduino+jobs&tbm=nws&source=lnms&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ0pQJegQIFBAB
+              - generic [ref=f2e102]: News
+          - listitem [ref=f2e103]:
+            - link "Shopping" [ref=f2e104] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&udm=28&fbs=ABfTbFVyMZGZf1hfvX9uKjN_-G8cbFrr0jGOmUDa5Wr8dJBxFZwNmZYJJS8DnCDRKlzSIL3qT6HTwQpKPI5zpsWMwXyrk6yuZGmEXRMokuEAERSDfpvrKATpD6rcJBdX-2bbJpgFgEcaaszvbVX4M8jQpPZehfay1ChrpYPzAtBPHMip3rSRthLIfCnAPg1BfFz98sQlCiWGXbiJf5nafrs7hsrIv83MJA&q=arduino+jobs&ved=1t:220175&ictx=111
+              - generic [ref=f2e106]: Shopping
+          - listitem [ref=f2e107]:
+            - button "More filters" [ref=f2e108] [cursor=pointer]:
+              - generic "More filters" [ref=f2e109]:
+                - generic [ref=f2e110]:
+                  - generic [ref=f2e111]: More
+                  - img [ref=f2e113]
+        - button "Tools" [ref=f2e116] [cursor=pointer]:
+          - generic [ref=f2e118]:
+            - generic [ref=f2e119]: Tools
+            - img [ref=f2e121]
+    - navigation [ref=f2e124]:
+      - navigation [ref=f2e127]:
+        - list [ref=f2e134]:
+          - listitem [ref=f2e135]:
+            - link "Add Remote" [ref=f2e136] [cursor=pointer]:
+              - /url: /search?sca_esv=47fdd52eba661d26&q=arduino+jobs+remote&uds=AJ5uw1_a2D0D09lxm8gpKKOTUn4rF9W4HYoFRtMNWy-HL-Y_hDvf0N8rXxiVtcV1mY7egVaNO3lgJcMblymv8Kv7pFhn5zWYo9ar42Gqo4jX4k71hDzQa_nF_z6VUe5jZ1mfdpLHZEfNQ0eicgAdf0vMOHd4e07tew&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQxKsJKAB6BAgiEAE&ictx=0
+              - generic [ref=f2e138]: Remote
+          - listitem [ref=f2e139]:
+            - listitem [ref=f2e141]:
+              - button "Job type" [ref=f2e143] [cursor=pointer]:
+                - generic [ref=f2e144]:
+                  - generic [ref=f2e145]: Job type
+                  - img [ref=f2e148]
+          - listitem [ref=f2e150]:
+            - listitem [ref=f2e152]:
+              - button "Date posted" [ref=f2e154] [cursor=pointer]:
+                - generic [ref=f2e155]:
+                  - generic [ref=f2e156]: Date posted
+                  - img [ref=f2e159]
+    - heading "Search Results" [level=1] [ref=f2e161]
+    - main [ref=f2e167]:
+      - generic [ref=f2e173]:
+        - heading "Doramamidi, Andhra Pradesh 534448" [level=2] [ref=f2e174]:
+          - img [ref=f2e177]:
+            - img [ref=f2e178]
+          - generic [ref=f2e181]: Doramamidi, Andhra Pradesh 534448
+        - generic [ref=f2e183]:
+          - text: ∙
+          - button "Choose area" [ref=f2e184] [cursor=pointer]
+        - button "How location is used" [ref=f2e187] [cursor=pointer]:
+          - img [ref=f2e189]
+      - generic [ref=f2e194]:
+        - generic [ref=f2e197]:
+          - heading "Web results" [level=2] [ref=f2e198]
+          - generic [ref=f2e199]:
+            - generic [ref=f2e202]:
+              - link "Careers at Arduino Arduino Careers https://careers.arduino.cc" [ref=f2e204] [cursor=pointer]:
+                - /url: https://careers.arduino.cc/
+                - heading "Careers at Arduino" [level=3] [ref=f2e205]
+                - generic [ref=f2e211]:
+                  - generic [ref=f2e213]: Arduino Careers
+                  - generic [ref=f2e215]: https://careers.arduino.cc
+              - button "About this result" [ref=f2e218] [cursor=pointer]:
+                - img [ref=f2e221]
+            - generic [ref=f2e224]:
+              - generic [ref=f2e225]:
+                - text: We're always looking for new friends who wants to contribute to the success of the
+                - emphasis [ref=f2e226]: Arduino
+                - text: Ecosystem. We believe in open knowledge, standardization and ...
+              - link "Read more" [ref=f2e227] [cursor=pointer]:
+                - /url: https://careers.arduino.cc/#:~:text=We're%20always%20looking%20for%20new,open%20knowledge%2C%20standardization%20and%20interoperability.
+        - generic [ref=f2e232]:
+          - generic [ref=f2e233]:
+            - heading "Jobs" [level=2] [ref=f2e235]
+            - button "Follow" [ref=f2e237] [cursor=pointer]:
+              - generic [ref=f2e239]: Follow
+          - tablist [ref=f2e241]:
+            - generic [ref=f2e243]:
+              - tab "Job postings" [selected] [ref=f2e245] [cursor=pointer]:
+                - generic [ref=f2e247]: Job postings
+              - tab "Saved jobs" [ref=f2e248] [cursor=pointer]:
+                - generic [ref=f2e251]: Saved jobs
+              - tab "Following" [ref=f2e252] [cursor=pointer]:
+                - generic [ref=f2e254]: Following
+          - generic [ref=f2e256]:
+            - generic [ref=f2e259]:
+              - generic [ref=f2e262] [cursor=pointer]:
+                - 'button "Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote) Robotronix Anywhere • via BeBee Add Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote) to saves list Share Work from home Employment type Contractor" [ref=f2e263]':
+                  - generic [ref=f2e268]:
+                    - generic [ref=f2e269]:
+                      - generic [ref=f2e270]:
+                        - generic [ref=f2e271]: "Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote)"
+                        - generic [ref=f2e272]: Robotronix
+                        - generic [ref=f2e273]: Anywhere • via BeBee
+                      - generic [ref=f2e274]:
+                        - 'button "Add Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote) to saves list" [ref=f2e276]':
+                          - img [ref=f2e280]
+                        - button "Share" [ref=f2e282]:
+                          - img [ref=f2e286]
+                    - generic [ref=f2e288]:
+                      - generic [ref=f2e289]:
+                        - img [ref=f2e291]
+                        - generic [ref=f2e293]: Work from home
+                      - generic [ref=f2e294]:
+                        - img [ref=f2e296]
+                        - generic "Employment type Contractor" [ref=f2e298]: Contractor
+                - dialog [ref=f2e840]:
+                  - 'dialog "Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote)" [ref=f2e848]':
+                    - 'group "Job details for Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote)" [ref=f2e851]':
+                      - generic [ref=f2e854]:
+                        - generic [ref=f2e862]: Robotronix
+                        - generic [ref=f2e864]:
+                          - generic [ref=f2e865]:
+                            - button "More options" [active] [ref=f2e868]:
+                              - img [ref=f2e872]
+                            - generic [ref=f2e879]: More options
+                          - button "Close" [ref=f2e883]:
+                            - img [ref=f2e886]
+                      - generic [ref=f2e888]:
+                        - 'heading "Hiring: Online Arduino & IoT Electronics Trainer (Contractual | Remote)" [level=1] [ref=f2e889]'
+                        - generic [ref=f2e890]: Robotronix · India · via BeBee
+                        - generic [ref=f2e893]:
+                          - img [ref=f2e895]
+                          - generic [ref=f2e897]: Contractor
+                      - generic [ref=f2e901]:
+                        - list [ref=f2e903]:
+                          - listitem [ref=f2e904]:
+                            - link "Apply on BeBee" [ref=f2e905]:
+                              - /url: https://bebee.com/in/jobs/hiring-online-arduino-iot-electronics-trainer-contractual-remote-robotronix--theirstack-680085501?utm_campaign=google_jobs_apply&utm_source=google_jobs_apply&utm_medium=organic
+                              - generic [ref=f2e908]: Apply on BeBee
+                        - button [ref=f2e909]:
+                          - img [ref=f2e912]
+                      - group [ref=f2e915]:
+                        - generic [ref=f2e916]:
+                          - generic [ref=f2e917]:
+                            - heading "Job description" [level=2] [ref=f2e918]
+                            - generic [ref=f2e919]:
+                              - text: Robotronix™
+                              - text: is a STEM & Robotics education organization focused on helping students learn
+                              - text: technology through hands-on building
+                              - text: .
+                              - text: We mentor school students in
+                              - text: Electronics, Arduino, IoT, Robotics, and Programming
+                              - text: ", and partner with schools to set up"
+                              - text: Robotics & Innovation Labs and STEM curriculum programs
+                              - text: .
+                              - text: Our mission is to
+                              - text: transform students from rote learners into innovators and problem solvers
+                            - text: ...
+                          - button "Show full description" [ref=f2e920]:
+                            - separator [ref=f2e921]
+                            - generic [ref=f2e922]:
+                              - generic [ref=f2e923]: Show full description
+                              - img [ref=f2e925]
+                      - button "Report this listing" [ref=f2e929]:
+                        - generic [ref=f2e931]:
+                          - img [ref=f2e933]
+                          - generic [ref=f2e935]: Report this listing
+                    - generic [ref=f2e938]:
+                      - link "More jobs at Robotronix" [ref=f2e939]:
+                        - /url: /search?q=Jobs+at+Robotronix&sa=X&ved=2ahUKEwj1w7ncmrOVAxWk7jgGHR-9EkEQjc0DegQIBRAA
+                        - generic [ref=f2e940]:
+                          - img [ref=f2e942]
+                          - generic [ref=f2e944]: More jobs at Robotronix
+                          - img [ref=f2e946]
+                      - link "See web results for Robotronix" [ref=f2e949]:
+                        - /url: /search?q=Robotronix&sa=X&ved=2ahUKEwj1w7ncmrOVAxWk7jgGHR-9EkEQmJACegQIBRAB
+                        - generic [ref=f2e950]:
+                          - img [ref=f2e952]
+                          - generic [ref=f2e954]: See web results for Robotronix
+                          - img [ref=f2e956]
+              - button "Robotics Engineer (Arduino, ESP32, Raspberry Pi) Utkal Robotronics Bhubaneswar, Odisha • via BeBee Add Robotics Engineer (Arduino, ESP32, Raspberry Pi) to saves list Share Posted 2 days ago Employment type Full–time" [ref=f2e303] [cursor=pointer]:
+                - generic [ref=f2e304]:
+                  - generic [ref=f2e307]: U
+                  - generic [ref=f2e308]:
+                    - generic [ref=f2e309]:
+                      - generic [ref=f2e310]:
+                        - generic [ref=f2e311]: Robotics Engineer (Arduino, ESP32, Raspberry Pi)
+                        - generic [ref=f2e312]: Utkal Robotronics
+                        - generic [ref=f2e313]: Bhubaneswar, Odisha • via BeBee
+                      - generic [ref=f2e314]:
+                        - button "Add Robotics Engineer (Arduino, ESP32, Raspberry Pi) to saves list" [ref=f2e316]:
+                          - img [ref=f2e320]
+                        - button "Share" [ref=f2e322]:
+                          - img [ref=f2e326]
+                    - generic [ref=f2e328]:
+                      - generic [ref=f2e329]:
+                        - img [ref=f2e331]
+                        - generic "Posted 2 days ago" [ref=f2e334]: 2 days ago
+                      - generic [ref=f2e335]:
+                        - img [ref=f2e337]
+                        - generic "Employment type Full–time" [ref=f2e339]: Full–time
+              - button "Raspberry/Arduino Designer Energasia New Delhi, Delhi • via Foundit Add Raspberry/Arduino Designer to saves list Share Employment type Full–time" [ref=f2e344] [cursor=pointer]:
+                - generic [ref=f2e345]:
+                  - generic [ref=f2e348]: E
+                  - generic [ref=f2e349]:
+                    - generic [ref=f2e350]:
+                      - generic [ref=f2e351]:
+                        - generic [ref=f2e352]: Raspberry/Arduino Designer
+                        - generic [ref=f2e353]: Energasia
+                        - generic [ref=f2e354]: New Delhi, Delhi • via Foundit
+                      - generic [ref=f2e355]:
+                        - button "Add Raspberry/Arduino Designer to saves list" [ref=f2e357]:
+                          - img [ref=f2e361]
+                        - button "Share" [ref=f2e363]:
+                          - img [ref=f2e367]
+                    - generic [ref=f2e370]:
+                      - img [ref=f2e372]
+                      - generic "Employment type Full–time" [ref=f2e374]: Full–time
+            - link "74 more jobs" [ref=f2e379] [cursor=pointer]:
+              - /url: https://www.google.com/search?q=arduino%20jobs&sei=2O9FatGIIOKrxc8Pk9-N4Qk&jbr=sep%3A0&udm=8&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ3L8LegQIKRAM
+              - separator [ref=f2e380]
+              - generic [ref=f2e381]:
+                - generic [ref=f2e382]: 74 more jobs
+                - img [ref=f2e384]
+          - generic [ref=f2e387]:
+            - group [ref=f2e388]:
+              - button "Feedback" [ref=f2e389] [cursor=pointer]
+            - link "Learn more" [ref=f2e390] [cursor=pointer]:
+              - /url: https://support.google.com/websearch/?p=job_search_box&hl=en-IN
+        - generic [ref=f2e393]:
+          - heading "Web results" [level=2] [ref=f2e394]
+          - generic [ref=f2e395]:
+            - generic [ref=f2e398]:
+              - link "3514 Arduino Job Vacancies In July 2026 Naukri.com https://www.naukri.com › arduino-jobs" [ref=f2e400] [cursor=pointer]:
+                - /url: https://www.naukri.com/arduino-jobs
+                - heading "3514 Arduino Job Vacancies In July 2026" [level=3] [ref=f2e401]
+                - generic [ref=f2e407]:
+                  - generic [ref=f2e409]: Naukri.com
+                  - generic [ref=f2e411]: https://www.naukri.com › arduino-jobs
+              - button "About this result" [ref=f2e414] [cursor=pointer]:
+                - img [ref=f2e417]
+            - generic [ref=f2e420]:
+              - generic [ref=f2e421]:
+                - emphasis [ref=f2e422]: Arduino jobs
+                - text: · Car Electronics Engineer - CANBUS/ AutoSARI Arduino / ECU · Embedded systems & IoT Engineer · Arduino & IoT Specialist · Robotic Trainer.
+              - link "Read more" [ref=f2e423] [cursor=pointer]:
+                - /url: https://www.naukri.com/arduino-jobs#:~:text=Arduino%20jobs&text=Car%20Electronics%20Engineer%20%2D%20CANBUS%2F,AutoSARI%20Arduino%20%2F%20ECU&text=Embedded%20systems%20%26%20IoT%20Engineer&text=Arduino%20%26%20IoT%20Specialist&text=Robotic%20Trainer
+        - generic [ref=f2e427]:
+          - generic [ref=f2e430]:
+            - link "1000+ Arduino jobs in India LinkedIn India https://in.linkedin.com › jobs › arduino-jobs" [ref=f2e432] [cursor=pointer]:
+              - /url: https://in.linkedin.com/jobs/arduino-jobs
+              - heading "1000+ Arduino jobs in India" [level=3] [ref=f2e433]
+              - generic [ref=f2e439]:
+                - generic [ref=f2e441]: LinkedIn India
+                - generic [ref=f2e443]: https://in.linkedin.com › jobs › arduino-jobs
+            - button "About this result" [ref=f2e446] [cursor=pointer]:
+              - img [ref=f2e449]
+          - generic [ref=f2e452]:
+            - generic [ref=f2e453]:
+              - emphasis [ref=f2e454]: 1,000+ Arduino Jobs in India
+              - text: · TECHNOLOGY CONSULTANT · STEM Innovation Engineer (Electronics Engineer) in Amritsar, Ghaziabad, Meerut, Sangrur, Noida, Gurgaon, ...
+            - link "Read more" [ref=f2e455] [cursor=pointer]:
+              - /url: https://in.linkedin.com/jobs/arduino-jobs#:~:text=1%2C000%2B%20Arduino%20Jobs%20in%20India&text=TECHNOLOGY%20CONSULTANT&text=STEM%20Innovation%20Engineer%20(Electronics%20Engineer),Gurgaon%2C%20Bulandshahr%2C%20Uttar%20Pradesh%2C%20Punjab
+        - generic [ref=f2e459]:
+          - generic [ref=f2e462]:
+            - link "300 Arduino Job Vacancies Indeed https://in.indeed.com › q-arduino-jobs" [ref=f2e464] [cursor=pointer]:
+              - /url: https://in.indeed.com/q-arduino-jobs.html
+              - heading "300 Arduino Job Vacancies" [level=3] [ref=f2e465]
+              - generic [ref=f2e471]:
+                - generic [ref=f2e473]: Indeed
+                - generic [ref=f2e475]: https://in.indeed.com › q-arduino-jobs
+            - button "About this result" [ref=f2e478] [cursor=pointer]:
+              - img [ref=f2e481]
+          - generic [ref=f2e484]:
+            - generic [ref=f2e485]:
+              - emphasis [ref=f2e486]: Arduino jobs
+              - text: · Electrical & Automation Engineer Intern (Fresher) · Embedded Intern (students) · Electronics Engineer · Embedded Systems Intern · Mechatronics ...
+            - link "Read more" [ref=f2e487] [cursor=pointer]:
+              - /url: https://in.indeed.com/q-arduino-jobs.html#:~:text=Arduino%20jobs&text=Electrical%20%26%20Automation%20Engineer%20Intern,(Fresher)&text=Embedded%20Intern%20(students)&text=Electronics%20Engineer&text=Embedded%20Systems%20Intern&text=Mechatronics%20Engineer
+        - generic [ref=f2e491]:
+          - generic [ref=f2e494]:
+            - link "All Jobs Arduino Careers https://careers.arduino.cc › jobs" [ref=f2e496] [cursor=pointer]:
+              - /url: https://careers.arduino.cc/jobs/
+              - heading "All Jobs" [level=3] [ref=f2e497]
+              - generic [ref=f2e503]:
+                - generic [ref=f2e505]: Arduino Careers
+                - generic [ref=f2e507]: https://careers.arduino.cc › jobs
+            - button "About this result" [ref=f2e510] [cursor=pointer]:
+              - img [ref=f2e513]
+          - generic [ref=f2e516]:
+            - generic [ref=f2e517]:
+              - emphasis [ref=f2e518]: All Jobs
+              - text: ; company. About ArduinoCareersContact us ; solutions. Professional · Education · Makers ; products. Hardware · Software · Arduino Cloud · IoT Remote App.
+            - link "Read more" [ref=f2e519] [cursor=pointer]:
+              - /url: https://careers.arduino.cc/jobs/#:~:text=All%20Jobs&text=company,About%20ArduinoCareersContact%20us&text=solutions,Makers&text=products,IoT%20Remote%20App
+        - generic [ref=f2e523]:
+          - generic [ref=f2e526]:
+            - link "25 Arduino Jobs in Jul 2026 Internshala https://internshala.com › Jobs" [ref=f2e528] [cursor=pointer]:
+              - /url: https://internshala.com/jobs/arduino-jobs/
+              - heading "25 Arduino Jobs in Jul 2026" [level=3] [ref=f2e529]
+              - generic [ref=f2e535]:
+                - generic [ref=f2e537]: Internshala
+                - generic [ref=f2e539]: https://internshala.com › Jobs
+            - button "About this result" [ref=f2e542] [cursor=pointer]:
+              - img [ref=f2e545]
+          - generic [ref=f2e548]:
+            - generic [ref=f2e549]:
+              - emphasis [ref=f2e550]: 25 Arduino Jobs
+              - text: · STEM Innovation Engineer (Electronics Engineer) · AI And Robotics Educator · Junior Embedded Systems Associate · STEM K2 Trainer · Embedded ...
+            - link "Read more" [ref=f2e551] [cursor=pointer]:
+              - /url: https://internshala.com/jobs/arduino-jobs/#:~:text=25%20Arduino%20Jobs&text=STEM%20Innovation%20Engineer%20(Electronics%20Engineer)&text=AI%20And%20Robotics%20Educator&text=Junior%20Embedded%20Systems%20Associate&text=STEM%20K2%20Trainer&text=Embedded%20Systems%20Associate
+        - generic [ref=f2e555]:
+          - generic [ref=f2e558]:
+            - 'link "Arduino Freelance Jobs: Work Remote & Earn Online Upwork https://www.upwork.com › freelance-jobs › arduino" [ref=f2e560] [cursor=pointer]':
+              - /url: https://www.upwork.com/freelance-jobs/arduino/
+              - 'heading "Arduino Freelance Jobs: Work Remote & Earn Online" [level=3] [ref=f2e561]'
+              - generic [ref=f2e567]:
+                - generic [ref=f2e569]: Upwork
+                - generic [ref=f2e571]: https://www.upwork.com › freelance-jobs › arduino
+            - button "About this result" [ref=f2e574] [cursor=pointer]:
+              - img [ref=f2e577]
+          - generic [ref=f2e581]:
+            - emphasis [ref=f2e582]: Browse 341 open jobs
+            - text: and land a remote Arduino job today. See detailed job requirements, compensation, duration, employer history, & apply today.
+        - generic [ref=f2e586]:
+          - generic [ref=f2e589]:
+            - link "Arduino Jobs for June 2026 Freelancer https://www.freelancer.in › Jobs › Arduino" [ref=f2e591] [cursor=pointer]:
+              - /url: https://www.freelancer.in/jobs/arduino
+              - heading "Arduino Jobs for June 2026" [level=3] [ref=f2e592]
+              - generic [ref=f2e598]:
+                - generic [ref=f2e600]: Freelancer
+                - generic [ref=f2e602]: https://www.freelancer.in › Jobs › Arduino
+            - button "About this result" [ref=f2e605] [cursor=pointer]:
+              - img [ref=f2e608]
+          - generic [ref=f2e612]:
+            - emphasis [ref=f2e613]: World's largest website for Arduino Jobs
+            - text: . Find $$$ Arduino Jobs or hire an Arduino Engineer to bid on your Arduino Job at Freelancer. 12m+ Jobs!
+          - img "Rated 4.9 out of 5, (33,418) user reviews" [ref=f2e618]:
+            - text: "4.9"
+            - img [ref=f2e619]
+            - text: (33,418)
+        - generic [ref=f2e625]:
+          - generic [ref=f2e628]:
+            - link "489 Arduino Job Vacancies In Hyderabad Secunderabad Naukri.com https://www.naukri.com › ... › Arduino jobs" [ref=f2e630] [cursor=pointer]:
+              - /url: https://www.naukri.com/arduino-jobs-in-hyderabad-secunderabad
+              - heading "489 Arduino Job Vacancies In Hyderabad Secunderabad" [level=3] [ref=f2e631]
+              - generic [ref=f2e637]:
+                - generic [ref=f2e639]: Naukri.com
+                - generic [ref=f2e641]: https://www.naukri.com › ... › Arduino jobs
+            - button "About this result" [ref=f2e644] [cursor=pointer]:
+              - img [ref=f2e647]
+          - generic [ref=f2e650]:
+            - generic [ref=f2e651]:
+              - emphasis [ref=f2e652]: Arduino jobs in Hyderabad Secunderabad
+              - text: ; Robotic Trainer. Leap Robots 4.3 · 0-1 Yrs ; EMBEDDED SYSTEMS ENGINEER. Spectrum Softtech Solutions 3.8 · 2-6 Yrs.
+            - link "Read more" [ref=f2e653] [cursor=pointer]:
+              - /url: https://www.naukri.com/arduino-jobs-in-hyderabad-secunderabad#:~:text=Arduino%20jobs%20in%20Hyderabad%20Secunderabad&text=Robotic%20Trainer,4.3&text=0%2D1%20Yrs&text=EMBEDDED%20SYSTEMS%20ENGINEER,3.8&text=2%2D6%20Yrs
+      - generic [ref=f2e655]:
+        - generic [ref=f2e660]:
+          - heading "People also search for" [level=2] [ref=f2e662]
+          - generic [ref=f2e664]:
+            - generic [ref=f2e665]:
+              - link "Arduino jobs for freshers" [ref=f2e669] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+for+freshers&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAg-EAE
+                - generic [ref=f2e670]:
+                  - generic [ref=f2e675]: Arduino jobs for freshers
+                  - img [ref=f2e679]
+              - link "Arduino jobs work from home" [ref=f2e684] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+work+from+home&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAhFEAE
+                - generic [ref=f2e685]:
+                  - generic [ref=f2e690]: Arduino jobs work from home
+                  - img [ref=f2e694]
+              - link "Arduino jobs salary" [ref=f2e699] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+salary&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAhHEAE
+                - generic [ref=f2e700]:
+                  - generic [ref=f2e705]: Arduino jobs salary
+                  - img [ref=f2e709]
+              - link "Arduino jobs near me" [ref=f2e714] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+near+me&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAhGEAE
+                - generic [ref=f2e715]:
+                  - generic [ref=f2e720]: Arduino jobs near me
+                  - img [ref=f2e724]
+            - generic [ref=f2e726]:
+              - link "Arduino jobs in india" [ref=f2e730] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+in+india&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAhBEAE
+                - generic [ref=f2e731]:
+                  - generic [ref=f2e736]: Arduino jobs in india
+                  - img [ref=f2e740]
+              - link "Arduino jobs from home" [ref=f2e745] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+jobs+from+home&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAhAEAE
+                - generic [ref=f2e746]:
+                  - generic [ref=f2e751]: Arduino jobs from home
+                  - img [ref=f2e755]
+              - link "Arduino programmer jobs" [ref=f2e760] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+programmer+jobs&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAg_EAE
+                - generic [ref=f2e761]:
+                  - generic [ref=f2e766]: Arduino programmer jobs
+                  - img [ref=f2e770]
+              - link "Arduino Engineer" [ref=f2e775] [cursor=pointer]:
+                - /url: /search?sca_esv=47fdd52eba661d26&q=Arduino+Engineer&sa=X&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ1QJ6BAg9EAE
+                - generic [ref=f2e776]:
+                  - generic [ref=f2e781]: Arduino Engineer
+                  - img [ref=f2e785]
+        - navigation [ref=f2e787]:
+          - heading "Page navigation" [level=1] [ref=f2e788]
+          - text: "1"
+          - link "Page 2" [ref=f2e791] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=10&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAE
+            - text: "2"
+          - link "Page 3" [ref=f2e793] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=20&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAG
+            - text: "3"
+          - link "Page 4" [ref=f2e795] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=30&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAI
+            - text: "4"
+          - link "Page 5" [ref=f2e797] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=40&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAK
+            - text: "5"
+          - link "Page 6" [ref=f2e799] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=50&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAM
+            - text: "6"
+          - link "Page 7" [ref=f2e801] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=60&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAO
+            - text: "7"
+          - link "Page 8" [ref=f2e803] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=70&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAQ
+            - text: "8"
+          - link "Page 9" [ref=f2e805] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=80&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAS
+            - text: "9"
+          - link "Page 10" [ref=f2e807] [cursor=pointer]:
+            - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=90&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8tMDegQIOxAU
+            - text: "10"
+          - heading "Next" [level=2] [ref=f2e809]:
+            - link "Next" [ref=f2e810] [cursor=pointer]:
+              - /url: /search?q=arduino+jobs&sca_esv=47fdd52eba661d26&ei=2e9FaqSKLauVxc8Px4DesQ4&start=10&sa=N&sstk=AU9db-CJUtSk-mRtKXaF88I2HoP121PacyG0Ss_-dRxtg9CA1hsnaqmDPxQNmtM1GGkY9-kpuz3oxE39-lwIgn8PVKfzgnTKrZ86pA&ved=2ahUKEwjk2tC4mrOVAxWrSvEDHUeAN-YQ8NMDegQIOxAW
+              - generic [ref=f2e812]: Next
+      - navigation
+    - contentinfo [ref=f2e813]:
+      - heading "Footer links" [level=1] [ref=f2e814]
+      - generic [ref=f2e818]:
+        - generic [ref=f2e820]:
+          - text: India
+          - generic [ref=f2e822]:
+            - button "534448, Andhra Pradesh - From your IP address" [ref=f2e824] [cursor=pointer]:
+              - generic [ref=f2e825]: 534448, Andhra Pradesh
+              - generic [ref=f2e827]:
+                - text: "-"
+                - generic [ref=f2e828]: From your IP address
+            - text: "-"
+            - button "Update location" [ref=f2e830] [cursor=pointer]: Update location
+        - generic [ref=f2e833]:
+          - link "Help" [ref=f2e834] [cursor=pointer]:
+            - /url: https://support.google.com/websearch/?p=ws_results_help&hl=en-IN&fg=1
+          - link "Send feedback" [ref=f2e835] [cursor=pointer]:
+            - /url: "#"
+          - link "Privacy" [ref=f2e836] [cursor=pointer]:
+            - /url: https://policies.google.com/privacy?hl=en-IN&fg=1
+          - link "Terms" [ref=f2e837] [cursor=pointer]:
+            - /url: https://policies.google.com/terms?hl=en-IN&fg=1
