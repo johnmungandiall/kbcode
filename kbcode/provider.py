@@ -40,6 +40,29 @@ class LLMResponse:
     tool_calls: list[ToolCall]
     raw: object  # native assistant payload, stored back on the normalized message
     usage: dict | None = None  # {"input_tokens": int, "output_tokens": int} when reported
+    thinking: str = ""  # the model's reasoning text, when the provider reports it
+
+
+def _parse_tool_args(raw: str | None, truncated: bool = False) -> dict:
+    """Parse a tool call's arguments JSON, marking unusable calls instead of
+    silently degrading them to ``{}``.
+
+    Weaker models sometimes emit malformed JSON, and any model whose response
+    hits the ``max_tokens`` limit mid-call leaves the JSON cut off — both used
+    to collapse to empty args, so the user saw a bare "missing required
+    argument(s): path, content" error with no clue why. The marker keys below
+    let ToolsCore._repair explain the real cause and coach the model (e.g.
+    "write the file in smaller pieces"). ``truncated`` = the provider said the
+    response stopped for length."""
+    try:
+        parsed = json.loads(raw) if raw else {}
+        if not isinstance(parsed, dict):
+            parsed = {"_malformed_args": str(parsed)[:500]}
+    except (json.JSONDecodeError, TypeError):
+        parsed = {"_malformed_args": (raw or "")[:500]}
+    if truncated and ("_malformed_args" in parsed or not parsed):
+        parsed["_args_cut_off"] = True
+    return parsed
 
 
 class ProviderError(RuntimeError):
@@ -144,14 +167,18 @@ class LLMProvider:
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         raise NotImplementedError
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None,
+               on_tool_args=None, on_thinking=None) -> LLMResponse:
         """Token-by-token variant of complete() (#3.1/#7.1). Default falls back
         to complete() and delivers the whole text as one chunk, so a provider
         that hasn't implemented true streaming still works — just without the
         incremental display. ``on_tool``, if given, is called with each tool
         name the moment it appears in the stream (a long tool-call-heavy
-        response otherwise looks frozen); the fallback has nothing incremental
-        to report, so it ignores it. Subclasses override for real streaming."""
+        response otherwise looks frozen); ``on_tool_args(name, chars)`` fires
+        as a call's arguments JSON accumulates, so a big write shows live
+        progress instead of looking stuck; ``on_thinking(chunk)`` receives
+        reasoning text as it streams. The fallback has nothing incremental to
+        report, so it ignores them. Subclasses override for real streaming."""
         resp = self.complete(system, messages, tools)
         if on_text and resp.text:
             on_text(resp.text)
@@ -333,10 +360,15 @@ class AnthropicProvider(LLMProvider):
             for b in resp.content
             if getattr(b, "type", None) == "tool_use"
         ]
+        thinking = "\n\n".join(
+            b.thinking for b in resp.content
+            if getattr(b, "type", None) == "thinking" and getattr(b, "thinking", "")
+        )
         usage = self._usage(getattr(resp, "usage", None))
-        return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content, usage=usage)
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content, usage=usage, thinking=thinking)
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None,
+               on_tool_args=None, on_thinking=None) -> LLMResponse:
         native = self._add_cache_breakpoints(self._to_native(messages))
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         base = dict(
@@ -363,19 +395,37 @@ class AnthropicProvider(LLMProvider):
             # synthetic "text" events carry the text deltas, and
             # content_block_start events reveal a tool call's name the moment
             # the model starts composing it — surfaced via on_tool so a long
-            # tool-heavy response doesn't look frozen.
+            # tool-heavy response doesn't look frozen. "input_json" events
+            # carry the tool call's arguments as they stream — surfaced via
+            # on_tool_args so a big write shows a live character counter.
+            # "thinking" events carry reasoning deltas — surfaced via
+            # on_thinking so the spinner shows the model is reasoning.
             with self.client.messages.stream(**kwargs) as stream_ctx:
+                tool_name = ""
+                tool_chars = 0
                 for event in stream_ctx:
                     etype = getattr(event, "type", "")
                     if etype == "text":
                         chunk = getattr(event, "text", "")
                         if on_text and chunk:
                             on_text(chunk)
+                    elif etype == "thinking":
+                        chunk = getattr(event, "thinking", "")
+                        if on_thinking and chunk:
+                            on_thinking(chunk)
+                    elif etype == "input_json":
+                        partial = getattr(event, "partial_json", "")
+                        if partial:
+                            tool_chars += len(partial)
+                            if on_tool_args:
+                                on_tool_args(tool_name, tool_chars)
                     elif etype == "content_block_start":
                         block = getattr(event, "content_block", None)
                         name = getattr(block, "name", "")
-                        if getattr(block, "type", "") == "tool_use" and name and on_tool:
-                            on_tool(name)
+                        if getattr(block, "type", "") == "tool_use" and name:
+                            tool_name, tool_chars = name, 0
+                            if on_tool:
+                                on_tool(name)
                 return stream_ctx.get_final_message()
 
         last_exc: Exception | None = None
@@ -482,16 +532,17 @@ class OpenAICompatibleProvider(LLMProvider):
             ),
             self.ui,
         )
-        msg = resp.choices[0].message
+        choice = resp.choices[0]
+        msg = choice.message
         text = msg.content or ""
+        truncated = getattr(choice, "finish_reason", "") == "length"
+        # DeepSeek exposes reasoning_content, OpenRouter exposes reasoning.
+        thinking = getattr(msg, "reasoning_content", None) or getattr(msg, "reasoning", None) or ""
 
         tool_calls: list[ToolCall] = []
         raw_tool_calls: list[dict] = []
         for tc in (msg.tool_calls or []):
-            try:
-                args = json.loads(tc.function.arguments or "{}")
-            except (json.JSONDecodeError, TypeError):
-                args = {}
+            args = _parse_tool_args(tc.function.arguments, truncated=truncated)
             tool_calls.append(ToolCall(tc.id, tc.function.name, args))
             raw_tool_calls.append(
                 {
@@ -509,9 +560,10 @@ class OpenAICompatibleProvider(LLMProvider):
             "input_tokens": getattr(u, "prompt_tokens", 0) or 0,
             "output_tokens": getattr(u, "completion_tokens", 0) or 0,
         } if u else None
-        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage)
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage, thinking=str(thinking))
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None,
+               on_tool_args=None, on_thinking=None) -> LLMResponse:
         native = self._to_native(system, messages)
 
         def do_stream():
@@ -532,19 +584,28 @@ class OpenAICompatibleProvider(LLMProvider):
                 **extra,
             )
             text_parts: list[str] = []
+            thinking_parts: list[str] = []
             tool_acc: dict[int, dict] = {}
             usage = None
+            finish = ""
             for chunk in resp_stream:
                 chunk_usage = getattr(chunk, "usage", None)
                 if chunk_usage is not None:
                     usage = chunk_usage
                 if not chunk.choices:
                     continue
+                finish = getattr(chunk.choices[0], "finish_reason", None) or finish
                 delta = chunk.choices[0].delta
                 if delta and delta.content:
                     text_parts.append(delta.content)
                     if on_text:
                         on_text(delta.content)
+                # Reasoning deltas (DeepSeek: reasoning_content, OpenRouter: reasoning).
+                reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None) if delta else None
+                if reasoning:
+                    thinking_parts.append(reasoning)
+                    if on_thinking:
+                        on_thinking(reasoning)
                 for tc in getattr(delta, "tool_calls", None) or []:
                     acc = tool_acc.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
                     if tc.id:
@@ -559,18 +620,21 @@ class OpenAICompatibleProvider(LLMProvider):
                             acc["name"] += tc.function.name
                         if tc.function.arguments:
                             acc["arguments"] += tc.function.arguments
-            return "".join(text_parts), tool_acc, usage
+                            if on_tool_args:
+                                # Live counter while a (possibly huge) write
+                                # call streams — this is what keeps a long
+                                # write from looking stuck.
+                                on_tool_args(acc["name"], len(acc["arguments"]))
+            return "".join(text_parts), "".join(thinking_parts), tool_acc, usage, finish
 
-        text, tool_acc, u = _with_retry(do_stream, self.ui)
+        text, thinking, tool_acc, u, finish = _with_retry(do_stream, self.ui)
+        truncated = finish == "length"
 
         tool_calls: list[ToolCall] = []
         raw_tool_calls: list[dict] = []
         for idx in sorted(tool_acc):
             acc = tool_acc[idx]
-            try:
-                args = json.loads(acc["arguments"] or "{}")
-            except (json.JSONDecodeError, TypeError):
-                args = {}
+            args = _parse_tool_args(acc["arguments"], truncated=truncated)
             tool_calls.append(ToolCall(acc["id"], acc["name"], args))
             raw_tool_calls.append(
                 {
@@ -587,7 +651,7 @@ class OpenAICompatibleProvider(LLMProvider):
             "input_tokens": getattr(u, "prompt_tokens", 0) or 0,
             "output_tokens": getattr(u, "completion_tokens", 0) or 0,
         } if u else None
-        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage)
+        return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage, thinking=thinking)
 
     def list_models(self) -> list[str]:
         return [m.id for m in self.client.models.list().data]

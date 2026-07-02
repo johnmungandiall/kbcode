@@ -43,27 +43,45 @@ more than that per round-trip. **Only user-role messages are marked** — they
 are built fresh by `_to_native` per request, so markers never accumulate into
 `Agent.messages`; assistant `raw` blocks are never mutated (see [[gotchas]]).
 Compaction rewrites history, so the first request after a compact is a cache
-miss — expected, one-time. `_usage()` (`kbcode/provider.py:278`) folds
+miss — expected, one-time. `_usage()` (`kbcode/provider.py:305`) folds
 `cache_creation_input_tokens` + `cache_read_input_tokens` back into
 `input_tokens` (the API reports only the uncached remainder there) so /cost
 and turn summaries stay comparable; the estimate is conservative (cache reads
 actually bill at ~0.1x). Tests: `tests/test_provider_caching.py`.
 
-## Streaming tool-name hints
-`stream(..., on_tool=)` (base signature `kbcode/provider.py:147`) reports each
-tool call's *name* the moment it appears mid-stream, so a long tool-call-heavy
-response doesn't look frozen while the arguments JSON generates. The Anthropic
-path iterates the SDK's event stream (synthetic `"text"` events for deltas,
-`content_block_start` with a `tool_use` block for names) instead of the old
-`text_stream`; the OpenAI path fires on the first name fragment per tool-call
-index. `Agent._complete()` forwards `on_tool` and `Agent.run` passes
-`ui.stream_tool_hint` (`kbcode/ui.py:566`), which prints one dim `⏺ name …`
-line after stopping any live spinner (it's the only mid-stream printer left —
-see [[gotchas]]). Text chunks themselves are NOT printed: `ui.stream_chunk`
-only feeds a `writing… N chars` progress label into the thinking spinner, and
-the complete reply is markdown-rendered by `ui.assistant_text` once the
-response resolves. The real described `tool_call()` line still follows when
-the response resolves.
+## Streaming progress: tool names, tool ARGS, and thinking
+`stream(..., on_tool=, on_tool_args=, on_thinking=)` (base signature
+`kbcode/provider.py:170`) reports, mid-stream: each tool call's *name* the
+moment it appears (`on_tool`), the accumulated size of its arguments JSON as
+it streams (`on_tool_args(name, chars)` — the Hermes tool-progress-callback
+idea), and reasoning deltas (`on_thinking`). The Anthropic path iterates the
+SDK's event stream (synthetic `"text"`/`"thinking"` events, `"input_json"`
+partial_json for args, `content_block_start` for names); the OpenAI path
+fires on the first name fragment per tool-call index, counts
+`function.arguments` deltas, and reads `delta.reasoning_content` (DeepSeek) /
+`delta.reasoning` (OpenRouter). NOTHING is printed from the worker thread
+anymore: `ui.stream_tool_hint` (`kbcode/ui.py:604`) now only relabels the
+live spinner ("<name> — composing the call…"), `ui.stream_tool_args`
+(`kbcode/ui.py:619`) keeps a `writing the call… N chars` counter ticking (the
+fix for "a big write looks stuck"), `ui.stream_thinking` (`kbcode/ui.py:591`)
+counts reasoning chars, and `ui.stream_chunk` counts reply chars. The
+complete reply is markdown-rendered by `ui.assistant_text` once the response
+resolves, preceded by a collapsed `🧠 thought…` line (`ui.thought_summary`)
+when the model reasoned — `/thoughts` (`ui.thoughts`) expands the full text,
+kept per turn on `Agent.last_thinking`.
+
+## Malformed / cut-off tool calls become repair markers
+`_parse_tool_args()` (`kbcode/provider.py:46`) parses a tool call's arguments
+JSON on both OpenAI paths. Malformed JSON no longer silently degrades to `{}`
+(which surfaced as a bare red "missing required argument(s): path, content"
+on every truncated `write_file`): it becomes `{"_malformed_args": <raw≤500>}`,
+plus `"_args_cut_off": True` when the response's finish_reason was `length`
+(max_tokens hit mid-call). `ToolsCore._repair` (`kbcode/tools/core.py:151`)
+turns the markers into precise guidance — including the split-the-write
+coaching (`_SPLIT_WRITE_HINT`, `kbcode/tools/core.py:144`) for
+write_file/edit_file/edit_files — and `ui.tool_call`/`tool_result` render
+these as a yellow "call arrived incomplete… ↻ asked the model to resend"
+instead of a scary error. Tests: `tests/test_auto_mode.py`.
 
 Tool schemas carry kbcode-only metadata (e.g. `parallel_safe`, see
 [[tools-and-repair]]) that the model APIs reject as unknown keys. The OpenAI path
@@ -88,16 +106,31 @@ backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:49-59`). Hard error
 `_with_retry` deliberately re-raises `TypeError` untouched so the Anthropic
 staged fallback still works.
 
-## Interrupt mid-request
-`Agent._complete()` (`kbcode/agent.py:132`) runs the blocking `provider.complete`/
+## Interrupt mid-request + type-ahead
+`Agent._complete()` (`kbcode/agent.py:162`) runs the blocking `provider.complete`/
 `stream` call on a daemon worker thread and polls `done.wait(0.05)` on the main
 thread — a blocking socket read swallows `KeyboardInterrupt` until it returns, so
 without the poll, Esc would feel dead while "thinking...". `interrupt_on_escape()`
-(`kbcode/interrupt.py:58`) is the watcher that raises it (Windows `msvcrt`, POSIX
+(`kbcode/interrupt.py:107`) is the watcher that raises it (Windows `msvcrt`, POSIX
 `termios`+`select`); the orphaned worker just finishes and its result is dropped.
-At turn end the watcher is **joined**, not just signalled (`kbcode/interrupt.py:47-48`):
-it reads the console / holds the tty, so leaving it alive would race the next prompt
-for stdin and eat the user's first keystrokes — see [[gotchas]].
+At turn end the watcher is **joined**, not just signalled: it reads the console /
+holds the tty, so leaving it alive would race the next prompt for stdin and eat
+the user's first keystrokes — see [[gotchas]].
+
+The same watcher now also powers **type-ahead** (Claude Code style): non-Esc
+keystrokes feed a `TypeAhead` buffer (`kbcode/interrupt.py:40`) — printable
+chars append, backspace edits, Enter commits a line — echoed live under the
+spinner via `ui.live_note` (polled by `_TickingStatus._render`,
+`kbcode/ui.py:302`). Committed lines reach the model MID-TURN:
+`repl._poll_user_notes` (`kbcode/repl.py:277`) is wired to
+`Agent.poll_user_notes`, and `Agent._deliver_user_notes()`
+(`kbcode/agent.py:689`) piggybacks them on the round-trip's last tool result
+(a separate user message would break the alternating-roles invariant) with a
+triage instruction: urgent → apply now, else after the current task. Slash
+commands stay in the REPL queue and run after the turn; on interrupt,
+`TypeAhead.take_all_text()` puts everything typed back into the next prompt
+(prompt_toolkit `default=` prefill). Shift+Tab mid-turn hits the watcher's
+`on_shift_tab` callback → ask/auto toggle ([[safety]]).
 
 See [[architecture]] for the big picture, [[vision]] for image/video routing
 through providers, [[gotchas]] for the SDK-kwarg and threading traps.

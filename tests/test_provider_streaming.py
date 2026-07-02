@@ -113,11 +113,14 @@ def test_openai_stream_extracts_usage_from_final_chunk():
     assert resp.usage == {"input_tokens": 12, "output_tokens": 7}
 
 
-def test_openai_stream_malformed_arguments_json_falls_back_to_empty_dict():
+def test_openai_stream_malformed_arguments_json_becomes_repair_marker():
+    # Malformed args no longer silently collapse to {} (which showed the user
+    # a bare "missing required arguments" error) — they carry a marker that
+    # ToolsCore._repair turns into precise guidance for the model.
     chunks = [_chunk(tool_call_deltas=[_tc_delta(0, id="call_1", name="x", arguments="not json")])]
     provider = _openai_provider(chunks)
     resp = provider.stream("sys", [], [])
-    assert resp.tool_calls[0].input == {}
+    assert resp.tool_calls[0].input == {"_malformed_args": "not json"}
 
 
 def test_openai_stream_reports_tool_names_via_on_tool_once_per_call():

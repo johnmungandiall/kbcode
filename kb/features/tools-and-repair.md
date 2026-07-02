@@ -11,10 +11,15 @@ bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.p
 native tool ids to replay) with a nudge to use the real format.
 
 *Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:102`) runs `_repair()`
-(`kbcode/tools/core.py:144`) first — unknown tool name -> closest match via
-`difflib`; missing required args -> names them. Every call site wraps
-`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:203`), which runs
-configured PreToolUse/PostToolUse hooks around it — see [[safety]].
+(`kbcode/tools/core.py:151`) first — unknown tool name -> closest match via
+`difflib`; missing required args -> names them; the reserved
+`_malformed_args`/`_args_cut_off` markers (set by `provider._parse_tool_args`
+when the arguments JSON was invalid or cut off by max_tokens — [[providers]])
+-> explains the real cause and, for write_file/edit_file/edit_files, coaches
+splitting the write (`_SPLIT_WRITE_HINT`, `kbcode/tools/core.py:144`). Every
+call site wraps `execute()` in `Agent._dispatch_tool()`
+(`kbcode/agent.py:237`), which runs configured PreToolUse/PostToolUse hooks
+around it — see [[safety]].
 
 ## MCP tools (external servers, namespaced `mcp__server__tool`)
 When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
@@ -79,8 +84,8 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:230`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:207`). Every describer
+directly; `_describe_tool()` (`kbcode/ui.py:232`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:209`). Every describer
 entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
 a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 
@@ -99,8 +104,8 @@ the schema reaches the model API.
 **`run_subagent` conditional extension.** A run of 2+ consecutive `run_subagent`
 calls is also eligible for concurrent dispatch, but only when *every* targeted
 subagent qualifies — `Agent._is_parallel_subagent_call()`
-(`kbcode/agent.py:688`) checks `Agent._subagent_parallel_safe(name)`
-(`kbcode/agent.py:673`), which requires the subagent's own `tools:` frontmatter
+(`kbcode/agent.py:848`) checks `Agent._subagent_parallel_safe(name)`
+(`kbcode/agent.py:833`), which requires the subagent's own `tools:` frontmatter
 (a `frozenset[str]`, never `None`) to be a subset of the same
 `parallel_safe_tools` set above plus `_SUBAGENT_PARALLEL_EXTRAS`
 (`frozenset({"manage_todos"})`, `kbcode/agent.py:66`). The default `tools: read`

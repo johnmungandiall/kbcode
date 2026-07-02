@@ -49,6 +49,45 @@ class Subagent:
         return self.tools is None or tool in self.tools
 
 
+def builtin_subagents() -> dict[str, Subagent]:
+    """Always-available subagents, baked in so every project has them without
+    re-scaffolding (a ``.kbcode/agents/<same-name>.md`` file overrides them).
+
+    - ``autopilot`` — takes a whole task end-to-end without asking the user
+      anything; gets every tool. In auto permission mode (see permissions.py)
+      nothing prompts, so it effectively runs with full permissions.
+    - ``fixer`` — reviews work that was just done and repairs any mistakes it
+      finds. Agent.run auto-dispatches it after editing turns in auto mode
+      (see Agent._auto_fix_feedback), and the model can call it any time.
+    """
+    autopilot = Subagent(
+        name="autopilot",
+        description="Complete a whole task end-to-end autonomously — plans, edits, runs and verifies without asking the user anything.",
+        instructions=(
+            "You are the autopilot subagent. Finish the given task COMPLETELY on your own:\n"
+            "- Never ask the user questions or wait for confirmation; make the best decision and proceed.\n"
+            "- Plan briefly, make the changes, then VERIFY them (run tests or the code you touched).\n"
+            "- If something fails, fix it and re-verify before finishing.\n"
+            "- Return a short summary: what you changed, what you verified, anything left over."
+        ),
+        tools=None,  # every tool
+    )
+    fixer = Subagent(
+        name="fixer",
+        description="Reviews changes that were just made, finds mistakes (syntax errors, broken imports, failing checks) and fixes them.",
+        instructions=(
+            "You are the fixer subagent. You are given a description (often a diff) of changes "
+            "that were just made. Your ONLY job is to find and repair mistakes in them:\n"
+            "- Read the touched files; check syntax, imports, obvious logic slips, and broken references.\n"
+            "- Run cheap, fast checks where possible (a linter, a targeted test, compiling the file).\n"
+            "- Fix ONLY real defects — do not restyle, refactor, or expand scope.\n"
+            "- If everything is fine, say so in one line. Otherwise fix, re-check, and summarize what you repaired."
+        ),
+        tools=None,  # needs read + write + run to actually repair things
+    )
+    return {autopilot.name: autopilot, fixer.name: fixer}
+
+
 def load_subagents(agents_dir: Path) -> dict[str, Subagent]:
     """Load subagent definitions from ``.kbcode/agents/*.md`` (malformed = skipped)."""
     agents: dict[str, Subagent] = {}

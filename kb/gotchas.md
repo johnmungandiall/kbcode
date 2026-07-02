@@ -16,10 +16,19 @@
 - `kbcode/sessions.py:59-86` — `_jsonable()` handles pydantic models, dataclasses, and plain types
 - New Anthropic SDK content-block shapes need `model_dump(mode="json")` fallback
 
-## Tool-call repair is two layers
-- `kbcode/tools/core.py:144` — `_repair()` fixes name typos + missing required args (execute-time)
+## Tool-call repair is two layers (+ provider markers)
+- `kbcode/tools/core.py:151` — `_repair()` fixes name typos + missing required args (execute-time), and turns the `_malformed_args`/`_args_cut_off` markers from `provider._parse_tool_args` (`kbcode/provider.py:46`) into precise guidance (truncated write_file coaching — see [[providers]])
 - `kbcode/repair.py:48` — `promote()` recovers tool calls written as plain text (parse-time)
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
+- The `_malformed_args`/`_args_cut_off` keys are RESERVED marker names: `_repair` intercepts them before any `_tool_*` method runs, and `ui.tool_call`/`tool_result` render them as a yellow retry note instead of a red error. Don't name a real tool argument with a leading underscore.
+
+## Mid-turn user messages must piggyback, never append a user message
+- `Agent._deliver_user_notes()` (`kbcode/agent.py:689`) appends what the user
+  typed mid-turn onto the round-trip's LAST tool result. Appending a separate
+  `{"role": "user"}` message after `tool_results` instead would put two
+  user-role messages back-to-back after `_to_native` — Anthropic rejects
+  non-alternating roles (HTTP 400). Same trick as `_auto_fix_feedback`'s
+  report, which is safe only because it's followed by another model call.
 
 ## Protected files
 - `kbcode/tools/file.py:116-137` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
@@ -47,8 +56,14 @@
   markdown via `assistant_text` (`kbcode/ui.py:535`) once the response resolves
   (`kbcode/agent.py:296`). Don't reintroduce raw chunk printing — it both
   races the spinner and makes markdown rendering impossible.
-- `stream_tool_hint` (`kbcode/ui.py:566`) still prints from the worker thread, so
-  it still stops the spinner first.
+- `stream_tool_hint` (`kbcode/ui.py:604`) no longer prints AT ALL: it (and
+  `stream_tool_args`, `stream_thinking`) only relabel the live spinner from the
+  worker thread. The old print-and-stop-the-spinner behavior left NOTHING
+  moving while a big write call streamed its arguments — the "write looks
+  stuck" complaint. Don't reintroduce a worker-thread print here.
+- The spinner's `_render` also appends `ui.live_note()` (set by the REPL) —
+  the type-ahead echo + auto-mode line. It's POLLED by the ticker (100ms), so
+  the watcher thread never touches the terminal either.
 - `stop()` can be called from worker AND main threads, so its check-and-tear-down
   is guarded by `self._stop_lock` — without it both callers can pass the
   `_stopped` check and tear the Rich `Live` down twice, corrupting the terminal.
@@ -60,13 +75,13 @@
   redraw repainted over the menu, and the Esc watcher thread
   (`watch_windows`/`watch_posix`, `kbcode/interrupt.py:76`) ate the menu's
   keystrokes — `msvcrt.getwch()`/`stdin.read()` race the prompt for every key.
-- Fix: `ui.permission` (`kbcode/ui.py:449`) stops `_active_status` first and wraps
+- Fix: `ui.permission` (`kbcode/ui.py:472`) stops `_active_status` first and wraps
   its `select()`/typed fallback in `pause_escape_watcher()`
   (`kbcode/interrupt.py:33`), which the watcher loops check via the module-level
   `_paused` event. ANY new mid-turn prompt must do both.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:230`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:232`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -75,7 +90,7 @@
   a stray string to a static label, but don't rely on it — write the function.
 
 ## The Esc watcher must be JOINED at turn end, not just signalled
-- `interrupt_on_escape()` (`kbcode/interrupt.py:26`) runs a daemon thread that reads
+- `interrupt_on_escape()` (`kbcode/interrupt.py:107`) runs a daemon thread that reads
   the console (Windows `msvcrt.getwch`) / holds the tty in cbreak (POSIX). Its
   `finally` does `stop.set()` **and** `thread.join(timeout=0.5)` (`kbcode/interrupt.py:47-48`).
 - The join is load-bearing: without it the watcher outlives the turn and races the

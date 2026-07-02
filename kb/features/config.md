@@ -98,7 +98,7 @@ path → no log, run continues). Modules log via `logging.getLogger(__name__)`.
 `Config` (`kbcode/config.py:183`) derives every path (`kbcode_dir`, `kb_dir`,
 `state_dir`, `memory_db`, `agent_md`, `settings_file`, ...) as a
 property off `project_dir` — so the project can be retargeted live. The CLI
-picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:280`) or
+picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:282`) or
 `init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:687`) mutates
 `config.project_dir` (`kbcode/repl.py:696`) then rebuilds `kb`, `memory`, and the
 agent — re-scaffolding the new folder, keeping the same provider/model/key. A

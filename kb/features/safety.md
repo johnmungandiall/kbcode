@@ -62,17 +62,46 @@ itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
 maintenance; deleting the `checkpoints/` folder is always safe.
 
-## Permissions
-`Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:449`), which renders a context panel then
+## Permissions — two MODES: ask / auto (Claude Code's Shift+Tab idea)
+`Permissions` (`kbcode/permissions.py:18`) hold an `always_allow` set and call
+`ui.permission(tool, detail)` (`kbcode/ui.py:472`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:484`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:507`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
-(`kbcode/permissions.py:26`) for headless use. Because this prompt fires
+(`kbcode/permissions.py:45`) for headless use. Because this prompt fires
 mid-turn, `ui.permission` stops the live `tool_running()` spinner and wraps
-the prompt in `pause_escape_watcher()` (`kbcode/interrupt.py:33`) so the Esc
+the prompt in `pause_escape_watcher()` (`kbcode/interrupt.py:96`) so the Esc
 watcher can't eat its keystrokes — see [[gotchas]] "Mid-turn interactive
 prompts".
+
+**Modes.** `Permissions.mode` is `ask` (default — risky actions prompt) or
+`auto` (`auto_approve=True` — nothing ever prompts). `toggle_mode()`
+(`kbcode/permissions.py:28`) flips them; thread-safe (bool assignment) since
+the mid-turn Shift+Tab handler calls it from the keyboard-watcher thread.
+One toggle serves three surfaces (`repl._toggle_auto`, `kbcode/repl.py:264`):
+Shift+Tab at the prompt (`s-tab` binding in `make_input`,
+`kbcode/prompt_input.py:196`), Shift+Tab mid-turn (`on_shift_tab` callback of
+`interrupt_on_escape`, `kbcode/interrupt.py:107`), and the `/auto` command.
+`config.auto_approve` mirrors the live value so the mode survives agent
+rebuilds (/provider, /open, /resume); `-y/--yes` starts already-auto. The
+prompt's bottom toolbar and the spinner's live-note line show "⏵⏵ auto mode on".
+
+**Auto mode changes agent behavior, not just gating:**
+- `_AUTO_MODE_NOTE` (`kbcode/agent.py:81`), appended by `_system_for_mode()`
+  (`kbcode/agent.py:276`): never ask the user; decide and proceed; delegate
+  big jobs to the builtin `autopilot` subagent.
+- `Agent._auto_continue_feedback()` (`kbcode/agent.py:719`) — the "convince
+  the model" pass: a final text that asks the user something ("shall I…?",
+  trailing "?") is pushed back once per turn with "there is no user to
+  answer — decide and continue".
+- `Agent._auto_fix_feedback()` (`kbcode/agent.py:752`) — after an editing
+  turn in auto mode, the builtin **fixer** subagent reviews this turn's
+  checkpoint diff (capped `_AUTO_FIX_DIFF_CHARS`, `kbcode/agent.py:94`) and
+  repairs real defects; its report goes back to the model as a user message.
+  Once per turn; never fires in ask mode or on read-only turns.
+- Builtin subagents `autopilot` + `fixer` (`builtin_subagents()`,
+  `kbcode/subagents.py:52`) carry `tools: None` (every tool) — with auto mode
+  approving everything they run with full permissions. See [[modes-subagents]].
 
 ## Hooks (Claude Code idea — PreToolUse/PostToolUse/Stop)
 `HooksRunner` (`kbcode/hooks.py:40`) reimplements Claude Code's public,

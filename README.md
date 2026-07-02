@@ -230,6 +230,8 @@ Type `/` in the chat to see them all (with a popup menu). Grouped:
 Session:
 - `/help` — show the command table (grouped)
 - `/version` — show the kbcode version
+- `/auto` — toggle **auto mode** (also **Shift+Tab**, even mid-turn): no permission prompts, no questions — the agent decides itself, can hand whole jobs to the builtin `autopilot` subagent, and the builtin `fixer` subagent double-checks every editing turn
+- `/thoughts` — expand the model's reasoning from the last turn (shown collapsed as a one-line `🧠 thought…` note)
 - `/status` — provider, model, mode, and a context-fullness bar
 - `/ping` — quick connectivity/auth check for the current provider (lists models; no chat call)
 - `/open <folder>` — switch to working on another project folder
@@ -255,7 +257,13 @@ Knowledge & memory:
 
 Planning & agents:
 - `/todo` — show the agent's current task checklist
-- `/agents` — list available subagents (`.kbcode/agents/`)
+- `/agents` — list available subagents (builtin `autopilot` + `fixer`, plus your own in `.kbcode/agents/`)
+
+> 💬 **You can keep typing while the agent works** (Claude Code style): your
+> keystrokes echo under the spinner, **Enter** queues the message, and the
+> agent receives it at its next step — it applies it immediately if urgent,
+> otherwise right after the current task. **Esc** still interrupts, and
+> anything half-typed comes back into your prompt.
 
 Models & modes:
 - `/mode [name]` — switch mode: code / architect / ask / debug (no name = list)

@@ -37,7 +37,7 @@ from .config import (
     persist_global_tuning,
     save_model_cache,
 )
-from .interrupt import interrupt_on_escape
+from .interrupt import TypeAhead, interrupt_on_escape
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
 from .prompt_input import make_input, select
@@ -250,10 +250,57 @@ def _read_multiline(read_line) -> str:
 
 def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None = None) -> None:
     """The interactive chat loop: read a line, dispatch slash commands, or run it as a turn."""
+    from rich.markup import escape as rich_escape
+
     agent = agent or _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
               temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens,
               kb_built=not kb.is_scaffold())
+
+    # --- ask/auto permission mode (Claude Code's Shift+Tab idea) ----------
+    # One toggle serves the prompt's Shift+Tab, the mid-turn Shift+Tab (via
+    # the Esc watcher), and /auto. config.auto_approve mirrors the live
+    # Permissions so the mode survives agent rebuilds (/provider, /open).
+    def _toggle_auto() -> str:
+        mode = agent.tools.perm.toggle_mode()
+        config.auto_approve = agent.tools.perm.auto_approve
+        return mode
+
+    def _mode_note() -> str:
+        return "⏵⏵ auto mode on — no questions asked" if config.auto_approve else ""
+
+    # --- type-ahead (type while the agent works, Claude Code style) -------
+    typeahead = TypeAhead()
+    queued_msgs: list[str] = []  # Enter-committed lines waiting to run
+    prefill = ""  # text handed back into the next prompt (interrupt / partial buffer)
+
+    def _poll_user_notes() -> list[str]:
+        """Called by Agent.run between tool round-trips: hand over what the
+        user typed mid-turn so the model can triage it (urgent → apply now,
+        else after the current task). Slash commands aren't for the model —
+        they stay queued and run in the REPL after the turn."""
+        lines = typeahead.pop_lines()
+        commands = [ln for ln in lines if ln.startswith("/")]
+        queued_msgs.extend(commands)
+        return [ln for ln in lines if not ln.startswith("/")]
+
+    agent.poll_user_notes = _poll_user_notes
+
+    def _live_note() -> str:
+        """Extra line(s) under the running spinner: permission mode + what the
+        user is typing right now (polled by the spinner's 100ms ticker)."""
+        parts = []
+        if config.auto_approve:
+            parts.append("[bold yellow]⏵⏵ auto mode on[/bold yellow] [dim](Shift+Tab to turn off)[/dim]")
+        buf, queued = typeahead.snapshot()
+        if buf or queued:
+            line = f"[bold green]you ›[/bold green] {rich_escape(buf)}▌"
+            if queued:
+                line += f"  [dim]({queued} queued — the agent gets it at its next step)[/dim]"
+            parts.append(line)
+        return "\n".join(parts)
+
+    ui.live_note = _live_note
 
     provider_args, model_args = _model_completion_sources(config)
     arg_options = {
@@ -265,38 +312,49 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         "/resume": [r["id"] for r in list_sessions(config.sessions_dir)],
         "/mcp": ["reload"],
     }
-    cmd_input = make_input(COMMANDS, arg_options, history_file=config.history_file)  # None if no autocomplete available
+    cmd_input = make_input(COMMANDS, arg_options, history_file=config.history_file,
+                           on_shift_tab=_toggle_auto, status_note=_mode_note)  # None if no autocomplete available
     if cmd_input:
-        ui.notice('type / for commands · Alt+V attaches an image · """ on its own line starts/ends a multi-line message')
+        ui.notice('type / for commands · Alt+V attaches an image · Shift+Tab toggles auto mode · '
+                  'you can keep typing while the agent works — Enter queues it')
     _kb_hint_if_unbuilt(kb)
 
     pending_images: list[dict] = []  # vision attachments waiting for the next turn
     pending_notes: list[str] = []  # e.g. /video descriptions, prepended to the next turn
 
     while True:
-        try:
-            # Context bar reflects the size *before* this turn — cheap (no
-            # tokenizing), and close enough to tell the user how close they
-            # are to auto-compaction without them running /status.
-            ctx_tokens, ctx_limit = agent.context_tokens(), config.compact_threshold
-            if cmd_input:
-                user = _read_multiline(
-                    lambda: cmd_input.read(ui.prompt_html(agent.mode.name, ctx_tokens, ctx_limit))
-                )
-            else:
-                user = _read_multiline(lambda: _read(ui.prompt(agent.mode.name, ctx_tokens, ctx_limit)))
-        except (EOFError, KeyboardInterrupt):
-            ui.print("\nbye 👋")
-            agent.close()
-            return
-        if cmd_input:  # collect any images attached with Alt+V during this prompt
-            new_imgs = cmd_input.pop_images()
-            if new_imgs:
-                pending_images.extend(new_imgs)
-                ui.notice(
-                    f"📎 {len(pending_images)} image(s) attached — they'll go with your next message.",
-                    style="green",
-                )
+        if queued_msgs:  # a message typed while the agent was working runs next
+            user = queued_msgs.pop(0)
+            ui.print(f"[dim]queued ▶[/dim] [bold green]you ›[/bold green] {rich_escape(user)}")
+        else:
+            try:
+                # Context bar reflects the size *before* this turn — cheap (no
+                # tokenizing), and close enough to tell the user how close they
+                # are to auto-compaction without them running /status.
+                ctx_tokens, ctx_limit = agent.context_tokens(), config.compact_threshold
+
+                def _next_line():
+                    nonlocal prefill
+                    default, prefill = prefill, ""  # prefill applies to the first line only
+                    if cmd_input:
+                        return cmd_input.read(ui.prompt_html(agent.mode.name, ctx_tokens, ctx_limit), default=default)
+                    if default:  # plain reader can't prefill — show it so nothing is lost
+                        ui.notice(f"(unsent text from the interrupted turn: {default})", style="dim")
+                    return _read(ui.prompt(agent.mode.name, ctx_tokens, ctx_limit))
+
+                user = _read_multiline(_next_line)
+            except (EOFError, KeyboardInterrupt):
+                ui.print("\nbye 👋")
+                agent.close()
+                return
+            if cmd_input:  # collect any images attached with Alt+V during this prompt
+                new_imgs = cmd_input.pop_images()
+                if new_imgs:
+                    pending_images.extend(new_imgs)
+                    ui.notice(
+                        f"📎 {len(pending_images)} image(s) attached — they'll go with your next message.",
+                        style="green",
+                    )
         if not user:
             continue
 
@@ -358,6 +416,20 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         if user == "/ping":
             _ping(agent)
             continue
+        if user in ("/auto", "/auto-approve"):
+            if _toggle_auto() == "auto":
+                ui.notice(
+                    "⏵⏵ auto mode ON — no permission prompts, no questions: the agent decides "
+                    "itself, can delegate whole jobs to the autopilot subagent, and the fixer "
+                    "subagent double-checks every editing turn. Shift+Tab or /auto turns it off.",
+                    style="yellow",
+                )
+            else:
+                ui.notice("auto mode OFF — the agent asks before risky actions again.", style="green")
+            continue
+        if user == "/thoughts":
+            ui.thoughts(agent.last_thinking)
+            continue
         if user in ("/mode", "/modes"):
             for name, m in agent.modes.items():
                 mark = "●" if name == agent.mode.name else " "
@@ -386,6 +458,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 continue
             agent.close()
             agent = _build_agent(config, kb, memory)  # new provider -> fresh chat
+            agent.poll_user_notes = _poll_user_notes
             persist_global_choice(config)  # cross-project default — all projects see this change
             ui.notice(f"switched → {config.provider} / {config.model}", style="green")
             continue
@@ -657,6 +730,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                     continue
             agent.close()
             agent = _resume_agent(config, kb, memory, chosen)
+            agent.poll_user_notes = _poll_user_notes
             continue
         if user.split() and user.split()[0] == "/kb-check":
             if "--fix" in user.split() or "fix" in user.split()[1:]:
@@ -747,6 +821,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
             memory = Memory(config.memory_db)
             _scaffold(config, kb)  # set it up (AGENT.md, kb/, .kbcode/) if new
             agent = _build_agent(config, kb, memory)
+            agent.poll_user_notes = _poll_user_notes
             ui.notice(f"now working on {config.project_dir}", style="green")
             ui.banner(config.provider, config.model, config.project_dir, agent.mode.name,
               temperature=config.temperature, thinking=config.thinking, max_tokens=config.max_tokens,
@@ -780,10 +855,17 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
 
         turn_input = "\n\n".join(pending_notes + [user]) if pending_notes else user
         try:
-            with interrupt_on_escape():  # press Esc (or Ctrl-C) to stop this turn
+            # Esc (or Ctrl-C) stops this turn; anything else you type queues as
+            # your next message (Enter commits it); Shift+Tab flips auto mode.
+            with interrupt_on_escape(typeahead=typeahead, on_shift_tab=_toggle_auto):
                 agent.run(turn_input, images=pending_images or None)
         except KeyboardInterrupt:
-            ui.notice("interrupted — back to the prompt.", style="yellow")
+            leftover = typeahead.take_all_text()
+            if leftover:
+                prefill = leftover.replace("\n", " ")
+                ui.notice("interrupted — what you typed is back in the prompt (edit it, then Enter).", style="yellow")
+            else:
+                ui.notice("interrupted — back to the prompt.", style="yellow")
         except ProviderError as exc:
             ui.error(str(exc))
             if exc.hint:
@@ -793,3 +875,9 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         finally:
             pending_images.clear()  # consumed by this turn (or dropped on error)
             pending_notes.clear()
+            # Lines committed with Enter mid-turn run next; a half-typed
+            # buffer goes back into the prompt instead of being lost.
+            queued_msgs.extend(typeahead.pop_lines())
+            partial = typeahead.take_all_text()
+            if partial and not prefill:
+                prefill = partial.replace("\n", " ")

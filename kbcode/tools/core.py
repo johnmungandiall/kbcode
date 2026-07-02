@@ -141,6 +141,13 @@ class ToolsCore:
     def _schema_for(self, name: str) -> dict | None:
         return next((s for s in self.schemas if s["name"] == name), None)
 
+    _SPLIT_WRITE_HINT = (
+        " If you are writing a lot of content, do NOT send it all in one call: "
+        "write_file the first portion, then extend the file with edit_file "
+        "(replace the current ending with ending + next portion), keeping each "
+        "call comfortably small."
+    )
+
     def _repair(self, name: str, inp: dict) -> str | None:
         """Return a correction message if the call is unusable, else None."""
         names = [s["name"] for s in self.schemas]
@@ -150,6 +157,23 @@ class ToolsCore:
             hint = f" Did you mean '{close[0]}'?" if close else ""
             return f"Unknown tool '{name}'.{hint} Available tools: {', '.join(names)}."
 
+        write_hint = self._SPLIT_WRITE_HINT if name in ("write_file", "edit_file", "edit_files") else ""
+
+        # Markers set by provider._parse_tool_args: the arguments JSON never
+        # made it here intact (malformed, or cut off by the max_tokens limit).
+        # Explain the real cause instead of a bare "missing arguments" error.
+        if "_malformed_args" in inp or "_args_cut_off" in inp:
+            reason = (
+                "your response hit the output-token limit mid-call, so the arguments JSON was cut off"
+                if inp.get("_args_cut_off")
+                else "the arguments were not valid JSON"
+            )
+            return (
+                f"Tool '{name}' arrived with unusable arguments — {reason}. Nothing was "
+                f"executed and nothing was damaged. Call it again with complete, valid "
+                f"JSON arguments.{write_hint}"
+            )
+
         schema = self._schema_for(name) or {}
         required = schema.get("input_schema", {}).get("required", [])
         missing = [r for r in required if r not in inp or inp[r] in (None, "")]
@@ -157,6 +181,7 @@ class ToolsCore:
             return (
                 f"Tool '{name}' is missing required argument(s): {', '.join(missing)}. "
                 f"It requires: {', '.join(required)}. Call it again with those filled in."
+                f"{write_hint}"
             )
         return None
 

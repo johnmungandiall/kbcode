@@ -39,6 +39,8 @@ COMMANDS = [
     ("/temperature <val>|none", "set sampling temperature (0, 0.01 ... 1.00) or 'none' for default; applies to next turn"),
     ("/thinking <level>", "set thinking level: off | low | medium | normal | high (normal→medium); use 'off' to disable reasoning"),
     ("/maxtokens <n>|auto", "set max output tokens, or 'auto' to let it follow the current model automatically"),
+    ("/auto", "toggle auto mode: agent works without permission prompts or questions (also Shift+Tab)"),
+    ("/thoughts", "show the model's full reasoning from the last turn (collapsed by default)"),
     ("/status", "show provider, model, mode and context size"),
     ("/ping", "quick connectivity/auth check for the current provider"),
     ("/open <folder>", "switch to working on another project folder"),
@@ -304,6 +306,17 @@ class _TickingStatus:
             text += f"  [dim](total {total:.1f}s)[/dim]"
         if self._hint:
             text += f"  [dim italic]{self._hint}[/dim italic]"
+        # Extra live line(s) under the spinner — the REPL uses this to echo
+        # what the user is typing mid-turn (type-ahead) and the current
+        # permission mode. Polled here so the 100ms ticker keeps it fresh
+        # without any cross-thread printing.
+        if self._ui is not None and getattr(self._ui, "live_note", None) is not None:
+            try:
+                extra = self._ui.live_note()
+            except Exception:  # noqa: BLE001 - a status line must never crash the ticker
+                extra = ""
+            if extra:
+                text += f"\n{extra}"
         return text
 
     def _tick(self) -> None:
@@ -362,6 +375,16 @@ class TerminalUI:
         # Characters received so far for the reply currently streaming —
         # reset by thinking(), grown by stream_chunk().
         self._stream_len = 0
+        # Reasoning characters received for the current model call —
+        # reset by thinking(), grown by stream_thinking().
+        self._thinking_len = 0
+        # Name of the tool call whose arguments are currently streaming
+        # (stream_tool_hint / stream_tool_args).
+        self._tool_stream_name = ""
+        # Optional callable -> str: extra live line(s) rendered under any
+        # running spinner (polled by _TickingStatus's ticker). The REPL sets
+        # this to echo mid-turn type-ahead + the permission mode.
+        self.live_note = None
 
     def turn_started(self) -> None:
         """Mark the start of a new agent turn (call once per user turn)."""
@@ -427,7 +450,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
+            ("session", ["/help", "/version", "/auto", "/thoughts", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
             ("knowledge & memory", ["/init", "/kb", "/kb-check [--fix]", "/kb-undo <note>", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]", "/temperature <val>|none", "/thinking <level>", "/maxtokens <n>|auto"]),
@@ -522,6 +545,8 @@ class TerminalUI:
     # -- agent turn output ---------------------------------------------
     def thinking(self):
         self._stream_len = 0  # fresh model call: restart the writing… counter
+        self._thinking_len = 0
+        self._tool_stream_name = ""
         return _TickingStatus(self.console, "thinking", "(Esc to interrupt)", self._turn_start, ui=self)
 
     def working(self, label: str):
@@ -563,21 +588,72 @@ class TerminalUI:
                 "writing", f"{self._stream_len:,} chars  (Esc to interrupt)"
             )
 
+    def stream_thinking(self, text: str) -> None:
+        """Track streamed reasoning like stream_chunk tracks reply text: the
+        live spinner counts the thinking characters, so a model that reasons
+        for a long time reads as alive. Runs on the provider worker thread —
+        attribute writes only, never prints (see stream_chunk)."""
+        if not text:
+            return
+        self._thinking_len += len(text)
+        if self._active_status is not None:
+            self._active_status.set_progress(
+                "thinking", f"{self._thinking_len:,} chars of reasoning  (Esc to interrupt)"
+            )
+
     def stream_tool_hint(self, name: str) -> None:
-        """One dim line the moment the model starts composing a call to *name*,
-        while the response is still streaming — a long tool-call-heavy response
-        otherwise looks frozen (the arguments JSON can take a while to
-        generate). The real tool_call() line, with described args, follows once
-        the response resolves. Unlike stream_chunk this *prints* from the
-        provider worker thread, so any live spinner is stopped first (its
-        ticker-thread redraw would race this print and shred the line)."""
+        """The model started composing a call to *name* while the response is
+        still streaming. Fed into the live spinner's label (never printed from
+        the worker thread — see stream_chunk): the real tool_call() line, with
+        described args, follows once the response resolves. It used to print a
+        dim '<name> …' line and stop the spinner — which left NOTHING moving
+        on screen while a large write_file/edit_files call streamed its
+        arguments, the classic 'write looks stuck' complaint; now
+        stream_tool_args keeps a live char counter ticking instead."""
         if not name:
             return
+        self._tool_stream_name = name
         if self._active_status is not None:
-            self._active_status.stop()
-        self.console.print(f"{_TOOL_ICON} {name} …", style="dim", markup=False, highlight=False)
+            self._active_status.set_progress(name, "composing the call…  (Esc to interrupt)")
+
+    def stream_tool_args(self, name: str, chars: int) -> None:
+        """Live progress while a tool call's arguments stream in — a big write
+        can be tens of KB of JSON, and the counter is what makes it read as
+        alive rather than stuck. Worker-thread safe: label updates only."""
+        label = name or self._tool_stream_name or "tool call"
+        if self._active_status is not None:
+            self._active_status.set_progress(
+                label, f"writing the call… {chars:,} chars  (Esc to interrupt)"
+            )
+
+    def thought_summary(self, thinking: str) -> None:
+        """One collapsed dim line for the model's reasoning — the full text is
+        a /thoughts away (Claude Code's collapsed-thinking idea)."""
+        if not thinking.strip():
+            return
+        n = len(thinking)
+        self.console.print(
+            Text(f"🧠 thought for {n:,} chars — /thoughts expands it", style="dim italic")
+        )
+
+    def thoughts(self, thinking: str) -> None:
+        """`/thoughts` — the expanded view of the last turn's reasoning."""
+        if not thinking.strip():
+            self.notice("No reasoning was reported for the last turn.", style="yellow")
+            return
+        self.console.print(Panel(Text(thinking, style="dim"), title="🧠 model thinking", border_style="dim", padding=(0, 1)))
 
     def tool_call(self, name: str, args: dict) -> None:
+        # A call whose arguments never arrived intact (cut off by the token
+        # limit / malformed JSON — see provider._parse_tool_args): don't show
+        # a scary "Write (0 chars)"; say what actually happened.
+        if "_malformed_args" in args or "_args_cut_off" in args:
+            self.console.print(Text.assemble(
+                (f"{_TOOL_ICON} ", "cyan"),
+                (name.rsplit(":", 1)[-1], "bold cyan"),
+                ("  (call arrived incomplete — asking the model to resend it)", "yellow dim"),
+            ))
+            return
         # Subagent inner calls arrive as "agent-name:tool" — nest them visually.
         prefix = ""
         if ":" in name:
@@ -605,6 +681,11 @@ class TerminalUI:
         """
         text = str(content or "").strip()
         if is_error:
+            # Repair guidance (not a real failure — nothing ran): render it as
+            # a gentle retry note instead of a red error line.
+            if "Call it again with" in text or "unusable arguments" in text:
+                self.console.print(Text("    ↻ asked the model to resend the call correctly", style="yellow dim"))
+                return
             first = text.splitlines()[0] if text else ""
             self.console.print(Text("    ✗ " + _short(first, 160), style="red"))
             return

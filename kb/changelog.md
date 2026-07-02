@@ -2,6 +2,35 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased (2026-07-02) — auto mode, type-ahead, thinking display
+- **Ask/auto permission modes** (Claude Code's Shift+Tab idea): `/auto` or
+  **Shift+Tab** (at the prompt AND mid-turn) toggles; auto = no permission
+  prompts, no questions — plus an auto-mode system note, a "convince the
+  model" pass (`_auto_continue_feedback`: a turn may not end on a question),
+  and builtin subagents **autopilot** (whole task end-to-end, every tool) and
+  **fixer** (auto-reviews each editing turn's checkpoint diff and repairs
+  defects — `_auto_fix_feedback`). See [[safety]], [[modes-subagents]].
+- **Type-ahead while the agent works**: keystrokes echo live under the
+  spinner (`TypeAhead` in interrupt.py + `ui.live_note`), Enter queues the
+  message, and it's delivered to the model MID-TURN (piggybacked on the last
+  tool result) with urgent-now/else-after-task triage; Esc hands unsent text
+  back into the next prompt. See [[providers]], [[gotchas]].
+- **"Write looks stuck" fixed for real** (Hermes tool-progress idea):
+  `stream_tool_hint` no longer prints-and-kills the spinner; new
+  `on_tool_args` streaming callback keeps a `writing the call… N chars`
+  counter live while big write_file/edit_files arguments stream.
+- **Truncated/malformed tool calls repaired properly**: provider
+  `_parse_tool_args` marks them (`_malformed_args`/`_args_cut_off` +
+  finish_reason=length detection) instead of silently passing `{}`; `_repair`
+  explains the real cause and coaches splitting large writes; UI shows a
+  yellow "call arrived incomplete → resend" instead of the red
+  "missing required argument(s): path, content" spam.
+- **Model thinking displayed**: reasoning streams into the spinner
+  (`thinking… N chars of reasoning`), collapses to one `🧠 thought…` line per
+  step, and `/thoughts` expands the full turn's reasoning
+  (Anthropic thinking blocks; DeepSeek `reasoning_content`; OpenRouter `reasoning`).
+- Tests: new `tests/test_auto_mode.py`; suite now 426 tests, ruff clean.
+
 ## v1.15.0 (2026-07-02)
 - **Replies render as markdown in the terminal** (user request): `stream_chunk`
   no longer prints raw chunks — it feeds a `writing… N chars` progress label

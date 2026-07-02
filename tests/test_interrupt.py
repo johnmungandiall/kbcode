@@ -24,7 +24,7 @@ def test_watcher_thread_is_joined_before_returning(monkeypatch):
     captured: dict[str, threading.Thread] = {}
 
     def fake_make_watcher():
-        def watch(stop: threading.Event) -> None:
+        def watch(stop: threading.Event, typeahead=None, on_shift_tab=None) -> None:
             captured["thread"] = threading.current_thread()
             started.set()
             while not stop.is_set():  # mirror the real ~50ms poll loop

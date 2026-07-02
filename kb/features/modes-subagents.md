@@ -23,8 +23,17 @@ servers mark their tools `parallel_safe`, so those are also the only MCP
 tools that can qualify a subagent for parallel dispatch. See [[mcp]].
 
 ## Subagents delegate into a fresh context
-`load_subagents()` (`kbcode/subagents.py:52`) reads `.kbcode/agents/*.md` (same
-frontmatter parser as modes) into `Subagent` records (`kbcode/subagents.py:75`).
+Two subagents are BUILTIN — `builtin_subagents()` (`kbcode/subagents.py:52`)
+bakes in `autopilot` (finish a whole task end-to-end, never ask the user;
+`tools: None` = everything) and `fixer` (review just-made changes and repair
+real defects; also `tools: None`). `cli._build_agent` merges them under
+project files (`{**builtin_subagents(), **load_subagents(...)}`,
+`kbcode/cli.py:187`), so a `.kbcode/agents/autopilot.md` overrides the
+builtin. They exist for AUTO permission mode: the auto-mode system note tells
+the model to delegate big jobs to autopilot, and `Agent._auto_fix_feedback`
+auto-dispatches fixer after editing turns — see [[safety]].
+`load_subagents()` (`kbcode/subagents.py:91`) reads `.kbcode/agents/*.md` (same
+frontmatter parser as modes) into `Subagent` records.
 `Agent.__init__` (`kbcode/agent.py:79`) wires `tools.subagents` and `tools.delegate = self
 ._run_subagent`; `Tools.schemas` (`kbcode/tools/core.py:94`) conditionally
 appends the `run_subagent` schema (`_subagent_schema`, `kbcode/tools/core.py:67`)

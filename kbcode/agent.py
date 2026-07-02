@@ -74,6 +74,25 @@ _KB_WRITE_TOOLS = {"write_file", "edit_file"}
 _KB_REMINDER_SKIP_DIRS = ("/kb/", "/.kbcode/", "/.git/", "/node_modules/")
 _KB_REMINDER_SKIP_NAMES = {"agent.md", "memory.md", "readme.md"}
 
+# Appended to the system prompt while the AUTO permission mode is active
+# (Shift+Tab / /auto — see permissions.py): the user has said "don't ask me
+# anything", so the model must decide for itself and lean on the builtin
+# autopilot/fixer subagents (subagents.py) instead of the user.
+_AUTO_MODE_NOTE = (
+    "## Auto mode (active)\n"
+    "The user switched to AUTO permission mode: nothing prompts them and they do NOT "
+    "want to be asked anything. Work autonomously:\n"
+    "- Never ask the user questions or wait for confirmation — pick the most sensible "
+    "option yourself and proceed.\n"
+    "- For a large multi-step job, delegate it to the 'autopilot' subagent "
+    "(run_subagent) so it completes end-to-end in its own context window.\n"
+    "- After changing code, the 'fixer' subagent automatically double-checks your "
+    "changes at the end of the turn; you can also call it yourself any time."
+)
+
+# Cap on how much checkpoint diff the auto-fix pass hands the fixer subagent.
+_AUTO_FIX_DIFF_CHARS = 12_000
+
 
 class Agent:
     def __init__(
@@ -117,10 +136,21 @@ class Agent:
         self._kb_drift_checked = False
         # Stop hook state (Claude Code idea): checked once per turn, reset in run().
         self._stop_hook_checked = False
+        # Auto-mode end-of-turn passes (fixer dispatch + "don't ask, continue"
+        # nudge) — each fires at most once per turn, reset in run().
+        self._auto_fix_done = False
+        self._auto_continue_done = False
         # Subagent delegation (Claude Code idea): expose it to the tools layer.
         self.subagents = subagents or {}
         self.tools.subagents = self.subagents
         self.tools.delegate = self._run_subagent
+        # Optional callable -> list[str]: messages the user typed while this
+        # turn was running (the REPL wires it to the TypeAhead queue). They're
+        # delivered to the model mid-turn so it can decide: urgent → apply
+        # now, otherwise finish the current task first (see run()).
+        self.poll_user_notes = None
+        # The reasoning text from the most recent turn, for /thoughts.
+        self.last_thinking = ""
 
     def set_mode(self, name: str) -> bool:
         mode = self.modes.get(name)
@@ -129,7 +159,8 @@ class Agent:
         self.mode = mode
         return True
 
-    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None, on_tool=None) -> LLMResponse:
+    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None, on_tool=None,
+                  on_tool_args=None, on_thinking=None) -> LLMResponse:
         """Call the provider off the main thread so Esc / Ctrl-C stay responsive.
 
         A blocking HTTP request holds the socket deep in C, so a pending
@@ -156,7 +187,8 @@ class Agent:
         def work() -> None:
             try:
                 if on_text is not None:
-                    box["resp"] = self.provider.stream(system, messages, schemas, on_text=on_text, on_tool=on_tool)
+                    box["resp"] = self.provider.stream(system, messages, schemas, on_text=on_text, on_tool=on_tool,
+                                                       on_tool_args=on_tool_args, on_thinking=on_thinking)
                 else:
                     box["resp"] = self.provider.complete(system, messages, schemas)
             except BaseException as exc:  # carried over and re-raised on the main thread
@@ -242,7 +274,10 @@ class Agent:
             self.session.append(message)
 
     def _system_for_mode(self) -> str:
-        return f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
+        base = f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
+        if getattr(self.tools.perm, "auto_approve", False):
+            base += f"\n\n{_AUTO_MODE_NOTE}"
+        return base
 
     def _mode_schemas(self) -> list[dict]:
         return [s for s in self.tools.schemas if self.mode.allows(s["name"])]
@@ -267,6 +302,9 @@ class Agent:
         self._kb_touched_this_run = False
         self._kb_drift_checked = False
         self._stop_hook_checked = False
+        self._auto_fix_done = False
+        self._auto_continue_done = False
+        self.last_thinking = ""
         self.tools.checkpoints.new_turn()
         self.tools.new_turn()
 
@@ -285,11 +323,19 @@ class Agent:
                         resp = self._complete(
                             self._system_for_mode(), self.messages, self._mode_schemas(),
                             on_text=self.ui.stream_chunk, on_tool=self.ui.stream_tool_hint,
+                            on_tool_args=self.ui.stream_tool_args, on_thinking=self.ui.stream_thinking,
                         )
                 except ProviderError as exc:
                     if self._try_vision_fallback(exc):
                         continue
                     raise
+                if resp.thinking.strip():
+                    # Collapsed by default; /thoughts expands the whole turn's
+                    # reasoning (steps separated below).
+                    self.ui.thought_summary(resp.thinking)
+                    self.last_thinking = (
+                        f"{self.last_thinking}\n\n---\n\n{resp.thinking}" if self.last_thinking else resp.thinking
+                    )
                 if resp.text.strip():
                     # Nothing was printed while streaming (see _complete) —
                     # show the whole reply now, markdown-rendered.
@@ -326,6 +372,10 @@ class Agent:
                     if self._kb_drift_feedback():
                         continue
                     if self._stop_hook_feedback():
+                        continue
+                    if self._auto_continue_feedback(resp.text):
+                        continue
+                    if self._auto_fix_feedback():
                         continue
                     self._turn_summary(start, actions, before)
                     return
@@ -376,6 +426,7 @@ class Agent:
                     content = self._with_kb_reminder(call.name, dict(call.input), content, is_error)
                     results.append({"id": call.id, "content": content, "is_error": is_error})
                     i += 1
+                self._deliver_user_notes(results)
                 self._append({"role": "tool_results", "results": results})
 
                 if self._compact_mid_turn_or_stop(start, actions, before):
@@ -632,6 +683,112 @@ class Agent:
         self.ui.notice("Stop hook blocked the turn from ending — asking the model to continue.", style="yellow")
         self._append(
             {"role": "user", "content": outcome.message or "Continue: a Stop hook blocked ending this turn."}
+        )
+        return True
+
+    def _deliver_user_notes(self, results: list[dict]) -> None:
+        """Messages typed while this turn runs (Claude Code's queued-message
+        idea, extended): deliver them to the model MID-TURN by piggybacking on
+        the round-trip's last tool result — appending a separate user message
+        here would break the alternating-roles invariant. The model is told to
+        triage: urgent → apply immediately, otherwise finish the current task
+        first and address it before ending the turn."""
+        if self.poll_user_notes is None or not results:
+            return
+        try:
+            notes = self.poll_user_notes() or []
+        except Exception:  # noqa: BLE001 - a UI queue must never break the loop
+            return
+        if not notes:
+            return
+        bullets = "\n".join(f"- {n}" for n in notes)
+        results[-1]["content"] = (
+            f"{results[-1]['content']}\n\n"
+            f"[The user sent {'this message' if len(notes) == 1 else 'these messages'} while you were working:]\n"
+            f"{bullets}\n"
+            "Triage it yourself: if it's urgent or changes what you're doing right now, apply "
+            "it IMMEDIATELY; otherwise finish the current task first and address it before "
+            "ending this turn. Acknowledge it briefly either way."
+        )
+        self.ui.notice(
+            f"↳ delivered your message{'s' if len(notes) != 1 else ''} to the agent — it will "
+            "apply it now if urgent, or right after the current task.",
+            style="cyan",
+        )
+
+    def _auto_continue_feedback(self, text: str) -> bool:
+        """Convince-the-model pass (auto mode only): if the model tries to end
+        the turn by asking the user something or deferring ("shall I…?",
+        "let me know…"), push back ONCE per turn — in auto mode there is no
+        user to answer, so the model must decide and keep working itself."""
+        if self._auto_continue_done or not getattr(self.tools.perm, "auto_approve", False):
+            return False
+        lowered = (text or "").strip().lower()
+        if not lowered:
+            return False
+        asking = lowered.rstrip().endswith("?") or any(
+            phrase in lowered
+            for phrase in (
+                "shall i", "should i proceed", "do you want", "would you like",
+                "let me know", "please confirm", "waiting for your",
+            )
+        )
+        if not asking:
+            return False
+        self._auto_continue_done = True
+        self.ui.notice("auto mode: the model asked a question — telling it to decide and continue.", style="yellow")
+        self._append(
+            {
+                "role": "user",
+                "content": (
+                    "You are in AUTO mode — there is no user available to answer. Do not ask "
+                    "questions or wait for confirmation. Choose the most sensible option "
+                    "yourself and CONTINUE the work now until it is fully done."
+                ),
+            }
+        )
+        return True
+
+    def _auto_fix_feedback(self) -> bool:
+        """Auto-mode safety net: after a turn that edited files, hand this
+        turn's checkpoint diff to the builtin 'fixer' subagent so mistakes get
+        caught and repaired immediately, without the user asking. Fires once
+        per turn, only in auto mode, only when files were touched. The fixer's
+        report goes back to the model as a user message (keeps the transcript
+        alternating) so it can react — or just wrap up."""
+        if self._auto_fix_done or not self._kb_touched_this_run:
+            return False
+        if not getattr(self.tools.perm, "auto_approve", False):
+            return False
+        if "fixer" not in self.subagents:
+            return False
+        self._auto_fix_done = True
+        diff = ""
+        try:
+            rows = self.tools.checkpoints.list_checkpoints()
+            if rows:
+                diff = self.tools.checkpoints.diff(rows[0]["hash"])
+        except Exception:  # noqa: BLE001 - no git / no checkpoint → generic review
+            diff = ""
+        if len(diff) > _AUTO_FIX_DIFF_CHARS:
+            diff = diff[:_AUTO_FIX_DIFF_CHARS] + "\n[...diff truncated...]"
+        task = (
+            "Changes were just made to this project. Review them for mistakes and fix any "
+            "real defects you find (syntax errors, broken imports, obvious logic slips). "
+            "Do not restyle or expand scope. If everything is fine, say so in one line.\n\n"
+            + (f"The diff of this turn's changes:\n{diff}" if diff.strip() else
+               "No diff is available — inspect the files changed most recently.")
+        )
+        self.ui.notice("auto mode: fixer subagent is double-checking this turn's changes…", style="cyan")
+        summary, is_error = self._run_subagent("fixer", task)
+        self._append(
+            {
+                "role": "user",
+                "content": (
+                    f"[fixer subagent report — {'error' if is_error else 'ok'}]\n{summary}\n\n"
+                    "If the fixer repaired something important, mention it briefly; then finish."
+                ),
+            }
         )
         return True
 

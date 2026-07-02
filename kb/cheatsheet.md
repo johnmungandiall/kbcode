@@ -22,7 +22,7 @@
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.
   kbcode now aggressively batches parallel reads (16 workers + prompt rules).
-- `pytest` — run the test suite (`tests/`, 33 files + conftest.py); `python -m compileall -q kbcode`
+- `pytest` — run the test suite (`tests/`, 34 files + conftest.py); `python -m compileall -q kbcode`
   for a fast syntax-only check (glob-free — `py_compile kbcode/*.py` breaks on
   Windows PowerShell, which doesn't expand `*`)
 
@@ -42,6 +42,9 @@
 - `/temperature <0|0.01|...|1>|none` — adjust sampling temp (0.00 to 1.00 in 0.01 steps)
 - `/thinking off|low|medium|normal|high` — set reasoning level or 'off' to disable (normal=medium)
 - `/maxtokens <n>|auto` — set or auto max output tokens based on model
+- `/auto` (or **Shift+Tab**, works mid-turn too) — toggle ask/auto permission
+  mode: auto = no prompts, no questions; autopilot/fixer builtin subagents ([[safety]])
+- `/thoughts` — expand the last turn's model reasoning (collapsed 🧠 line by default)
 - `/status` — provider, model, mode, context size
 - `/todo` — show task checklist
 - `/kb` — list kb/ notes

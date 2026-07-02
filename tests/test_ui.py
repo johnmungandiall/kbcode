@@ -135,12 +135,19 @@ def test_thinking_resets_the_writing_counter_between_model_calls():
         assert "2" in status._hint and "11" not in status._hint
 
 
-def test_stream_tool_hint_stops_active_spinner_before_printing():
+def test_stream_tool_hint_feeds_spinner_instead_of_stopping_it():
+    # It used to stop the spinner and print a dim line — which left nothing
+    # moving while a big write call streamed its arguments (the "write looks
+    # stuck" bug). Now it relabels the live spinner, and stream_tool_args
+    # keeps a character counter ticking while the arguments stream in.
     ui = _silent_ui()
     with ui.thinking() as status:
-        ui.stream_tool_hint("read_file")
-        assert ui._active_status is None
-        assert status._stopped is True
+        ui.stream_tool_hint("write_file")
+        assert ui._active_status is status
+        assert status._stopped is False
+        assert status._label == "write_file"
+        ui.stream_tool_args("write_file", 12345)
+        assert "12,345" in status._hint
 
 
 def test_permission_prompt_stops_active_spinner_first(monkeypatch):

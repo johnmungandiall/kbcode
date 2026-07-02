@@ -13,7 +13,7 @@ Can also connect to external **MCP servers** (stdio, tools only) and expose
 their tools as built-ins — see [[mcp]].
 
 ## Key entry points
-- `kbcode/cli.py:381` — `main()` entry point, parses args, dispatches to wizard/init/REPL
+- `kbcode/cli.py:383` — `main()` entry point, parses args, dispatches to wizard/init/REPL
 - `kbcode/repl.py:222` — `repl()` the interactive chat loop
 - `kbcode/agent.py:78` — `Agent` class, the core tool-using loop
 - `kbcode/tools/core.py:26 — `ToolsCore`/`Tools`, all tool implementations + schemas
@@ -31,7 +31,7 @@ See [[cheatsheet]] for the full command list.
 ## Version
 - `kbcode/__init__.py:9` — `__version__ = "1.15.0"`; release history in [[changelog]]
 
-last indexed: 2026-07-02 (v1.15.0 released)
+last indexed: 2026-07-02 (post-v1.15.0: auto mode + type-ahead + thinking display, unreleased — see [[changelog]])
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

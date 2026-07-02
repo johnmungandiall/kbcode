@@ -14,7 +14,7 @@ not a new file, so replay only reconstructs what happened after the last reset
 while the file keeps a full audit trail underneath).
 
 `kbcode -c`/`--continue`, `--resume [id]`, and in-chat `/sessions`/`/resume`
-resolve to `cli._resume_agent()` (`kbcode/cli.py:200`), which restores the session's
+resolve to `cli._resume_agent()` (`kbcode/cli.py:202`), which restores the session's
 original provider/model — **raw assistant payloads are provider-shaped** (see
 [[providers]]), so replay only works cleanly under the same one — and
 reconstructs `tool_calls` back into `ToolCall` instances (`sessions

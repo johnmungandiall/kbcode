@@ -197,6 +197,8 @@ def make_input(
     commands: list[tuple[str, str]],
     arg_options: dict[str, list[str]] | None = None,
     history_file: Path | None = None,
+    on_shift_tab=None,
+    status_note=None,
 ):
     """Return an input object with ``.read(prompt_html)`` and ``.pop_images()``, or None.
 
@@ -204,6 +206,12 @@ def make_input(
     from the clipboard to the next message (for vision-capable models). Attached
     images wait in a buffer shown in the bottom toolbar; ``pop_images()`` returns
     and clears them — the caller sends them with the user's next turn.
+
+    ``on_shift_tab``, if given, is called (no args) when the user presses
+    **Shift+Tab** at the prompt — the REPL uses it to cycle the ask/auto
+    permission mode, Claude Code style. ``status_note``, if given, is a
+    callable returning a short plain-text state line (e.g. the current
+    permission mode) shown at the start of the bottom toolbar.
 
     ``history_file``, if given, persists input history there across sessions
     (up-arrow recalls prompts from earlier runs, not just this one).
@@ -270,10 +278,27 @@ def make_input(
     kb.add("escape", "v")(_attach_image)
     kb.add("escape", "V")(_attach_image)
 
+    if on_shift_tab is not None:
+        @kb.add("s-tab")
+        def _cycle_mode(event):
+            try:
+                on_shift_tab()
+            except Exception:  # noqa: BLE001 - a mode toggle must never break typing
+                return
+            event.app.invalidate()  # redraw the toolbar with the new mode
+
     def _toolbar():
+        note = ""
+        if status_note is not None:
+            try:
+                text = status_note() or ""
+            except Exception:  # noqa: BLE001 - a status source must never break typing
+                text = ""
+            if text:
+                note = f" {text} · "
         if images:
-            return HTML(f" 📎 {len(images)} image(s) attached — sent with your next message")
-        return HTML(" tip: <b>Alt+V</b> attaches an image from your clipboard")
+            return HTML(f"{note} 📎 {len(images)} image(s) attached — sent with your next message")
+        return HTML(f"{note} tip: <b>Alt+V</b> attaches an image · <b>Shift+Tab</b> toggles auto mode")
 
     session = PromptSession(
         # Threaded: callable arg_options may fetch model lists over the network
@@ -286,8 +311,10 @@ def make_input(
     )
 
     class _Input:
-        def read(self, prompt_html: str) -> str:
-            raw = session.prompt(HTML(prompt_html))
+        def read(self, prompt_html: str, default: str = "") -> str:
+            # ``default`` prefills the line (editable) — used to hand back text
+            # the user typed mid-turn when the turn was interrupted.
+            raw = session.prompt(HTML(prompt_html), default=default)
             # Strip any stray BOM/control chars some shells inject.
             return "".join(c for c in raw if c.isprintable()).strip()
 

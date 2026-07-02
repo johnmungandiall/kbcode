@@ -34,7 +34,7 @@ from .prompt_input import select
 from .prompts import build_system_prompt, load_prompt_fragments
 from .provider import ProviderError, get_provider
 from .sessions import SessionRecorder, list_sessions, load_session
-from .subagents import load_subagents
+from .subagents import builtin_subagents, load_subagents
 from .tools import Tools
 from .tools.mcp import MCPManager, parse_mcp_configs
 from .ui import TerminalUI
@@ -182,7 +182,9 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id
         compact_threshold=config.compact_threshold,
         ui=ui,
         modes=load_modes(config.kbcode_dir / "modes"),
-        subagents=load_subagents(config.kbcode_dir / "agents"),
+        # Builtins (autopilot, fixer) first so a project file with the same
+        # name in .kbcode/agents/ overrides them.
+        subagents={**builtin_subagents(), **load_subagents(config.kbcode_dir / "agents")},
         max_steps=config.max_steps,
     )
     # Claude Code / Hermes idea: persist every chat so it can be picked back up
