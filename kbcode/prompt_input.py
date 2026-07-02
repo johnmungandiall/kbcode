@@ -1,7 +1,8 @@
 """Interactive input line with slash-command autocomplete (Claude Code style).
 
 When you type ``/`` a live popup menu of commands appears; arrow keys + Tab/Enter
-pick one. After ``/provider`` it suggests provider names too.
+pick one. After ``/provider`` it suggests provider names, then that provider's
+model ids for the second argument (fetched live, in the background).
 
 This uses `prompt_toolkit`. If it isn't installed, or stdin isn't an interactive
 terminal (e.g. piped input), :func:`make_input` returns ``None`` and the caller
@@ -53,16 +54,20 @@ def _path_completions(word: str, limit: int = 40) -> list[tuple[str, str, str]]:
 def suggest(
     text: str,
     commands: list[tuple[str, str]],
-    arg_options: dict[str, list[str]] | None = None,
+    arg_options: dict | None = None,
     path_commands: frozenset[str] | set[str] | None = None,
 ) -> list[tuple[str, str, str]]:
     """Pure matching logic (no prompt_toolkit) — easy to test.
 
     Returns a list of ``(insert, display, meta)`` for the current input ``text``.
     Empty list means "no popup" (e.g. the user is typing a normal request).
-    ``arg_options`` maps a command (e.g. ``/provider``) to the values to suggest
-    for its first argument; ``path_commands`` (defaults to :data:`PATH_COMMANDS`)
-    names commands whose first argument gets filesystem path completion.
+    ``arg_options`` maps a command (e.g. ``/provider``) to the values to suggest:
+    a plain list applies to the first argument only, while a callable receives
+    all words after the command (last one partial) and returns the candidates
+    for that last word — so suggestions can depend on the earlier arguments
+    (e.g. ``/provider deepseek <model>``). ``path_commands`` (defaults to
+    :data:`PATH_COMMANDS`) names commands whose first argument gets filesystem
+    path completion.
     """
     arg_options = arg_options or {}
     if path_commands is None:
@@ -83,7 +88,17 @@ def suggest(
     head, _, _ = text.partition(" ")
     parts = text.split(" ")
     word = parts[-1]
-    out = [(name, name, "") for name in arg_options.get(head, []) if name.startswith(word)]
+    options = arg_options.get(head)
+    if callable(options):
+        try:
+            candidates = options(parts[1:])
+        except Exception:  # noqa: BLE001 - a completion source must never break typing
+            candidates = []
+    elif len(parts) == 2:  # a static list completes the first argument only
+        candidates = options or []
+    else:
+        candidates = []
+    out = [(name, name, "") for name in candidates if name.startswith(word)]
     # File-path completion, but only while typing the *first* argument (parts ==
     # [command, partial-path]) — later words (e.g. /video's question) aren't paths.
     if head in path_commands and len(parts) == 2:
@@ -191,7 +206,7 @@ def make_input(
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.application import run_in_terminal
-        from prompt_toolkit.completion import Completer, Completion
+        from prompt_toolkit.completion import Completer, Completion, ThreadedCompleter
         from prompt_toolkit.formatted_text import HTML
         from prompt_toolkit.history import FileHistory
         from prompt_toolkit.key_binding import KeyBindings
@@ -254,7 +269,9 @@ def make_input(
         return HTML(" tip: <b>Alt+V</b> attaches an image from your clipboard")
 
     session = PromptSession(
-        completer=_SlashCompleter(),
+        # Threaded: callable arg_options may fetch model lists over the network
+        # on first use — run them off the UI thread so typing never freezes.
+        completer=ThreadedCompleter(_SlashCompleter()),
         complete_while_typing=True,
         key_bindings=kb,
         bottom_toolbar=_toolbar,

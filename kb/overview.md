@@ -12,7 +12,7 @@ Works with Claude (Anthropic SDK) and any OpenAI-compatible model (OpenAI, Gemin
 
 ## Key entry points
 - `kbcode/cli.py:329` — `main()` entry point, parses args, dispatches to wizard/init/REPL
-- `kbcode/repl.py:151` — `repl()` the interactive chat loop
+- `kbcode/repl.py:187` — `repl()` the interactive chat loop
 - `kbcode/agent.py:72` — `Agent` class, the core tool-using loop
 - `kbcode/tools/core.py:23 — `ToolsCore`/`Tools`, all tool implementations + schemas
 
@@ -29,7 +29,7 @@ See [[cheatsheet]] for the full command list.
 ## Version
 - `kbcode/__init__.py:9` — `__version__ = "1.9.12"`; release history in [[changelog]]
 
-last indexed: 2026-07-01 (v1.9.12: tests for new clean tool activity UI summaries + doc drift fixes (stale versions in overview/README); v1.9.11 UX: agent actions understandable (high-level counts instead of raw code leaks) + read_file range streaming)
+last indexed: 2026-07-02 (uncommitted: `/provider <name>` and `/model` now autocomplete live model ids — `_model_completion_sources` in repl.py, callable `arg_options` + `ThreadedCompleter` in prompt_input.py; two drifted tests fixed (repo_map in parallel_safe set, read_file budget-floor test))
 
 See [[architecture]] for how the pieces fit, [[conventions]] for structure rules,
 [[about-kb]] for KB-maintenance rules, [[about-you]] for user preferences.

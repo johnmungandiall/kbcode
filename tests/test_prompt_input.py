@@ -51,6 +51,32 @@ def test_argument_completion_returns_all_when_word_empty():
     assert names == ["anthropic", "openai"]
 
 
+def test_static_list_completes_first_argument_only():
+    # A plain list is for the first argument; it must NOT reappear for later
+    # words (the old behavior re-suggested provider names where a model goes).
+    arg_options = {"/provider": ["anthropic", "openai"]}
+    assert suggest("/provider deepseek ", COMMANDS, arg_options) == []
+
+
+def test_callable_arg_options_receive_words_after_command():
+    seen = []
+
+    def options(args):
+        seen.append(list(args))
+        return ["deepseek-chat", "deepseek-reasoner"]
+
+    results = suggest("/provider deepseek deepseek-c", COMMANDS, {"/provider": options})
+    assert seen == [["deepseek", "deepseek-c"]]
+    assert [r[0] for r in results] == ["deepseek-chat"]
+
+
+def test_callable_arg_options_exception_means_no_popup():
+    def boom(args):
+        raise RuntimeError("network down")
+
+    assert suggest("/provider deepseek ", COMMANDS, {"/provider": boom}) == []
+
+
 # --- path completion (#9) --------------------------------------------------
 
 

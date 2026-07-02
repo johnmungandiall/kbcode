@@ -248,19 +248,20 @@ def test_read_file_offset_beyond_end(tmp_path):
 
 
 def test_read_file_range_respects_budget(tmp_path):
-    """Range read should still be truncated by the active context budget."""
-    tools = _make_tools(tmp_path)  # uses Permissions(auto_approve=True)
-    # 10 lines of 200 chars each = ~2000 chars + line nums
-    lines = ["x" * 200 for _ in range(10)]
+    """Range read output is still capped by the char budget — floored at
+    _MIN_READ_CHARS (2000), so a tighter budget can't truncate a read to
+    uselessness."""
+    tools = _make_tools(tmp_path, _RecordingPermissions())
+    # 20 lines of 200 chars ≈ 4000 chars — well over the 2000-char floor.
+    lines = ["x" * 200 for _ in range(20)]
     (tools.root / "large.txt").write_text("\n".join(lines), encoding="utf-8")
 
-    # Set a tight budget
-    tools.context_budget_chars = 300
-    out = tools._tool_read_file({"path": "large.txt", "offset": 2, "limit": 8})
+    tools.context_budget_chars = 300  # floored up to _MIN_READ_CHARS
+    out = tools._tool_read_file({"path": "large.txt", "offset": 2, "limit": 18})
 
-    assert "[...truncated...]" in out
+    assert "[...file truncated...]" in out
     # Should have started from original line 2
-    assert out.startswith("2\t") or "\n2\t" in out
+    assert out.startswith("2\t")
 
 
 def test_read_file_range_and_full_have_consistent_line_numbers(tmp_path):

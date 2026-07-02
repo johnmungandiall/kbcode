@@ -8,6 +8,7 @@ _find_session, _require_key, _read) that this module imports from cli.py.
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from . import __version__
@@ -79,6 +80,41 @@ def _rollback_menu(cps, rows: list[dict]) -> bool:
     msg = cps.restore(chosen["hash"], file_arg)
     ui.notice(msg, style="green" if msg.startswith("Restored") else "yellow")
     return True
+
+
+def _model_completion_sources(config: Config):
+    """Build the (``/provider``, ``/model``) autocomplete callables.
+
+    ``/provider``'s first argument completes to preset names; its second — and
+    ``/model``'s first — completes to that provider's live model ids, fetched
+    with ``list_models()`` once per provider per session and cached. The fetch
+    runs on the completer's background thread (see ``make_input``), so typing
+    never blocks; a provider with no usable key just yields no suggestions.
+    Closures read ``config`` live, so ``/provider`` switches are picked up.
+    """
+    cache: dict[str, list[str]] = {}
+
+    def models_for(name: str) -> list[str]:
+        if name not in cache:
+            try:
+                probe = replace(config)  # don't mutate the live config
+                probe.use_provider(name)
+                cache[name] = sorted(get_provider(probe).list_models())
+            except Exception:  # noqa: BLE001 - no key / offline → just no popup
+                cache[name] = []
+        return cache[name]
+
+    def provider_args(args: list[str]) -> list[str]:
+        if len(args) <= 1:
+            return list(PRESETS)
+        if len(args) == 2:
+            return models_for(args[0])
+        return []
+
+    def model_args(args: list[str]) -> list[str]:
+        return models_for(config.provider) if len(args) <= 1 else []
+
+    return provider_args, model_args
 
 
 def _list_models(config: Config) -> None:
@@ -153,8 +189,10 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
     agent = agent or _build_agent(config, kb, memory)
     ui.banner(config.provider, config.model, config.project_dir, agent.mode.name)
 
+    provider_args, model_args = _model_completion_sources(config)
     arg_options = {
-        "/provider": list(PRESETS),
+        "/provider": provider_args,  # provider names, then that provider's models
+        "/model": model_args,  # current provider's models
         "/mode": list(agent.modes),
         "/kb-check": ["--fix"],
         "/resume": [r["id"] for r in list_sessions(config.sessions_dir)],

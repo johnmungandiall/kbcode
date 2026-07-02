@@ -24,8 +24,12 @@
   property instead — see [[tools-and-repair]].)
 - **A new slash command:** add it to `COMMANDS` in `ui.py` (single source for
   `/help` + autocomplete) and handle it in `repl()` (`repl.py`). Argument
-  completion comes from the `arg_options` map passed to `make_input`. Pass any
-  command label with `[...]`/`<...>` hints as a `Text` object, not raw markup.
+  completion comes from the `arg_options` map passed to `make_input`: a plain
+  list completes the FIRST argument only; a callable gets all words after the
+  command and returns candidates for the last one (may hit the network — it
+  runs on `ThreadedCompleter`'s background thread, so it must never raise
+  usefully: exceptions just mean "no popup"). Pass any command label with
+  `[...]`/`<...>` hints as a `Text` object, not raw markup.
 - **A new subagent or mode:** ship a markdown file (`.kbcode/agents/*.md` or
   `.kbcode/modes/*.md`) with `description:`/`tools:` frontmatter — no code
   change needed. A starter `code-explorer` subagent is scaffolded by

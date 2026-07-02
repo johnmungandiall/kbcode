@@ -5,7 +5,7 @@ A user turn may carry `images: [{"media_type","data"(base64)}]`. `images.py`
 builds them: `grab_clipboard_image()` (`kbcode/images.py:43`, via Pillow) or
 `load_image_file(path)` (`kbcode/images.py:68`), downscaled to <=1568px PNG
 (`_MAX_DIM`, `kbcode/images.py:27`). Chat input binds **Alt+V** to grab the clipboard
-into a pending buffer (`kbcode/prompt_input.py:225` `_attach_image`); `repl.py` drains
+into a pending buffer (`kbcode/prompt_input.py:240` `_attach_image`); `repl.py` drains
 it and calls `Agent.run(user, images=...)` (`kbcode/agent.py:221`) — the `images` key
 is only added when non-empty, so non-vision turns are unaffected. Each
 provider's `_to_native` expands an image-bearing message into its own vision
@@ -35,7 +35,7 @@ none at all), so `describe_video()` (`kbcode/vision_fallback.py:146`) skips
 with a `video_url` part. `videos.load_video_file()` (`kbcode/videos.py:31`) base64s a
 local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:319` `_describe_videos`) /
 `--video` (one-shot, `kbcode/cli.py:304`) call this synchronously; the description is
-threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:167`) —
+threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:205`) —
 the main model never sees raw video.
 
 See [[providers]] for the retry/translation layer these routes reuse,

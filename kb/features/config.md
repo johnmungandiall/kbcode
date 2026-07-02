@@ -42,8 +42,8 @@ Modules log via the standard `logging.getLogger(__name__)`.
 `memory_db`, `agent_md`, `settings_file`, `standing_orders_file`, ...) as a
 property off `project_dir` — so the project can be retargeted live. The CLI
 picks it via `-C`/`--dir`/`--project` (`_take_dir`, `kbcode/cli.py:228`) or
-`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:444`) mutates
-`config.project_dir` (`kbcode/repl.py:453`) then rebuilds `kb`, `memory`, and the
+`init <path>`. In-chat `/open <folder>` (`kbcode/repl.py:483`) mutates
+`config.project_dir` (`kbcode/repl.py:492`) then rebuilds `kb`, `memory`, and the
 agent — re-scaffolding the new folder, keeping the same provider/model/key. A
 REPL guard catches the common slip of typing the terminal-only `init`/`model`
 as a chat message and points at `/open` instead.

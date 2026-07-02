@@ -481,6 +481,7 @@ def test_parallel_safe_tools_derived_from_schema_flag(tmp_path):
     _agent, tools = _make_agent(tmp_path, provider)
     assert tools.parallel_safe_tools == {
         "read_file", "list_dir", "search_code", "kb_read", "kb_search", "web_search",
+        "repo_map",
     }
     flagged = {s["name"] for s in tools.schemas if s.get("parallel_safe")}
     assert tools.parallel_safe_tools == flagged

@@ -21,7 +21,7 @@ dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:66`, mir
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
 (`_EXCLUDES`, `kbcode/checkpoints.py:31`), same spirit as redaction. `/rollback`
-(`repl._rollback_menu`, `kbcode/repl.py:36`) opens an arrow-key picker built on
+(`repl._rollback_menu`, `kbcode/repl.py:37`) opens an arrow-key picker built on
 `prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:200`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
