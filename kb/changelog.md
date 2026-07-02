@@ -2,6 +2,9 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased / next
+- `kb model` (and the selection flow) now correctly persists so the immediately following `kb` shows/uses the chosen provider+model. It writes the choice to both global and the project's `.kbcode/settings.json`; when a project `.env` had `KBCODE_PROVIDER` etc pins it updates them too (otherwise env vars would silently win). Addresses the case where selection appeared to do nothing or showed a stale provider.
+
 ## v1.9.12
 - Release prep + polish:
   - Added unit tests covering the new high-level `tool_result` summaries (search/read/list/repo_map) and long-pattern truncation in `_describe_tool`.

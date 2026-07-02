@@ -23,7 +23,7 @@ from .cli import (
     _session_picker,
     ui,
 )
-from .config import PRESETS, Config
+from .config import PRESETS, Config, persist_choice
 from .interrupt import interrupt_on_escape
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
@@ -240,6 +240,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 continue
             agent.close()
             agent = _build_agent(config, kb, memory)  # new provider -> fresh chat
+            persist_choice(config)  # make /provider switch stick for next `kb` run (same as `kb model`)
             ui.notice(f"switched → {config.provider} / {config.model}", style="green")
             continue
         if user in ("/model", "/models"):

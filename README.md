@@ -101,7 +101,7 @@ no-install option.)
 | `kbcode -c` / `kbcode --continue` | Reopen the most recent saved chat for this folder. |
 | `kbcode --resume` | Pick a past chat from a list and reopen it (`--resume <id>` skips the picker). |
 | `kbcode init` | Set up the current folder (`AGENT.md` + `kb/`). Target another with `kbcode init "C:\path"`. |
-| `kbcode model` | Pick provider + key + model interactively; saved globally. |
+| `kbcode model` | Pick provider + key + model interactively; persists so the next run in the folder uses it (global default + project override). |
 | `kbcode -C "C:\path"` | Work on another project folder without `cd` (also `--dir` / `--project`). |
 | `kbcode update` | Update to the latest version from GitHub. |
 | `kbcode --version` | Show the version (also `-v`, `-V`, or `/version` in chat). |
@@ -420,8 +420,8 @@ kbcode model
 ```
 
 Run it and follow the prompts: pick a provider, paste your key, choose a model
-from the list it fetches. It's saved globally (`~/.kbcode`), so every project
-uses it. **This is all most people ever need.**
+from the list it fetches. The selection is saved so `kb` (or `kb -C ...`) immediately
+sees the new provider/model for the folder (also updates global default). **This is all most people ever need.**
 
 > [!WARNING]
 > **Model not configured? / "No API key found"?** That just means no key is saved

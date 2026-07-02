@@ -7,8 +7,11 @@ folder's > the global `~/.kbcode` (`global_dir()`, `kbcode/config.py:182`) > pre
 defaults**. `.env` files are loaded highest-priority-first since `load_dotenv`
 never overrides an already-set value; `settings.json` is merged the opposite
 way (low->high, `kbcode/config.py:224-227`). The launch-folder and global fallbacks are
-what let you configure kbcode once (`python -m kbcode model`, which saves to
-`~/.kbcode`) and then `-C` it at any project without re-entering the key there.
+what let you configure kbcode once. `python -m kbcode model` now writes the
+provider/model to both the global `~/.kbcode/settings.json` (future default)
+and the current project's `.kbcode/settings.json` (so the next `kb` here picks
+it up immediately). Keys go only to global `.env`. If a project `.env` pins
+via `KBCODE_PROVIDER` etc, the wizard updates those pins so the choice sticks.
 `PRESETS` (`kbcode/config.py:32`) is the source of truth for built-in providers
 (anthropic, openai, gemini, deepseek, openrouter, mimo, ollama, custom).
 

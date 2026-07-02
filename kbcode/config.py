@@ -200,6 +200,66 @@ def save_settings(kbcode_dir: Path, provider: str, model: str, base_url: str | N
     (kbcode_dir / "settings.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def persist_choice(config: "Config") -> None:
+    """Persist the current provider/model/base_url choice from the live Config.
+
+    Writes settings.json to both global (for future default) and the config's
+    project .kbcode dir (so the folder immediately sees the choice).
+    If the project folder already has a .env it also updates the KBCODE_PROVIDER
+    / KBCODE_MODEL / KBCODE_BASE_URL pins so env-var precedence doesn't hide
+    the selection.
+    The API key itself is never written by this helper.
+    """
+    from pathlib import Path as _Path  # local alias to avoid shadowing
+
+    home = global_dir()
+    preset = PRESETS.get(config.provider, {})
+    preset_base = preset.get("base_url")
+    base_to_save = config.base_url if config.base_url != preset_base else None
+
+    save_settings(home, config.provider, config.model, base_to_save)
+    save_settings(config.kbcode_dir, config.provider, config.model, base_to_save)
+
+    # If project .env already exists with KBCODE_* pins, keep it in sync.
+    proj_env = config.project_dir / ".env"
+    if proj_env.exists():
+        upsert_env_value(proj_env, "KBCODE_PROVIDER", config.provider)
+        upsert_env_value(proj_env, "KBCODE_MODEL", config.model)
+        if base_to_save:
+            upsert_env_value(proj_env, "KBCODE_BASE_URL", base_to_save)
+        else:
+            clear_env_key(proj_env, "KBCODE_BASE_URL")
+
+
+# --- .env helpers (internal but usable by wizard + repl for consistent pinning) ---
+def upsert_env_value(path: Path, key: str, value: str) -> None:
+    """Set KEY=value (replaces non-comment existing line). Creates file if needed."""
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    out, found = [], False
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith(f"{key}=") and not stripped.startswith("#"):
+            out.append(f"{key}={value}")
+            found = True
+        else:
+            out.append(line)
+    if not found:
+        out.append(f"{key}={value}")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+
+def clear_env_key(path: Path, key: str) -> None:
+    """Remove KEY= line (non-comment) from a .env."""
+    if not path.exists():
+        return
+    lines = path.read_text(encoding="utf-8").splitlines()
+    out = [
+        ln for ln in lines
+        if not (ln.strip().startswith(f"{key}=") and not ln.strip().startswith("#"))
+    ]
+    path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
+
+
 def load_config(project_dir: Path | None = None) -> Config:
     """Build a Config. Precedence for provider/model/base_url and the API key is:
     environment vars  >  the project's `.kbcode`/.env  >  the launch folder's  >

@@ -7,7 +7,8 @@
 - `kbcode "do something"` — one-shot task (`-y`/`--yes` auto-approves writes/commands)
 - `kbcode -C "<path>"` — work on a different project without `cd` (folder must exist)
 - `kbcode model` — setup wizard (provider + key + model); auto-fetches model
-  list, saves **globally** to `~/.kbcode/settings.json` + `~/.kbcode/.env`
+  list; persists to global (~/.kbcode) **and** current project's .kbcode/settings.json
+  (and updates KBCODE_* pins in an existing project .env so selection applies)
 - `kbcode init` — scaffold project (AGENT.md + kb/ + .kbcode/)
 - `kbcode -c` — continue most recent saved session
 - `kbcode --resume` — pick from past sessions
