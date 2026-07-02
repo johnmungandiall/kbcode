@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased
+## v1.13.0 (2026-07-02)
 - **First-run onboarding + `/init`:** new `/init` chat command scans the project
   (canned `_BUILD_KB_PROMPT`) and fills the kb/ notes with real facts; while the
   KB is still untouched templates (`KnowledgeBase.is_scaffold()`), the REPL prints
