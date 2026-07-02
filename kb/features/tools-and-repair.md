@@ -93,7 +93,7 @@ with a narrow, explicit tool list opts in. `Agent.run`'s batching loop
 read-only-tool check; a qualifying run goes through
 `_run_subagents_parallel_batch()` (`kbcode/agent.py:407`), which mirrors
 `_run_parallel_batch`'s shape: a `ThreadPoolExecutor` (same
-`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:60`) runs `_quiet_dispatch()` (`kbcode/agent.py:395`)
+`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:60`) runs `_quiet_dispatch()` (`kbcode/agent.py:428`)
 per call, then call/result lines render sequentially afterward in the
 model's original order so `tool_results` stays aligned with tool_call ids.
 `_quiet_dispatch` sets a thread-local flag (`Agent._quiet_subagents`, a

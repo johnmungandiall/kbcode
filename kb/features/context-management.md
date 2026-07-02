@@ -25,7 +25,7 @@ and returns `(messages, None)` only if neither reduced anything:
 Both passes preserve the alternation invariant. Auto-triggered in
 `Agent._maybe_compact()` (`kbcode/agent.py:790`) and mid-turn by
 `_compact_mid_turn_or_stop()` (`kbcode/agent.py:446`); manual via `/compact` ->
-`Agent.compact_now()` (`kbcode/agent.py:810`).
+`Agent.compact_now()` (`kbcode/agent.py:849`).
 
 ## Knowledge base (product feature)
 `KnowledgeBase` (`kbcode/knowledge_base.py:153`) holds `kb/` notes loaded into the

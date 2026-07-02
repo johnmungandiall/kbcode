@@ -88,7 +88,7 @@ that used to call `self.tools.execute()` directly now goes through
 `_run_parallel_batch()` (`kbcode/agent.py:360`), the plain-text-recovered
 path in `_run_promoted()` (`kbcode/agent.py:468`), two sites inside
 `_run_subagent()` (`kbcode/agent.py:677` and `:719`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:395`), used
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:428`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
 `Agent._stop_hook_feedback()` (`kbcode/agent.py:556`) runs the `Stop` event

@@ -124,7 +124,7 @@
 - `kbcode/agent.py:631` — `_run_subagent()` is used both sequentially (main
   thread, normal path) and concurrently, one call per pool worker thread, from
   `_run_subagents_parallel_batch()` (`kbcode/agent.py:407`) via
-  `_quiet_dispatch()` (`kbcode/agent.py:395`), which sets the per-thread
+  `_quiet_dispatch()` (`kbcode/agent.py:428`), which sets the per-thread
   `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
   `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
   `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
