@@ -142,8 +142,9 @@
 - `kbcode/compaction.py:146` — `_compact_within_last_exchange()` is the second
   pass of `compact()`. The first pass (`_compact_exchanges`) summarizes whole
   *middle* exchanges and always protects the most recent one — but a turn that
-  runs many tool round-trips and hits the step limit (`_MAX_STEPS`,
-  `kbcode/agent.py:26`) is a **single** exchange (one user turn + ~50
+  runs many tool round-trips and hits the step limit (`Agent.max_steps`,
+  default `_MAX_STEPS = 50`, `kbcode/agent.py:26`; `KBCODE_MAX_STEPS` tunes
+  it) is a **single** exchange (one user turn + ~50
   assistant/tool_results pairs). Pass 1 can't touch it, so `/compact`
   (`Agent.compact_now`) and mid-turn auto-compaction did nothing after a
   step-limit stop — the classic "`/compact` is broken" report.
@@ -154,7 +155,7 @@
   `tests/test_compaction.py` (`test_compact_shrinks_a_single_runaway_exchange`,
   `test_runaway_compaction_preserves_alternation_and_tool_pairing`).
 - Note the step limit itself is a flat cap: `actions` can read *above*
-  `_MAX_STEPS` in the "hit the step limit" notice because a parallel batch adds
+  `max_steps` in the "hit the step limit" notice because a parallel batch adds
   `len(batch)` per loop iteration (`kbcode/agent.py:305`), and the turn-summary
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
@@ -163,18 +164,20 @@
 - When doing comparisons across directories (e.g. similar functions in broker/kotak vs broker/zerodha), the agent must start with `repo_map` (scoped to subdirs) then use `search_code` with the `path` argument for narrow, targeted searches. Batch different scoped searches in one step. Stop and summarize as soon as the pattern is found — do not repeat similar searches. Updated BASE_SYSTEM, search_code description, and code-explorer instructions enforce this (see prompts.py and schemas.py). This prevents the repetitive search loops that previously caused long-running or "stuck" turns.
 
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:42` — `_MAX_COMMANDS_PER_TURN = 25` (raised from 10) is a
-  safety rail inside `_tool_run_command`. It increments a per-turn counter (reset
-  in `ToolsCore.new_turn`, called at start of every `Agent.run`). Exceeding it
-  raises the exact message the user saw: "Refused: hit the safety limit of 25
+- `kbcode/tools/file.py:381` — `_tool_run_command` caps calls per turn at
+  `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
+  `kbcode/config.py:34`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
+  per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
+  `Agent.run`). Exceeding it raises: "Refused: hit the safety limit of N
   run_command calls in one turn (a runaway loop guard)..."
 - Intended to stop infinite `ls` / `echo` / pointless loops. Real tasks (e.g.
   "check for compilation errors", analyze + build + targeted checks + logs +
   retries) legitimately need more than a tiny budget inside one user message.
   When hit, the model is told to wrap up the turn; user can continue in next
-  message. The count is shared with any `run_subagent` (they use the same
-  `Tools` instance). Related to (and can combine with) the `_MAX_STEPS` cap.
-  See [[safety]], [[tools-and-repair]].
+  message — or raise `KBCODE_MAX_COMMANDS` in `.env` so long tasks pause less
+  often. The count is shared with any `run_subagent` (they use the same
+  `Tools` instance). Related to (and can combine with) the `max_steps` cap.
+  See [[safety]], [[tools-and-repair]], [[config]].
 
 ## Vision-fallback candidate order matters
 - `kbcode/vision_fallback.py:43` — `_candidates()` only trusts the active provider's

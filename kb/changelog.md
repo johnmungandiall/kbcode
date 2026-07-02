@@ -3,6 +3,11 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased / next
+- **Runaway-loop guards are now tunable** — the per-message step cap (was a
+  hardcoded `_MAX_STEPS = 50`) and the per-turn `run_command` cap (was a
+  hardcoded 25) moved to `Config.max_steps` / `Config.max_commands_per_turn`,
+  overridable via `KBCODE_MAX_STEPS` / `KBCODE_MAX_COMMANDS` in `.env`. Both
+  stop messages now name the cap and say how to raise it. Defaults unchanged.
 - **Model autocomplete is now instant across sessions** — model lists are cached
   to `~/.kbcode/models/<provider>.json` (24h TTL). On the first keystroke,
   autocomplete reads the disk cache so there's no network delay. Live fetches

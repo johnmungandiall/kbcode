@@ -96,6 +96,16 @@ def test_run_command_rate_limit_blocks_beyond_the_cap(tmp_path):
         tools._tool_run_command({"command": "echo hi"})
 
 
+def test_run_command_rate_limit_honors_config_override(tmp_path):
+    perm = _RecordingPermissions(allow=True)
+    tools = _make_tools(tmp_path, perm)
+    tools.config.max_commands_per_turn = 2
+    for _ in range(2):
+        tools._tool_run_command({"command": "echo hi"})
+    with pytest.raises(ValueError, match="safety limit of 2"):
+        tools._tool_run_command({"command": "echo hi"})
+
+
 def test_run_command_rate_limit_resets_on_new_turn(tmp_path):
     perm = _RecordingPermissions(allow=True)
     tools = _make_tools(tmp_path, perm)

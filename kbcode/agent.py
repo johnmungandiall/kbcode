@@ -23,7 +23,7 @@ from .subagents import Subagent
 from .tools import Tools
 from .ui import TerminalUI
 
-_MAX_STEPS = 50  # safety cap on tool round-trips per user message
+_MAX_STEPS = 50  # default cap on tool round-trips per user message (Config.max_steps / KBCODE_MAX_STEPS overrides)
 _SUBAGENT_MAX_STEPS = 30  # a delegated task gets its own, smaller budget
 _MAX_PROMOTED_RECOVERIES = 3  # give up auto-repairing plain-text tool calls after this many/turn
 
@@ -79,11 +79,13 @@ class Agent:
         ui: TerminalUI | None = None,
         modes: dict[str, Mode] | None = None,
         subagents: dict[str, Subagent] | None = None,
+        max_steps: int = _MAX_STEPS,
     ):
         self.system = system
         self.provider = provider
         self.tools = tools
         self.compact_threshold = compact_threshold  # tokens; 0 disables auto-compaction
+        self.max_steps = max(1, max_steps)  # runaway guard; KBCODE_MAX_STEPS tunes it
         self.ui = ui or TerminalUI()
         self.modes = modes or builtin_modes()
         self.mode = self.modes[DEFAULT_MODE]
@@ -237,7 +239,7 @@ class Agent:
         self.tools.new_turn()
 
         try:
-            for _ in range(_MAX_STEPS):
+            for _ in range(self.max_steps):
                 self._update_read_budget()
                 # Proactive auto-compact before each model call (in case previous
                 # tool results or text pushed us over without a mid-turn check yet).
@@ -343,7 +345,12 @@ class Agent:
                 if self._compact_mid_turn_or_stop(start, actions, before):
                     return
 
-            self.ui.notice("Stopped: hit the step limit for one request.", style="yellow")
+            self.ui.notice(
+                f"Stopped: hit the step limit ({self.max_steps} tool round-trips) for one "
+                "request. Say 'continue' to pick up where it left off; KBCODE_MAX_STEPS in "
+                ".env raises the cap.",
+                style="yellow",
+            )
             self._turn_summary(start, actions, before)
         except KeyboardInterrupt:
             self.ui.notice("interrupted.", style="yellow")

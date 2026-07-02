@@ -26,6 +26,12 @@ DEFAULT_COMPACT_TOKENS = 80000
 # fails fast and _with_retry backs off and retries. Override with
 # KBCODE_REQUEST_TIMEOUT; 0 restores the SDK default (no explicit timeout).
 DEFAULT_REQUEST_TIMEOUT = 120
+# Per-turn runaway-loop guards: tool round-trips per user message (the agent
+# loop's step cap) and run_command calls per turn. Both stop the turn safely —
+# saying "continue" resumes — but a long, legitimate task can hit them, so they
+# are tunable: KBCODE_MAX_STEPS / KBCODE_MAX_COMMANDS.
+DEFAULT_MAX_STEPS = 50
+DEFAULT_MAX_COMMANDS = 25
 
 # Built-in providers. "anthropic" uses the Anthropic SDK; every other entry is
 # an OpenAI-compatible endpoint (so OpenAI, Gemini, DeepSeek, OpenRouter, etc.
@@ -105,6 +111,8 @@ class Config:
     effort: str = DEFAULT_EFFORT
     compact_threshold: int = DEFAULT_COMPACT_TOKENS
     request_timeout: int = DEFAULT_REQUEST_TIMEOUT
+    max_steps: int = DEFAULT_MAX_STEPS
+    max_commands_per_turn: int = DEFAULT_MAX_COMMANDS
     auto_approve: bool = False
     hooks: dict = field(default_factory=dict)  # PreToolUse/PostToolUse/Stop config, from settings.json (see hooks.py)
 
@@ -360,6 +368,8 @@ def load_config(project_dir: Path | None = None) -> Config:
         effort=os.environ.get("KBCODE_EFFORT", DEFAULT_EFFORT),
         compact_threshold=_int("KBCODE_COMPACT_TOKENS", settings.get("compact_tokens") or DEFAULT_COMPACT_TOKENS),
         request_timeout=_int("KBCODE_REQUEST_TIMEOUT", DEFAULT_REQUEST_TIMEOUT),
+        max_steps=_int("KBCODE_MAX_STEPS", DEFAULT_MAX_STEPS),
+        max_commands_per_turn=_int("KBCODE_MAX_COMMANDS", DEFAULT_MAX_COMMANDS),
         hooks=settings.get("hooks") or {},
     )
     config.use_provider(provider, model=model, base_url=base_url)

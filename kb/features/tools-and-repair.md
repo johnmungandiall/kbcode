@@ -58,7 +58,7 @@ a static label instead of crashing (`'str' object is not callable` — see [[got
 
 ## Parallel-safe tools (#4.3)
 Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batch`,
-`kbcode/agent.py:344`); mutating tools stay sequential. Which tools are safe is
+`kbcode/agent.py:360`); mutating tools stay sequential. Which tools are safe is
 declared per-tool by a `"parallel_safe": True` key on the schema
 (`kbcode/tools/schemas.py`) — the single source of truth. `Agent.run` reads the
 set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:81`, a comprehension
@@ -71,8 +71,8 @@ the schema reaches the model API.
 **`run_subagent` conditional extension.** A run of 2+ consecutive `run_subagent`
 calls is also eligible for concurrent dispatch, but only when *every* targeted
 subagent qualifies — `Agent._is_parallel_subagent_call()`
-(`kbcode/agent.py:610`) checks `Agent._subagent_parallel_safe(name)`
-(`kbcode/agent.py:595`), which requires the subagent's own `tools:` frontmatter
+(`kbcode/agent.py:626`) checks `Agent._subagent_parallel_safe(name)`
+(`kbcode/agent.py:611`), which requires the subagent's own `tools:` frontmatter
 (a `frozenset[str]`, never `None`) to be a subset of the same
 `parallel_safe_tools` set above. The default `tools: read` does NOT qualify —
 it includes `recall`/`manage_todos`, which touch Memory's non-thread-safe

@@ -1,5 +1,13 @@
 # Safety — secret redaction, checkpoints, permissions.
 
+## Runaway-loop guards (tunable)
+Two per-turn caps stop a looping model from burning tokens forever: the agent
+loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
+`KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
+(`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
+in `_tool_run_command`, `kbcode/tools/file.py:381`). Both end the turn safely —
+the user says "continue" to resume. Details and history: [[gotchas]], [[config]].
+
 ## Secret redaction (Hermes idea)
 `redact.py` masks live credentials — API key prefixes (`sk-`, `ghp_`, `AKIA`,
 ...), `Authorization` headers, private key blocks, DB connection-string

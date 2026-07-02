@@ -162,6 +162,7 @@ def _build_agent(config: Config, kb: KnowledgeBase, memory: Memory, *, resume_id
         ui=ui,
         modes=load_modes(config.kbcode_dir / "modes"),
         subagents=load_subagents(config.kbcode_dir / "agents"),
+        max_steps=config.max_steps,
     )
     # Claude Code / Hermes idea: persist every chat so it can be picked back up
     # with --continue / --resume / /resume, and rolled into /insights later.

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from ..config import DEFAULT_MAX_COMMANDS
 from ..redact import redact_terminal_output_with_count, redact_with_count
 
 # Directories we never scan when searching code.
@@ -38,8 +39,10 @@ _SYSTEM_PATH_PREFIXES = (
 )
 
 # Safety rail (#6.1/#6.4): a runaway loop firing dozens of shell commands in one
-# turn, or an outright destructive one, should be caught before it runs.
-_MAX_COMMANDS_PER_TURN = 25
+# turn, or an outright destructive one, should be caught before it runs. The
+# per-turn cap is Config.max_commands_per_turn (KBCODE_MAX_COMMANDS); this
+# module-level alias of the default is kept for tests.
+_MAX_COMMANDS_PER_TURN = DEFAULT_MAX_COMMANDS
 _DANGEROUS_COMMAND_PATTERNS = [
     re.compile(r"\brm\s+(-\w*r\w*f\w*|-\w*f\w*r\w*)\s+/(\s|$)"),  # rm -rf /
     re.compile(r"\brm\s+(-\w*r\w*f\w*|-\w*f\w*r\w*)\s+/\*"),  # rm -rf /*
@@ -375,11 +378,12 @@ class FileToolsMixin:
         """Run a shell command in the project root, gated by rate limit, danger check, and permission."""
         command = inp["command"]
         self._run_command_count += 1
-        if self._run_command_count > _MAX_COMMANDS_PER_TURN:
+        limit = self.config.max_commands_per_turn
+        if self._run_command_count > limit:
             raise ValueError(
-                f"Refused: hit the safety limit of {_MAX_COMMANDS_PER_TURN} run_command calls in "
+                f"Refused: hit the safety limit of {limit} run_command calls in "
                 "one turn (a runaway loop guard). Wrap up this turn and continue in the next message "
-                "if you genuinely need more."
+                "if you genuinely need more. (KBCODE_MAX_COMMANDS in .env raises the cap.)"
             )
         if self._is_dangerous_command(command):
             raise ValueError(

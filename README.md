@@ -469,6 +469,10 @@ DEEPSEEK_API_KEY=...
 > - `KBCODE_REQUEST_TIMEOUT` (seconds, default `120`) caps how long one model
 >   call can hang before it fails fast and retries — handy for slow endpoints;
 >   set `0` to restore the SDK's ~10-minute default. See `.env.example`.
+> - `KBCODE_MAX_STEPS` (default `50`) and `KBCODE_MAX_COMMANDS` (default `25`)
+>   are the runaway-loop guards: tool round-trips per message and shell commands
+>   per turn. Hitting one pauses the turn safely — saying "continue" resumes —
+>   so raise them if long tasks keep pausing on you.
 > - `KBCODE_LOG_LEVEL` (default `INFO`) writes a quiet diagnostic log to
 >   `.kbcode/kbcode.log` — set `DEBUG` for full detail when reporting a bug, or
 >   `off` to write nothing. This is separate from the on-screen output.
