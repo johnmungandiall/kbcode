@@ -15,6 +15,7 @@ import time
 from pathlib import Path
 
 from ..config import DEFAULT_MAX_COMMANDS
+from ..lint import lint_text
 from ..redact import redact_terminal_output_with_count, redact_with_count
 
 # Directories we never scan when searching code.
@@ -225,7 +226,24 @@ class FileToolsMixin:
         self.checkpoints.ensure_checkpoint("before write_file")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(inp["content"], encoding="utf-8")
-        return f"wrote {p} ({n} chars)"
+        return f"wrote {p} ({n} chars)" + self._lint_note(p, inp["content"])
+
+    def _lint_note(self, p: Path, text: str) -> str:
+        """Post-edit syntax check (Aider idea, see kbcode/lint.py): a note
+        appended to a SUCCESSFUL write result, never an error — the file is
+        already on disk. The second sentence matters: large files are
+        deliberately written in pieces (see the output-budget rules), and a
+        half-written .py file never parses — the model must not \"fix\" it
+        prematurely."""
+        err = lint_text(p, text)
+        if not err:
+            return ""
+        return (
+            f"\nWARNING — the file does not parse now: {err}\n"
+            "If the file should be complete, fix this before moving on. If you are "
+            "deliberately writing it in pieces, finish the remaining pieces first, "
+            "then make sure the final file parses."
+        )
 
     def _tool_edit_file(self, inp: dict) -> str:
         """Replace one exact occurrence of old_string with new_string in an existing file."""
@@ -255,7 +273,7 @@ class FileToolsMixin:
             raise PermissionError("User denied permission to edit the file.")
         self.checkpoints.ensure_checkpoint("before edit_file")
         p.write_text(new_text, encoding="utf-8")
-        return f"edited {p}"
+        return f"edited {p}" + self._lint_note(p, new_text)
 
     def _tool_edit_files(self, inp: dict) -> str:
         """Apply multiple precise edits across files. Each requires unique old_string.
@@ -319,7 +337,7 @@ class FileToolsMixin:
             text = p.read_text(encoding="utf-8", errors="replace")
             new_text = text.replace(old, new, 1)
             p.write_text(new_text, encoding="utf-8")
-            results.append(f"edited {p}")
+            results.append(f"edited {p}" + self._lint_note(p, new_text))
 
         return "\n".join(results)
 

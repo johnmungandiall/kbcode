@@ -32,7 +32,7 @@
   report, which is safe only because it's followed by another model call.
 
 ## Protected files
-- `kbcode/tools/file.py:116-137` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
+- `kbcode/tools/file.py:123` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
 - `.env.example` and `.gitignore` are explicitly allowed — see [[safety]]
 
 ## Compaction token estimate
@@ -175,7 +175,7 @@
   available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
-- `kbcode/tools/file.py:372` — `_tool_search_code` formats each hit through
+- `kbcode/tools/file.py:444` — `_tool_search_code` formats each hit through
   `self._display_path(fp)` (`kbcode/tools/core.py:219`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
@@ -188,6 +188,17 @@
   absolute-otherwise. Any new tool that displays a resolved path must use it,
   never a bare `relative_to`. Regression test: `tests/test_tools_search.py`
   (`test_search_code_outside_project_shows_absolute_path`).
+
+## Post-edit lint is a NOTE, never a failure — and must excuse piece-wise writes
+- `_lint_note()` (`kbcode/tools/file.py:231`) appends a parse-error WARNING to a
+  write/edit tool result. Two contracts: (1) never raise — the file is already
+  on disk, a lint bug must not turn a successful write into a tool error;
+  (2) keep the "if you are deliberately writing it in pieces" escape clause —
+  the output-budget rules tell the model to build big files in parts
+  (write_file then edit_file), and a half-written .py NEVER parses; without
+  the clause the model "fixes" an incomplete file mid-sequence. Checkers are
+  stdlib-only and syntax-level (`kbcode/lint.py:16`) — no linter subprocesses,
+  nothing that can hang. See [[tools-and-repair]].
 
 ## Compaction must shrink the *last* exchange too, not just the middle
 - `kbcode/compaction.py:194` — `_compact_within_last_exchange()` is the second
@@ -219,8 +230,8 @@
   so one unscoped search ran 285s+ and looked like a hang (hit live via the
   fixer subagent). Two guards now, keep both: `_walk_files` skips the project
   .gitignore's plain top-level dir entries (`_gitignored_dirs`,
-  `kbcode/tools/file.py:371`), and `_tool_search_code` enforces
-  `_SEARCH_TIME_BUDGET` (30s, `kbcode/tools/file.py:28`) — past it, partial
+  `kbcode/tools/file.py:389`), and `_tool_search_code` enforces
+  `_SEARCH_TIME_BUDGET` (30s, `kbcode/tools/file.py:29`) — past it, partial
   hits return with a "narrow with 'path'" note. Tests:
   `tests/test_tools_search.py` (gitignore-skip + budget; budget test uses a
   NEGATIVE budget — 0.0 was flaky when the clock didn't tick).
@@ -237,10 +248,10 @@
   cleanup does exactly this blocking read, so even `timeout=180` sailed past
   3000s in the field. Fixed (2026-07-02) by writing output to temp files +
   `proc.wait(timeout)` + `_kill_process_tree()` — see [[safety]] and
-  `kbcode/tools/file.py:400`.
+  `kbcode/tools/file.py:456`.
 
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:400` — `_tool_run_command` caps calls per turn at
+- `kbcode/tools/file.py:456` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
   `kbcode/config.py:117`; `KBCODE_MAX_COMMANDS` tunes it; `0` = unlimited —
   the check is gated on `limit > 0`, so a zero cap disables the guard). It
@@ -332,7 +343,7 @@
 - Same family as the v1.6.1 packaging trap — see [[changelog]].
 
 ## Background tasks die on /provider and /open, not just at exit
-- `Agent.close()` calls `Tools.stop_background_tasks()` (`kbcode/tools/file.py:560`)
+- `Agent.close()` calls `Tools.stop_background_tasks()` (`kbcode/tools/file.py:616`)
   so a model-started dev server can't outlive kbcode — but `close()` also runs
   on the `/provider` and `/open` agent rebuilds (same path that stops MCP
   servers). Switching provider therefore kills every `run_command

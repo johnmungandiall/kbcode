@@ -62,7 +62,7 @@ carried as `Config.max_steps` / `Config.max_commands_per_turn`
 (`kbcode/config.py:201-202`). `max_steps` caps tool round-trips per user message
 (`Agent.__init__`'s `max_steps` arg, passed from `kbcode/cli.py:186`);
 `max_commands_per_turn` caps `run_command` calls per turn (read in
-`_tool_run_command`, `kbcode/tools/file.py:400`). **Setting either to 0 disables
+`_tool_run_command`, `kbcode/tools/file.py:456`). **Setting either to 0 disables
 that guard entirely (unlimited)** — `_int()` passes an explicit `"0"` through
 (only empty/unset falls back to the default); the step loop switches to
 `itertools.count()` and the run_command cap check is skipped (`limit > 0` guard).

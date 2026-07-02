@@ -28,6 +28,21 @@ call site wraps `execute()` in `Agent._dispatch_tool()`
 (`kbcode/agent.py:237`), which runs configured PreToolUse/PostToolUse hooks
 around it — see [[safety]].
 
+## Post-edit syntax check (Aider idea)
+Every successful `write_file`/`edit_file`/`edit_files` runs the new content
+through `lint_text()` (`kbcode/lint.py:16`) via `_lint_note()`
+(`kbcode/tools/file.py:231`) and, if it does not parse, APPENDS a WARNING to
+the (still successful) tool result — the model sees the exact error + a
+█-marked context snippet in the very next step, instead of the bug surfacing
+when the code runs. Syntax-level only, by design: pure stdlib parsers
+(`compile()` for .py, `json.loads` for .json, `tomllib` for .toml, PyYAML for
+.yaml only if importable) — no external linter subprocess, so it is
+dependency-free, instant, and hang-proof. Two contracts to keep: (1) a lint
+problem is a NOTE on a successful write, never an exception — the file is
+already on disk; (2) the warning's second sentence excuses deliberately
+piece-wise writes (the output-budget rules above tell the model to build big
+files in parts, and a half-written .py never parses) — see [[gotchas]].
+
 ## MCP tools (external servers, namespaced `mcp__server__tool`)
 When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
 an `MCPManager` to `Tools.mcp` (`kbcode/tools/core.py:41`); `ToolsCore.schemas`
@@ -40,16 +55,16 @@ edit-distance, so difflib never "corrects" across the namespace boundary.
 Deep dive: [[mcp]].
 
 ## Path resolution & protected files
-`_resolve()` (`kbcode/tools/core.py:164`) anchors a relative path to the
+`_resolve()` (`kbcode/tools/core.py:208`) anchors a relative path to the
 project root but honors an absolute path exactly as given, even outside the
 project — kbcode is not sandboxed to the project folder. `_protected_reason()`
-(`kbcode/tools/file.py:192`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
-(`_PROTECTED_DIRS`, `kbcode/tools/file.py:31`), `.env`/secrets/private keys
-(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:32-33`), and
-kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:34`) — checked
+(`kbcode/tools/file.py:123`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
+(`_PROTECTED_DIRS`, `kbcode/tools/file.py:38`), `.env`/secrets/private keys
+(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:39-40`), and
+kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:41`) — checked
 against the full resolved path, not just relative to the project root — while
 allowing templates (`.env.example`, `_ENV_TEMPLATE_TAILS`,
-`kbcode/tools/file.py:35`), `.gitignore`, and user-authored `.kbcode/agents`/
+`kbcode/tools/file.py:42`), `.gitignore`, and user-authored `.kbcode/agents`/
 `modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:216`) drives
 the `-- OUTSIDE the project folder` flag on the permission prompt.
 `_display_path()` (`kbcode/tools/core.py:219`) formats a resolved path for tool
@@ -64,13 +79,13 @@ Tools: `read/write/edit/edit_files/list/search/run` + `check_task` + `kb_read/kb
 
 `run_command` accepts optional `background: true`: after the same rate-limit /
 dangerous-command / permission gates (prompt shows "(background — keeps
-running)"), `_start_background_command()` (`kbcode/tools/file.py:472`) starts
+running)"), `_start_background_command()` (`kbcode/tools/file.py:528`) starts
 the Popen detached (output to named temp files) and returns a task id like
 `bg-1`; the registry is `ToolsCore.bg_tasks` + `_bg_seq` (`kbcode/tools/core.py:46`).
-`check_task` (`_tool_check_task`, `kbcode/tools/file.py:527`) polls it —
+`check_task` (`_tool_check_task`, `kbcode/tools/file.py:583`) polls it —
 status running/finished/killed + redacted stdout/stderr tails via `_tail_file`
 — and `kill: true` stops it with `_kill_process_tree`. Survivors are killed at
-exit by `stop_background_tasks()` (`kbcode/tools/file.py:560`), called from
+exit by `stop_background_tasks()` (`kbcode/tools/file.py:616`), called from
 `Agent.close()` — note that also fires on `/provider`/`/open` agent rebuilds
 (see [[gotchas]]).
 

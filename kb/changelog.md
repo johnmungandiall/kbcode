@@ -3,6 +3,13 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **Post-edit syntax check** (the Aider idea): every write_file/edit_file/
+  edit_files result now carries a WARNING when the written file no longer
+  parses (`lint_text` in the new `kbcode/lint.py` + `_lint_note` in
+  tools/file.py) — .py/.json/.toml (+.yaml if PyYAML) via stdlib parsers
+  only, no linter subprocess; a note on a successful write, never a failure,
+  with an escape clause for deliberate piece-wise writes. See
+  [[tools-and-repair]], [[gotchas]].
 - **Output-budget-aware writes** ("okko model okkola untadhi"): the system
   prompt now tells the model its per-response output budget up front
   (`Agent._output_budget_note`, from the live model-aware

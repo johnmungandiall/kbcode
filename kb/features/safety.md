@@ -5,7 +5,7 @@ Two per-turn caps stop a looping model from burning tokens forever: the agent
 loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
 `KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
 (`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
-in `_tool_run_command`, `kbcode/tools/file.py:400`). Both end the turn safely —
+in `_tool_run_command`, `kbcode/tools/file.py:456`). Both end the turn safely —
 the user says "continue" to resume. **Setting either env var to 0 disables that
 guard (unlimited)**: `Agent.run()` then loops on `itertools.count()` instead of
 `range(max_steps)`, and `_tool_run_command`'s cap check is skipped via its
@@ -14,14 +14,14 @@ and the subagent step budget (`_SUBAGENT_MAX_STEPS`) are deliberately NOT
 disabled by 0. Details and history: [[gotchas]], [[config]].
 
 ## run_command hang-proofing
-`_tool_run_command` (`kbcode/tools/file.py:400`) runs via `Popen` writing to
+`_tool_run_command` (`kbcode/tools/file.py:456`) runs via `Popen` writing to
 temp FILES with `stdin=DEVNULL` — never `subprocess.run(capture_output=True)`.
 Pipes hang: a grandchild that outlives the shell (`taskkill && start
 explorer.exe`, a spawned dev server) inherits the pipe handles, so the pipe
 read blocks on EOF forever, sailing straight past the timeout (the real-world
 "running… 3142s" bug). Timeout is `_COMMAND_TIMEOUT` (180s,
-`kbcode/tools/file.py:67`); on expiry `_kill_process_tree()`
-(`kbcode/tools/file.py:67`) kills the whole tree (`taskkill /F /T` on Windows,
+`kbcode/tools/file.py:23`); on expiry `_kill_process_tree()`
+(`kbcode/tools/file.py:74`) kills the whole tree (`taskkill /F /T` on Windows,
 `os.killpg` + `start_new_session` on POSIX) and the tool still returns the
 partial output captured so far. Trap stub: [[gotchas]].
 `background: true` runs share the same rate-limit / dangerous-command /
