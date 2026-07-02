@@ -98,7 +98,14 @@ def suggest(
         candidates = options or []
     else:
         candidates = []
-    out = [(name, name, "") for name in candidates if name.startswith(word)]
+    out = []
+    for c in candidates:
+        if isinstance(c, tuple):
+            name, meta = c
+        else:
+            name, meta = c, ""
+        if name.startswith(word):
+            out.append((name, name, meta))
     # File-path completion, but only while typing the *first* argument (parts ==
     # [command, partial-path]) — later words (e.g. /video's question) aren't paths.
     if head in path_commands and len(parts) == 2:

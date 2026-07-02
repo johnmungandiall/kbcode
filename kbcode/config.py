@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -231,6 +232,21 @@ def persist_choice(config: "Config") -> None:
             clear_env_key(proj_env, "KBCODE_BASE_URL")
 
 
+def persist_global_choice(config: "Config") -> None:
+    """Persist the current choice to `~/.kbcode` only — the cross-project default.
+
+    Use this when switching provider/model from the REPL (``/provider``, ``/model``)
+    so the change shows up as the default when you open a different project.
+    Unlike :func:`persist_choice`, this does NOT write to the project's
+    ``.kbcode/settings.json``, so a project that was explicitly configured via
+    ``kb model`` can still keep its own overrides.
+    """
+    preset = PRESETS.get(config.provider, {})
+    preset_base = preset.get("base_url")
+    base_to_save = config.base_url if config.base_url != preset_base else None
+    save_settings(global_dir(), config.provider, config.model, base_to_save)
+
+
 # --- .env helpers (internal but usable by wizard + repl for consistent pinning) ---
 def upsert_env_value(path: Path, key: str, value: str) -> None:
     """Set KEY=value (replaces non-comment existing line). Creates file if needed."""
@@ -258,6 +274,41 @@ def clear_env_key(path: Path, key: str) -> None:
         if not (ln.strip().startswith(f"{key}=") and not ln.strip().startswith("#"))
     ]
     path.write_text("\n".join(out) + ("\n" if out else ""), encoding="utf-8")
+
+
+# --- model list cache (persisted across sessions for fast autocomplete) ---
+
+# 24 hours — after that, the next autocomplete triggers a background refresh.
+_MODEL_CACHE_TTL_SECONDS = 24 * 60 * 60
+
+
+def _model_cache_dir() -> Path:
+    """``~/.kbcode/models/`` — persisted model lists, one JSON file per provider."""
+    d = global_dir() / "models"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def load_model_cache(provider: str) -> list[str] | None:
+    """Return a cached model list for *provider*, or None if missing or stale."""
+    path = _model_cache_dir() / f"{provider}.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if time.time() - data.get("_ts", 0) > _MODEL_CACHE_TTL_SECONDS:
+        return None  # stale — caller should refresh
+    return data.get("models")
+
+
+def save_model_cache(provider: str, models: list[str]) -> None:
+    """Persist a model list for *provider* to disk (with a freshness timestamp)."""
+    data = {"_ts": time.time(), "models": models}
+    (_model_cache_dir() / f"{provider}.json").write_text(
+        json.dumps(data, indent=2), encoding="utf-8"
+    )
 
 
 def load_config(project_dir: Path | None = None) -> Config:

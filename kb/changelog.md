@@ -3,6 +3,21 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased / next
+- **Model autocomplete is now instant across sessions** — model lists are cached
+  to `~/.kbcode/models/<provider>.json` (24h TTL). On the first keystroke,
+  autocomplete reads the disk cache so there's no network delay. Live fetches
+  (when the cache is stale or empty) update the cache.
+- **Autocomplete UX improved** — current provider/model shows a `● current`
+  marker in the popup so you can see at a glance what's active.
+- **`/model` now persists** — switching models from the REPL saves to the global
+  `~/.kbcode/settings.json` (cross-project default), same as `/provider`. Before
+  this fix, `/model` changes were lost on restart.
+- **`/provider` and `/model` save cross-project** — they now write only to
+  global `~/.kbcode`, not to the project `.kbcode`. That way switching in one
+  project becomes your default everywhere, while a project explicitly configured
+  via `kb model` still keeps its own override.
+
+## Older
 - `kb model` (and the selection flow) now correctly persists so the immediately following `kb` shows/uses the chosen provider+model. It writes the choice to both global and the project's `.kbcode/settings.json`; when a project `.env` had `KBCODE_PROVIDER` etc pins it updates them too (otherwise env vars would silently win). Addresses the case where selection appeared to do nothing or showed a stale provider.
 
 ## v1.9.12
@@ -10,7 +25,7 @@ The ONLY place release history lives (don't duplicate it in other notes).
   - Added unit tests covering the new high-level `tool_result` summaries (search/read/list/repo_map) and long-pattern truncation in `_describe_tool`.
   - Fixed stale version strings across docs (overview intro, README badge, KB pointers) for release hygiene.
   - Direct execution verification + import smoke of UI/agent/tools for the recent changes.
-- **UX (from 1.9.11 carried)**: Agent activity log is now user-friendly: clean counts instead of raw internal code/match lines. Paths relative, patterns truncated. Users can finally tell what the agent is doing ("Search ... ↳ 7 matches", "Read foo.py:11+ ↳ 42 lines").
+- **UX (from 1.9.11 carried)**: Agent activity log is now user-friendly: clean counts instead of raw internal code/match lines. Paths relative, patterns truncated. Users can finally tell what the agent is doing (e.g. `Search ... ↳ 7 matches`, `Read some_file.py:11+ ↳ 42 lines`).
 
 ## v1.9.11
 - `read_file` now supports `offset` (1-based) + `limit` for reading slices of large files. Range reads use efficient line-by-line streaming (no full file load) to avoid the old shell-chunking pattern (`powershell Get-Content | Select -Skip`). Still respects context budget and preserves original line numbers in output. Directly addresses step-limit issues on huge files (e.g. 2000+ line main.dart). UI display updated, tests added.

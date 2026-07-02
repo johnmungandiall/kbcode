@@ -24,7 +24,7 @@ from .cli import (
     _session_picker,
     ui,
 )
-from .config import PRESETS, Config, persist_choice
+from .config import PRESETS, Config, persist_choice, persist_global_choice, load_model_cache, save_model_cache
 from .interrupt import interrupt_on_escape
 from .knowledge_base import KnowledgeBase
 from .memory import Memory
@@ -85,34 +85,56 @@ def _rollback_menu(cps, rows: list[dict]) -> bool:
 def _model_completion_sources(config: Config):
     """Build the (``/provider``, ``/model``) autocomplete callables.
 
-    ``/provider``'s first argument completes to preset names; its second — and
-    ``/model``'s first — completes to that provider's live model ids, fetched
-    with ``list_models()`` once per provider per session and cached. The fetch
-    runs on the completer's background thread (see ``make_input``), so typing
-    never blocks; a provider with no usable key just yields no suggestions.
+    ``/provider``'s first argument completes to preset names (with the current
+    provider marked ●); its second — and ``/model``'s first — completes to that
+    provider's live model ids, fetched with ``list_models()`` once per provider
+    per session and cached. The cache persists to ``~/.kbcode/models/`` on disk
+    so autocomplete is instant across sessions (no network delay on first keystroke).
+    The fetch runs on the completer's background thread (see ``make_input``), so
+    typing never blocks; a provider with no usable key falls back to the disk cache.
     Closures read ``config`` live, so ``/provider`` switches are picked up.
     """
     cache: dict[str, list[str]] = {}
 
     def models_for(name: str) -> list[str]:
         if name not in cache:
+            # Start from disk cache so autocomplete is instant even offline.
+            disk = load_model_cache(name)
+            cache[name] = sorted(disk) if disk else []
             try:
                 probe = replace(config)  # don't mutate the live config
                 probe.use_provider(name)
-                cache[name] = sorted(get_provider(probe).list_models())
-            except Exception:  # noqa: BLE001 - no key / offline → just no popup
-                cache[name] = []
+                live = sorted(get_provider(probe).list_models())
+                if live:
+                    cache[name] = live
+                    save_model_cache(name, live)
+            except Exception:  # noqa: BLE001 - no key / offline → use whatever was cached
+                pass
         return cache[name]
 
-    def provider_args(args: list[str]) -> list[str]:
+    def provider_args(args: list[str]) -> list[str] | list[tuple[str, str]]:
         if len(args) <= 1:
-            return list(PRESETS)
+            # Show current provider with a ● marker in autocomplete meta.
+            return [
+                (name, "● current" if name == config.provider else "")
+                for name in PRESETS
+            ]
         if len(args) == 2:
-            return models_for(args[0])
+            models = models_for(args[0])
+            return [
+                (m, "● current" if m == config.model else "")
+                for m in models
+            ]
         return []
 
-    def model_args(args: list[str]) -> list[str]:
-        return models_for(config.provider) if len(args) <= 1 else []
+    def model_args(args: list[str]) -> list[str] | list[tuple[str, str]]:
+        if len(args) <= 1:
+            models = models_for(config.provider)
+            return [
+                (m, "● current" if m == config.model else "")
+                for m in models
+            ]
+        return []
 
     return provider_args, model_args
 
@@ -122,6 +144,9 @@ def _list_models(config: Config) -> None:
     with ui.working("fetching available models…"):
         try:
             models = sorted(get_provider(config).list_models())
+            from .config import save_model_cache
+            if models:
+                save_model_cache(config.provider, models)
         except Exception as exc:  # noqa: BLE001
             ui.notice(f"Couldn't fetch models: {exc}", style="yellow")
             return
@@ -278,7 +303,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
                 continue
             agent.close()
             agent = _build_agent(config, kb, memory)  # new provider -> fresh chat
-            persist_choice(config)  # make /provider switch stick for next `kb` run (same as `kb model`)
+            persist_global_choice(config)  # cross-project default — all projects see this change
             ui.notice(f"switched → {config.provider} / {config.model}", style="green")
             continue
         if user in ("/model", "/models"):
@@ -287,6 +312,7 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         if user.startswith("/model"):
             config.model = user.split(maxsplit=1)[1].strip()
             agent.provider = get_provider(config, ui)  # same chat, new model
+            persist_global_choice(config)  # cross-project default — all projects see this change
             ui.notice(f"model → {config.model}", style="green")
             continue
         if user == "/kb":

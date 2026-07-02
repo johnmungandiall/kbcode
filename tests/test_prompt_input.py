@@ -126,3 +126,53 @@ def test_non_path_command_gets_no_path_completion(tmp_path):
 
 def test_path_commands_cover_the_path_taking_slash_commands():
     assert {"/open", "/image", "/video"} <= PATH_COMMANDS
+
+
+def test_callable_returns_tuples_with_metadata():
+    """Callables can return (name, meta) tuples for richer autocomplete display."""
+
+    def provider_args(args):
+        if len(args) <= 1:
+            return [("anthropic", "current"), ("openai", ""), ("gemini", "")]
+        return []
+
+    cmds = [("/provider", "Switch provider")]
+    results = suggest("/provider ", cmds, {"/provider": provider_args})
+    expected = [
+        ("anthropic", "anthropic", "current"),
+        ("openai", "openai", ""),
+        ("gemini", "gemini", ""),
+    ]
+    assert results == expected
+
+
+def test_callable_mixed_strings_and_tuples():
+    """A callable can mix plain strings and (name, meta) tuples."""
+
+    def mixed_args(args):
+        return ["plain-one", ("with-meta", "extra info"), "plain-two"]
+
+    cmds = [("/test", "Test")]
+    results = suggest("/test x", cmds, {"/test": mixed_args})
+    # The user typed 'x' which matches nothing here, so
+    # depending on what 'x' matches, just verify the handling works.
+    # Actually test with a prefix that matches.
+    results = suggest("/test p", cmds, {"/test": mixed_args})
+    assert results == [
+        ("plain-one", "plain-one", ""),
+        ("plain-two", "plain-two", ""),
+    ]
+
+
+def test_callable_tuple_filters_by_prefix():
+    """Tuple candidates are filtered by the name prefix, not the meta."""
+
+    def opts(args):
+        return [("gpt-4o", "current"), ("gpt-4o-mini", ""), ("claude-opus", "")]
+
+    cmds = [("/model", "Switch model")]
+    results = suggest("/model gpt", cmds, {"/model": opts})
+    assert results == [
+        ("gpt-4o", "gpt-4o", "current"),
+        ("gpt-4o-mini", "gpt-4o-mini", ""),
+    ]
