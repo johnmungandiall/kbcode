@@ -2,73 +2,74 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased / next
-- **2026-07-02: v1.10.0 — MCP support (stdio, tools only)** — new
-  `kbcode/tools/mcp.py`: a lean newline-JSON-RPC stdio client (no SDK, no new
-  deps; `initialize`/`tools/list`/`tools/call` only) + `MCPManager`. Servers
-  come from a Claude Code-compatible `mcpServers` block in settings.json,
-  merged PER SERVER across home→launch→project (the only deep-merged settings
-  key). Tools appear as `mcp__server__tool` in `Tools.schemas` (repair +
-  parallel_safe work for free); dispatch forks on the prefix into
-  `_execute_mcp` — permission prompt by default, checkpoint before mutating
-  calls, redaction on results; `read_only`/`trusted` config relaxes per
-  server/tool. `/mcp [reload]` command, startup notice, `/status` line;
-  `Agent.close()` stops servers (no leak across `/provider` rebuilds) with an
-  atexit backstop. `tools/list_changed` notifications are discarded — reload
-  to pick up changed tool sets. Tests: `tests/test_mcp.py` end-to-end against
+## v1.10.0 (2026-07-02)
+- **MCP support (stdio, tools only)** — new `kbcode/tools/mcp.py`: a lean
+  newline-JSON-RPC stdio client (no SDK, no new deps;
+  `initialize`/`tools/list`/`tools/call` only) + `MCPManager`. Servers come
+  from a Claude Code-compatible `mcpServers` block in settings.json, merged PER
+  SERVER across home→launch→project (the only deep-merged settings key). Tools
+  appear as `mcp__server__tool` in `Tools.schemas` (repair + parallel_safe work
+  for free); dispatch forks on the prefix into `_execute_mcp` — permission
+  prompt by default, checkpoint before mutating calls, redaction on results;
+  `read_only`/`trusted` config relaxes per server/tool. `/mcp [reload]`
+  command, startup notice, `/status` line; `Agent.close()` stops servers (no
+  leak across `/provider` rebuilds) with an atexit backstop.
+  `tools/list_changed` notifications are discarded — reload to pick up changed
+  tool sets. Tests: `tests/test_mcp.py` end-to-end against
   `tests/fake_mcp_server.py`. See [[mcp]].
-  Follow-up fix (same day, found in live use): an `mcpServers` block added
-  mid-session did nothing — servers only started at launch and `/mcp` said
-  "no MCP servers configured" until restart. `/mcp reload` now re-reads the
-  merged block from disk (new `load_mcp_servers()` helper, also used by
-  `load_config`) and bootstraps the manager if none existed.
-- **2026-07-02: Anthropic prompt caching now covers the conversation, not just
+  Follow-up fix: an `mcpServers` block added mid-session did nothing — servers
+  only started at launch and `/mcp` said "no MCP servers configured" until
+  restart. `/mcp reload` now re-reads the merged block from disk (new
+  `load_mcp_servers()` helper, also used by `load_config`) and bootstraps the
+  manager if none existed.
+- **Anthropic prompt caching now covers the conversation, not just
   system+tools** — `_add_cache_breakpoints()` marks the newest 3 user-role
   native messages with `cache_control`, so each tool round-trip re-reads the
   prior history from cache (~0.1x input price) instead of full price; this was
   the dominant cost of long agentic turns. `_usage()` folds the API's separate
   cache-token counts back into `input_tokens` so /cost stays comparable.
   Anthropic provider only. Tests: `tests/test_provider_caching.py`.
-- **2026-07-02: streaming now shows tool names as they're composed** — new
-  `on_tool` callback on `provider.stream()` (both providers) feeds
+- **Streaming now shows tool names as they're composed** — new `on_tool`
+  callback on `provider.stream()` (both providers) feeds
   `ui.stream_tool_hint()`, printing a dim `⏺ <name> …` line the moment a tool
   call starts streaming, so long tool-heavy responses no longer look frozen.
   The Anthropic stream switched from `text_stream` to event iteration for this.
-- **2026-07-02: new `/diff [n]` command** — show the working tree vs a
-  checkpoint (no `n` = newest) without leaving the REPL; same shadow-git
-  plumbing as `/rollback diff`, now one obvious command.
-- **2026-07-02: per-project runtime state moved to `~/.kbcode/projects/<slug>/`**
-  (Claude Code's `~/.claude/projects` layout) — memory.db, sessions/, the
-  checkpoints/ shadow repo, input history, and kbcode.log no longer land in the
-  project's `.kbcode/` (they used to show up as ~80 untracked files in the host
-  project's git). New `Config.state_dir` + `project_slug()`; a project carrying
-  a legacy `.kbcode/memory.db` keeps its local dir so nothing is lost. The
-  project `.kbcode/` is now config-only (settings.json, standing-orders.md,
-  agents/, modes/, prompts/, .env) and self-hides via an auto-written `*`
-  .gitignore (`_ensure_self_ignore`). New `KBCODE_HOME` env var overrides
-  `~/.kbcode` (used by the new autouse fixture in `tests/conftest.py`);
-  documented in README + .env.example.
-- **Runaway-loop guards are now tunable** — the per-message step cap (was a
-  hardcoded `_MAX_STEPS = 50`) and the per-turn `run_command` cap (was a
-  hardcoded 25) moved to `Config.max_steps` / `Config.max_commands_per_turn`,
-  overridable via `KBCODE_MAX_STEPS` / `KBCODE_MAX_COMMANDS` in `.env`. Both
-  stop messages now name the cap and say how to raise it. Defaults unchanged.
+- **New `/diff [n]` command** — show the working tree vs a checkpoint (no `n` =
+  newest) without leaving the REPL; same shadow-git plumbing as `/rollback
+  diff`, now one obvious command.
+- **Per-project runtime state moved to `~/.kbcode/projects/<slug>/`** (Claude
+  Code's `~/.claude/projects` layout) — memory.db, sessions/, the checkpoints/
+  shadow repo, input history, and kbcode.log no longer land in the project's
+  `.kbcode/` (they used to show up as ~80 untracked files in the host project's
+  git). New `Config.state_dir` + `project_slug()`; a project carrying a legacy
+  `.kbcode/memory.db` keeps its local dir so nothing is lost. The project
+  `.kbcode/` is now config-only (settings.json, standing-orders.md, agents/,
+  modes/, prompts/, .env) and self-hides via an auto-written `*` .gitignore
+  (`_ensure_self_ignore`). New `KBCODE_HOME` env var overrides `~/.kbcode`
+  (used by the new autouse fixture in `tests/conftest.py`); documented in
+  README + .env.example.
+- **Runaway-loop guards are now tunable** — the per-message step cap and the
+  per-turn `run_command` cap moved to `Config.max_steps` /
+  `Config.max_commands_per_turn`, overridable via `KBCODE_MAX_STEPS` /
+  `KBCODE_MAX_COMMANDS` in `.env`. Both stop messages now name the cap and say
+  how to raise it. Defaults unchanged.
 - **Model autocomplete is now instant across sessions** — model lists are cached
   to `~/.kbcode/models/<provider>.json` (24h TTL). On the first keystroke,
-  autocomplete reads the disk cache so there's no network delay. Live fetches
-  (when the cache is stale or empty) update the cache.
+  autocomplete reads the disk cache so there's no network delay.
 - **Autocomplete UX improved** — current provider/model shows a `● current`
   marker in the popup so you can see at a glance what's active.
-- **`/model` now persists** — switching models from the REPL saves to the global
-  `~/.kbcode/settings.json` (cross-project default), same as `/provider`. Before
-  this fix, `/model` changes were lost on restart.
+- **`/model` now persists** — switching models from the REPL saves to the
+  global `~/.kbcode/settings.json` (cross-project default), same as
+  `/provider`. Before this fix, `/model` changes were lost on restart.
 - **`/provider` and `/model` save cross-project** — they now write only to
   global `~/.kbcode`, not to the project `.kbcode`. That way switching in one
   project becomes your default everywhere, while a project explicitly configured
   via `kb model` still keeps its own override.
-
-## Older
-- `kb model` (and the selection flow) now correctly persists so the immediately following `kb` shows/uses the chosen provider+model. It writes the choice to both global and the project's `.kbcode/settings.json`; when a project `.env` had `KBCODE_PROVIDER` etc pins it updates them too (otherwise env vars would silently win). Addresses the case where selection appeared to do nothing or showed a stale provider.
+- **`kb model` selection actually sticks** — it now correctly persists so the
+  immediately following `kb` shows/uses the chosen provider+model. It writes
+  the choice to both global and the project's `.kbcode/settings.json`; when a
+  project `.env` had `KBCODE_PROVIDER` etc pins it updates them too (otherwise
+  env vars would silently win).
 
 ## v1.9.12
 - Release prep + polish:
