@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased
+## v1.14.0 (2026-07-02)
 - 2026-07-02 — **`KBCODE_MAX_STEPS=0` / `KBCODE_MAX_COMMANDS=0` now mean
   UNLIMITED** (that runaway guard is disabled): the agent loop switches to
   `itertools.count()` and the `run_command` cap check is skipped. The emergency

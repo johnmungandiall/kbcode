@@ -1,6 +1,6 @@
 # Improvement Suggestions for kbcode
 
-Status refreshed 2026-07-02 against v1.13.0+ (the original list was written
+Status refreshed 2026-07-02 against v1.14.0 (the original list was written
 against v1.4.2 — most of it has shipped since). Only genuinely OPEN items keep
 a row below; everything else is in the "Done" roll-up at the bottom.
 
