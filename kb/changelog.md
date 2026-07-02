@@ -2,6 +2,13 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased
+- **Broken tool-call JSON no longer 400s the follow-up request** (live MiMo:
+  a cut-off 70k-char write_file replayed verbatim → HTTP 400 "unexpected end
+  of data", killing the repair round): `_replayable_args` stores the marker
+  dict as valid JSON in `raw["tool_calls"]`, and `_sanitize_raw` guards
+  pre-fix session payloads on replay. See [[providers]], [[gotchas]].
+
 ## v1.16.0 (2026-07-02) — auto mode, type-ahead, thinking display
 - **Ask/auto permission modes** (Claude Code's Shift+Tab idea): `/auto` or
   **Shift+Tab** (at the prompt AND mid-turn) toggles; auto = no permission

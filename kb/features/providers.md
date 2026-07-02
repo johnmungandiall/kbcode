@@ -13,10 +13,10 @@ surgery (see [[context-management]] on compaction). A session uses exactly one
 provider, so `raw` is always that provider's shape — session replay requires a
 matching provider (see [[sessions]]).
 
-`get_provider()` (`kbcode/provider.py:596`) dispatches on `config.kind`. Every
+`get_provider()` (`kbcode/provider.py:709`) dispatches on `config.kind`. Every
 non-Claude provider (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom) is the
-*same* `OpenAICompatibleProvider` (`kbcode/provider.py:408`) with a different
-`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:144`) tries a staged
+*same* `OpenAICompatibleProvider` (`kbcode/provider.py:472`) with a different
+`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:334`) tries a staged
 kwargs fallback (`thinking`+`output_config` -> `thinking` -> plain), catching
 `TypeError` per attempt for older SDKs. Temperature (if set) and thinking level
 (from `config.thinking`) are included **only if not "off"** (Anthropic output_config.effort,
@@ -51,7 +51,7 @@ actually bill at ~0.1x). Tests: `tests/test_provider_caching.py`.
 
 ## Streaming progress: tool names, tool ARGS, and thinking
 `stream(..., on_tool=, on_tool_args=, on_thinking=)` (base signature
-`kbcode/provider.py:170`) reports, mid-stream: each tool call's *name* the
+`kbcode/provider.py:184`) reports, mid-stream: each tool call's *name* the
 moment it appears (`on_tool`), the accumulated size of its arguments JSON as
 it streams (`on_tool_args(name, chars)` — the Hermes tool-progress-callback
 idea), and reasoning deltas (`on_thinking`). The Anthropic path iterates the
@@ -82,6 +82,15 @@ coaching (`_SPLIT_WRITE_HINT`, `kbcode/tools/core.py:144`) for
 write_file/edit_file/edit_files — and `ui.tool_call`/`tool_result` render
 these as a yellow "call arrived incomplete… ↻ asked the model to resend"
 instead of a scary error. Tests: `tests/test_auto_mode.py`.
+
+The broken arguments string must NEVER reach `raw["tool_calls"]`: strict
+OpenAI-compatible servers (MiMo, live) parse every replayed `arguments` field
+and reject the follow-up request with HTTP 400 "unexpected end of data" —
+killing the repair round itself. `_replayable_args()` (`kbcode/provider.py:68`)
+stores the marker dict as valid JSON instead, and
+`OpenAICompatibleProvider._sanitize_raw()` (`kbcode/provider.py:507`) re-checks
+every replayed raw payload in `_to_native` (covers sessions recorded before
+the fix). Tests: `tests/test_provider_streaming.py`.
 
 Tool schemas carry kbcode-only metadata (e.g. `parallel_safe`, see
 [[tools-and-repair]]) that the model APIs reject as unknown keys. The OpenAI path

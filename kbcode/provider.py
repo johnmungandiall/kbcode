@@ -65,6 +65,20 @@ def _parse_tool_args(raw: str | None, truncated: bool = False) -> dict:
     return parsed
 
 
+def _replayable_args(raw: str | None, parsed: dict) -> str:
+    """The arguments string safe to store in ``raw`` and replay to the provider.
+
+    A malformed/cut-off call must NOT keep its broken JSON in the replayed
+    assistant payload: strict OpenAI-compatible servers (e.g. MiMo) parse every
+    ``arguments`` field on the follow-up request and reject the whole request
+    with HTTP 400 ("unexpected end of data"), killing the very repair round
+    that was asking the model to resend the call. Replaying the marker dict
+    keeps the payload valid JSON (and drops the useless multi-kB fragment)."""
+    if "_malformed_args" in parsed or "_args_cut_off" in parsed:
+        return json.dumps(parsed, ensure_ascii=False)
+    return raw or "{}"
+
+
 class ProviderError(RuntimeError):
     """A clean, user-facing failure from the model provider.
 
@@ -489,6 +503,35 @@ class OpenAICompatibleProvider(LLMProvider):
             for t in tools
         ]
 
+    @staticmethod
+    def _sanitize_raw(raw: object) -> object:
+        """Guard the replayed assistant payload against unparseable tool-call
+        arguments (sessions recorded before _replayable_args existed, or edited
+        by hand). Strict servers 400 the whole request on one broken field."""
+        if not isinstance(raw, dict) or not raw.get("tool_calls"):
+            return raw
+        fixed_calls = []
+        dirty = False
+        for tc in raw["tool_calls"]:
+            args = tc.get("function", {}).get("arguments")
+            try:
+                json.loads(args or "{}")
+                fixed_calls.append(tc)
+            except (json.JSONDecodeError, TypeError):
+                dirty = True
+                fixed_calls.append(
+                    {
+                        **tc,
+                        "function": {
+                            **tc["function"],
+                            "arguments": json.dumps({"_malformed_args": str(args)[:500]}),
+                        },
+                    }
+                )
+        if not dirty:
+            return raw
+        return {**raw, "tool_calls": fixed_calls}
+
     def _to_native(self, system: str, messages: list[dict]) -> list[dict]:
         out: list[dict] = [{"role": "system", "content": system}]
         for m in messages:
@@ -504,7 +547,7 @@ class OpenAICompatibleProvider(LLMProvider):
                 else:
                     out.append({"role": "user", "content": m["content"]})
             elif m["role"] == "assistant":
-                out.append(m["raw"])  # native assistant message dict
+                out.append(self._sanitize_raw(m["raw"]))  # native assistant message dict
             elif m["role"] == "tool_results":
                 for r in m["results"]:
                     out.append(
@@ -548,7 +591,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 {
                     "id": tc.id,
                     "type": "function",
-                    "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": _replayable_args(tc.function.arguments, args),
+                    },
                 }
             )
 
@@ -640,7 +686,10 @@ class OpenAICompatibleProvider(LLMProvider):
                 {
                     "id": acc["id"],
                     "type": "function",
-                    "function": {"name": acc["name"], "arguments": acc["arguments"]},
+                    "function": {
+                        "name": acc["name"],
+                        "arguments": _replayable_args(acc["arguments"], args),
+                    },
                 }
             )
 

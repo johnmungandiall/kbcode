@@ -50,9 +50,9 @@ def test_default_stream_skips_on_text_for_empty_response():
 # --- OpenAICompatibleProvider.stream() -------------------------------------
 
 
-def _chunk(content=None, tool_call_deltas=None, usage=None):
+def _chunk(content=None, tool_call_deltas=None, usage=None, finish_reason=None):
     delta = types.SimpleNamespace(content=content, tool_calls=tool_call_deltas)
-    choice = types.SimpleNamespace(delta=delta)
+    choice = types.SimpleNamespace(delta=delta, finish_reason=finish_reason)
     return types.SimpleNamespace(choices=[choice], usage=usage)
 
 
@@ -121,6 +121,56 @@ def test_openai_stream_malformed_arguments_json_becomes_repair_marker():
     provider = _openai_provider(chunks)
     resp = provider.stream("sys", [], [])
     assert resp.tool_calls[0].input == {"_malformed_args": "not json"}
+
+
+def test_openai_stream_broken_args_are_replayed_as_valid_json():
+    # The live MiMo failure behind this: a write_file call cut off at
+    # max_tokens kept its broken 70k-char JSON in raw["tool_calls"], and the
+    # NEXT request replayed it — the server parses every arguments field and
+    # rejected the whole request with HTTP 400 "unexpected end of data",
+    # killing the very repair round asking the model to resend the call.
+    import json
+
+    chunks = [_chunk(tool_call_deltas=[_tc_delta(0, id="call_1", name="write_file",
+                                                 arguments='{"path": "big.html", "content": "<html')],
+                     finish_reason="length")]
+    provider = _openai_provider(chunks)
+    resp = provider.stream("sys", [], [])
+
+    assert resp.tool_calls[0].input["_args_cut_off"] is True
+    replayed = resp.raw["tool_calls"][0]["function"]["arguments"]
+    parsed = json.loads(replayed)  # must not raise — this is what the server sees
+    assert parsed["_args_cut_off"] is True
+
+
+def test_openai_stream_intact_args_are_replayed_verbatim():
+    chunks = [_chunk(tool_call_deltas=[_tc_delta(0, id="call_1", name="read_file",
+                                                 arguments='{"path": "a.py"}')])]
+    provider = _openai_provider(chunks)
+    resp = provider.stream("sys", [], [])
+    assert resp.raw["tool_calls"][0]["function"]["arguments"] == '{"path": "a.py"}'
+
+
+def test_to_native_sanitizes_broken_args_from_old_sessions():
+    # Sessions recorded before _replayable_args existed may still hold broken
+    # arguments in their raw payloads; replaying one must not 400 the request.
+    import json
+
+    provider = OpenAICompatibleProvider(_config())
+    raw = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "write_file", "arguments": '{"path": "x.html", "content": "<htm'},
+        }],
+    }
+    native = provider._to_native("sys", [{"role": "assistant", "raw": raw}])
+    replayed = native[-1]["tool_calls"][0]["function"]["arguments"]
+    assert json.loads(replayed)["_malformed_args"].startswith('{"path": "x.html"')
+    # the original message dict must not be mutated (sessions replay it again)
+    assert raw["tool_calls"][0]["function"]["arguments"] == '{"path": "x.html", "content": "<htm'
 
 
 def test_openai_stream_reports_tool_names_via_on_tool_once_per_call():

@@ -21,6 +21,7 @@
 - `kbcode/repair.py:48` — `promote()` recovers tool calls written as plain text (parse-time)
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 - The `_malformed_args`/`_args_cut_off` keys are RESERVED marker names: `_repair` intercepts them before any `_tool_*` method runs, and `ui.tool_call`/`tool_result` render them as a yellow retry note instead of a red error. Don't name a real tool argument with a leading underscore.
+- NEVER put a broken arguments string into `raw["tool_calls"]`: strict servers (MiMo) parse every replayed `arguments` field and 400 the whole follow-up request ("unexpected end of data"), killing the repair round. `_replayable_args` (`kbcode/provider.py:68`) stores the marker dict as valid JSON; `_sanitize_raw` (`kbcode/provider.py:507`) guards old sessions on replay — see [[providers]]
 
 ## Mid-turn user messages must piggyback, never append a user message
 - `Agent._deliver_user_notes()` (`kbcode/agent.py:689`) appends what the user
