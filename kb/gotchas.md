@@ -236,7 +236,7 @@
   user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
 ## `fix_pointers` anchors on the FIRST text match — verify its "fixes"
-- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:243`) relocates a
+- `KnowledgeBase.fix_pointers()` (`kbcode/knowledge_base.py:250`) relocates a
   drifted pointer by searching the target file for the symbol named on the
   note line — but it takes the *first* line containing that text, which can
   be a docstring/comment mention or a class header instead of the actual

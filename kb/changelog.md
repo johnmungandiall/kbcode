@@ -2,6 +2,12 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## Unreleased
+- Scaffold templates (`_TEMPLATES["overview"]` + `AGENT_MD_TEMPLATE`) now warn
+  that an unbuilt KB does NOT mean an empty project — check real files
+  (repo_map / list) first. Fixes a live MiMo session that declared a real
+  project "empty" after seeing only fresh templates. See [[context-management]].
+
 ## v1.12.0 (2026-07-02)
 - **New tools:** `fetch_url` (read a web page/API via stdlib urllib, HTML→text,
   no API key, parallel_safe) and `check_task`; `run_command` gained

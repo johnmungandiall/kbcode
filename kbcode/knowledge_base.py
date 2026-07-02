@@ -28,6 +28,8 @@ base in `kb/` instead of making it re-scan the whole repo.
 2. When you change code, update the affected `kb/` note in the SAME turn.
 3. Record user preferences in `kb/about-you.md`; durable decisions go to memory.
 4. Save reusable how-tos as skills after finishing something non-trivial.
+5. Fresh template notes in `kb/` mean the KB is unbuilt — NOT that the project
+   is empty. Check the real files (repo_map / list) before describing the project.
 
 ## Knowledge base rules (keep notes cheap and trustworthy)
 - One note per concern; each stays under ~50 lines. Bullets/tables, not code dumps.
@@ -52,6 +54,11 @@ base in `kb/` instead of making it re-scan the whole repo.
 
 _TEMPLATES: dict[str, str] = {
     "overview": """# Overview — what this project is and how to run it.
+
+> STARTER TEMPLATE — these kb/ notes haven't been filled in yet. That does
+> NOT mean the project is empty: the folder may already hold a full codebase.
+> Check the real files (repo_map / list) before describing the project, and
+> offer to build the knowledge base from the actual code.
 
 last indexed: (fill in date)
 

@@ -37,15 +37,18 @@ added, removed, or reordered). Auto-triggered in
 `Agent.compact_now()` (`kbcode/agent.py:859`).
 
 ## Knowledge base (product feature)
-`KnowledgeBase` (`kbcode/knowledge_base.py:153`) holds `kb/` notes loaded into the
+`KnowledgeBase` (`kbcode/knowledge_base.py:160`) holds `kb/` notes loaded into the
 system prompt (`kbcode/prompts.py:42` `build_system_prompt`) so the agent doesn't
-re-scan files; `read_all()` (`kbcode/knowledge_base.py:169`). `check_pointers()`
-(`kbcode/knowledge_base.py:217`, `/kb-check`) resolves every `path:line` reference and
+re-scan files; `read_all()` (`kbcode/knowledge_base.py:176`). `check_pointers()`
+(`kbcode/knowledge_base.py:224`, `/kb-check`) resolves every `path:line` reference and
 flags missing files / stale lines; placeholder examples are skipped.
-`fix_pointers()` (`kbcode/knowledge_base.py:243`, `/kb-check --fix`) relocates a
+`fix_pointers()` (`kbcode/knowledge_base.py:250`, `/kb-check --fix`) relocates a
 drifted pointer by the code symbol named on the same note line (`_anchors`,
-`kbcode/knowledge_base.py:291`; `_relocate`, `kbcode/knowledge_base.py:303` — prefer a unique
+`kbcode/knowledge_base.py:298`; `_relocate`, `kbcode/knowledge_base.py:310` — prefer a unique
 definition line, then a unique call, then a unique mention).
+Scaffolded starter templates (`_TEMPLATES` + `AGENT_MD_TEMPLATE`) open with an
+explicit "unbuilt KB ≠ empty project" warning so a model seeing fresh templates
+checks the real files (repo_map / list) instead of declaring the project empty.
 
 ## KB lifecycle hooks (agent.py — baked-in default, no `.claude/settings.json`
 equivalent inside kbcode itself)
