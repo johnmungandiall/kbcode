@@ -5,11 +5,11 @@
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls
-- `kbcode/agent.py:124-162` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
+- `kbcode/agent.py:126-164` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
-- `kbcode/cli.py:148-162` — `_resume_agent` restores the recorded provider/model from session meta
+- `kbcode/cli.py:179-200` — `_resume_agent` restores the recorded provider/model from session meta
 - If the recorded provider isn't configured, it falls back to the current one with a warning
 
 ## JSON serialization of SDK objects
@@ -39,7 +39,7 @@
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
   background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:279`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
-  (`kbcode/agent.py:148`). Two threads writing the terminal at once = the spinner's
+  (`kbcode/agent.py:150`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
 - Fix: `stream_chunk` (`kbcode/ui.py:468`) calls `_active_status.stop()`
@@ -97,10 +97,10 @@
   sandbox). See [[safety]].
 
 ## `_run_subagent`'s inline UI calls must stay quiet-flag-gated
-- `kbcode/agent.py:615` — `_run_subagent()` is used both sequentially (main
+- `kbcode/agent.py:631` — `_run_subagent()` is used both sequentially (main
   thread, normal path) and concurrently, one call per pool worker thread, from
-  `_run_subagents_parallel_batch()` (`kbcode/agent.py:391`) via
-  `_quiet_dispatch()` (`kbcode/agent.py:379`), which sets the per-thread
+  `_run_subagents_parallel_batch()` (`kbcode/agent.py:407`) via
+  `_quiet_dispatch()` (`kbcode/agent.py:395`), which sets the per-thread
   `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
   `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
   `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
@@ -108,7 +108,7 @@
   terminal when multiple subagents run in parallel. If you add a new inline
   UI call inside `_run_subagent()`, gate it on `quiet` too. See
   [[tools-and-repair]], [[modes-subagents]].
-- Related: `Agent._record_usage()` (`kbcode/agent.py:570`) is guarded by
+- Related: `Agent._record_usage()` (`kbcode/agent.py:586`) is guarded by
   `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
@@ -156,7 +156,7 @@
   `test_runaway_compaction_preserves_alternation_and_tool_pairing`).
 - Note the step limit itself is a flat cap: `actions` can read *above*
   `max_steps` in the "hit the step limit" notice because a parallel batch adds
-  `len(batch)` per loop iteration (`kbcode/agent.py:305`), and the turn-summary
+  `len(batch)` per loop iteration (`kbcode/agent.py:312`), and the turn-summary
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
 
@@ -166,7 +166,7 @@
 ## run_command per-turn limit (runaway guard)
 - `kbcode/tools/file.py:381` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
-  `kbcode/config.py:34`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
+  `kbcode/config.py:35`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
   per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
   `Agent.run`). Exceeding it raises: "Refused: hit the safety limit of N
   run_command calls in one turn (a runaway loop guard)..."
@@ -185,6 +185,20 @@
   `openrouter.ai`; some presets (`mimo`) alias `key_env` to
   `OPENROUTER_API_KEY` while `KBCODE_BASE_URL` points elsewhere, so trusting
   the env var name alone would silently 401 — see [[vision]]
+
+## Runtime state lives in the user home; a legacy `.kbcode/memory.db` pins it local
+- `Config.state_dir` (`kbcode/config.py:130`) — memory db, sessions/, checkpoints/,
+  input history, and kbcode.log live at `~/.kbcode/projects/<slug>/` (Claude Code
+  style), NOT in the project. Exception: a project carrying a legacy
+  `.kbcode/memory.db` keeps the project-local `.kbcode` as its state dir —
+  deleting that file silently switches the project to the (empty) home-dir
+  location, "losing" its sessions/checkpoints/history. See [[config]].
+- `KBCODE_HOME` overrides `~/.kbcode` and is read on every `global_dir()` call
+  (`kbcode/config.py:219`) — set it BEFORE any Config path is touched (tests do,
+  via the autouse fixture in `tests/conftest.py`), or state splits across two homes.
+- The project `.kbcode/` (config only) self-hides via an auto-written `*`
+  .gitignore (`_ensure_self_ignore`, `kbcode/config.py:206`) — an existing,
+  user-customized `.kbcode/.gitignore` is deliberately never overwritten.
 
 ## `kbcode update` needs force-reinstall; bump `__version__` every release
 - `kbcode/cli.py:48` — `_self_update()` installs from a moving git branch, not a

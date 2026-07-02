@@ -148,7 +148,8 @@ Type `/` and a **popup menu of commands** appears and filters as you type
 (arrow keys + Tab/Enter to pick); after `/provider` it suggests provider names,
 after `/mode` mode names, and after `/kb-check` the `--fix` flag. This needs
 `prompt_toolkit` (in `requirements.txt`); without it, commands still work by
-typing them in full. Input history persists across sessions (`.kbcode/history`),
+typing them in full. Input history persists across sessions (in the project's
+`~/.kbcode/projects/<slug>/history`),
 so **↑/↓** recall prompts from earlier chats too, not just this one.
 
 **Multi-line messages:** type a bare `"""` on its own line to start one, type
@@ -288,7 +289,8 @@ order** and appended right after standing orders, e.g. `10-style.md`,
 
 ### 📜 Session history (the Claude Code + Hermes idea)
 
-Every chat is saved as it happens to `.kbcode/sessions/<id>.jsonl` — one line
+Every chat is saved as it happens to `~/.kbcode/projects/<slug>/sessions/<id>.jsonl`
+— one line
 per message, so a crash or a closed terminal loses at most the in-flight one.
 Pick it back up later:
 
@@ -300,7 +302,7 @@ Pick it back up later:
 Resuming restores the provider, model, and mode that chat was using, and
 `/insights` rolls every saved session into an all-time token/cost total —
 not just the one you're in. `/reset` starts a fresh saved session rather than
-erasing history; deleting `.kbcode/sessions/` is always safe, it just forgets
+erasing history; deleting the `sessions/` folder is always safe, it just forgets
 past chats.
 
 ### 💸 Long sessions stay cheap (auto-compaction)
@@ -328,18 +330,24 @@ your request
      │   run_subagent                (delegate to a specialist — Claude Code idea)
      │   web_search                  (DuckDuckGo, free/no key — Hermes idea)
      ▼
-  files in your project      kb/ notes        .kbcode/memory.db
+  files in your project      kb/ notes        memory.db (in ~/.kbcode)
 ```
 
 - **`kb/`** — short markdown notes about the project, loaded into the prompt each
   session so the agent doesn't re-read everything.
-- **`.kbcode/memory.db`** — a tiny SQLite database of long-term memories and
-  skills, kept between sessions. (Git-ignored; it's per-machine.)
-- **`.kbcode/sessions/`** — one JSONL file per chat, for `--continue` / `--resume`
-  and the all-time `/insights` rollup. (Also git-ignored.)
-- **`.kbcode/standing-orders.md`** — always-on instructions added to every session.
-- **`.kbcode/agents/`** — your subagent definitions (`*.md`).
-- **`.kbcode/modes/`** — your custom modes (`*.md`), if any.
+- **`~/.kbcode/projects/<project-slug>/`** — the project's **runtime state**, kept in
+  your home dir the way Claude Code keeps `~/.claude/projects/`: `memory.db` (a tiny
+  SQLite database of long-term memories and skills), `sessions/` (one JSONL file per
+  chat, for `--continue` / `--resume` and the all-time `/insights` rollup),
+  `checkpoints/` (pre-edit snapshots), `history` (input history), and `kbcode.log`.
+  Nothing here ever shows up in your project's git. (A project that already has a
+  `.kbcode/memory.db` from an older kbcode keeps using it, so nothing is lost.
+  `KBCODE_HOME` relocates `~/.kbcode` itself.)
+- **`.kbcode/`** (in the project) — just the per-project **config**: `settings.json`,
+  `standing-orders.md` (always-on instructions added to every session), `agents/`
+  (your subagent definitions, `*.md`), `modes/` (your custom modes, `*.md`), and
+  `prompts/`. kbcode drops a `.gitignore` inside it so it stays out of your project's
+  git; delete that file if you'd rather commit e.g. your standing orders.
 - **`.kbcode/settings.json`**'s `"hooks"` key — optional `PreToolUse`/`PostToolUse`/`Stop`
   scripts that can inspect or block a tool call before/after it runs, same shape and
   exit-code contract as real Claude Code's hooks (`0` allow, `2` block + message), e.g.
@@ -474,8 +482,10 @@ DEEPSEEK_API_KEY=...
 >   per turn. Hitting one pauses the turn safely — saying "continue" resumes —
 >   so raise them if long tasks keep pausing on you.
 > - `KBCODE_LOG_LEVEL` (default `INFO`) writes a quiet diagnostic log to
->   `.kbcode/kbcode.log` — set `DEBUG` for full detail when reporting a bug, or
->   `off` to write nothing. This is separate from the on-screen output.
+>   `~/.kbcode/projects/<slug>/kbcode.log` — set `DEBUG` for full detail when
+>   reporting a bug, or `off` to write nothing. Separate from the on-screen output.
+> - `KBCODE_HOME` relocates `~/.kbcode` itself (global settings, model cache, and
+>   every project's runtime state under `projects/`).
 
 ## 🔄 Update & version
 

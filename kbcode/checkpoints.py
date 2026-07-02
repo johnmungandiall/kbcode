@@ -6,8 +6,10 @@ touches the user's real `.git` (separate `GIT_DIR`/`GIT_WORK_TREE`/
 `GIT_INDEX_FILE`, no shared config). If the agent goes sideways, `/rollback`
 puts the working tree back exactly where it was.
 
-The shadow repo lives at `.kbcode/checkpoints/` (already gitignored, like the
-rest of `.kbcode/`). Deleting that folder is always safe — it just forgets
+The shadow repo lives in the project's state dir (`~/.kbcode/projects/<slug>/
+checkpoints/`, see `Config.state_dir`) — outside the project's working tree,
+so it never shows up in the host project's git. Deleting that folder is always
+safe — it just forgets
 the undo history.
 """
 

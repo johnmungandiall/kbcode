@@ -23,9 +23,9 @@ and returns `(messages, None)` only if neither reduced anything:
    alternation (see [[providers]], [[gotchas]]).
 
 Both passes preserve the alternation invariant. Auto-triggered in
-`Agent._maybe_compact()` (`kbcode/agent.py:709`) and mid-turn by
-`_compact_mid_turn_or_stop()` (`kbcode/agent.py:430`); manual via `/compact` ->
-`Agent.compact_now()` (`kbcode/agent.py:729`).
+`Agent._maybe_compact()` (`kbcode/agent.py:790`) and mid-turn by
+`_compact_mid_turn_or_stop()` (`kbcode/agent.py:446`); manual via `/compact` ->
+`Agent.compact_now()` (`kbcode/agent.py:810`).
 
 ## Knowledge base (product feature)
 `KnowledgeBase` (`kbcode/knowledge_base.py:153`) holds `kb/` notes loaded into the
@@ -40,15 +40,15 @@ definition line, then a unique call, then a unique mention).
 
 ## KB lifecycle hooks (agent.py — baked-in default, no `.claude/settings.json`
 equivalent inside kbcode itself)
-`Agent._with_kb_reminder()` (`kbcode/agent.py:486`) is the PostToolUse equivalent —
+`Agent._with_kb_reminder()` (`kbcode/agent.py:502`) is the PostToolUse equivalent —
 after a successful `write_file`/`edit_file` outside `kb/`/`.kbcode/`/`.git/`/
 `node_modules/` and the top-level docs, it appends a once-per-session reminder
-(`_kb_reminder_done`, set `kbcode/agent.py:107`) nudging the model to update the
-matching note. `Agent._kb_drift_feedback()` (`kbcode/agent.py:513`) is the Stop
+(`_kb_reminder_done`, set `kbcode/agent.py:109`) nudging the model to update the
+matching note. `Agent._kb_drift_feedback()` (`kbcode/agent.py:529`) is the Stop
 equivalent — when the model tries to end a turn that touched files
-(`_kb_touched_this_run`, `kbcode/agent.py:108`), it runs `check_pointers()` and, on
+(`_kb_touched_this_run`, `kbcode/agent.py:110`), it runs `check_pointers()` and, on
 drift, feeds the broken pointers back as one more `user` turn instead of
-returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:109`) so it nudges at most
+returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:111`) so it nudges at most
 once per turn.
 
 See [[sessions]] for how compaction interacts with session replay,

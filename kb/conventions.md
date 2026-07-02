@@ -33,11 +33,11 @@
 - **A new subagent or mode:** ship a markdown file (`.kbcode/agents/*.md` or
   `.kbcode/modes/*.md`) with `description:`/`tools:` frontmatter — no code
   change needed. A starter `code-explorer` subagent is scaffolded by
-  `cli._scaffold` (`kbcode/cli.py:65`).
+  `cli._scaffold` (`kbcode/cli.py:95`).
 - **An interactive picker:** reuse `prompt_input.select()` (returns
   `(available, index)`); always handle `available is False` with a
   non-interactive fallback, as `TerminalUI.permission` does.
-- **A new provider:** prefer adding a `PRESETS` entry (`kbcode/config.py:26`); only
+- **A new provider:** prefer adding a `PRESETS` entry (`kbcode/config.py:40`); only
   write a new `LLMProvider` subclass if it isn't OpenAI-compatible.
 
 ## Notes rules

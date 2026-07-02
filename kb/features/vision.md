@@ -5,8 +5,8 @@ A user turn may carry `images: [{"media_type","data"(base64)}]`. `images.py`
 builds them: `grab_clipboard_image()` (`kbcode/images.py:43`, via Pillow) or
 `load_image_file(path)` (`kbcode/images.py:68`), downscaled to <=1568px PNG
 (`_MAX_DIM`, `kbcode/images.py:27`). Chat input binds **Alt+V** to grab the clipboard
-into a pending buffer (`kbcode/prompt_input.py:240` `_attach_image`); `repl.py` drains
-it and calls `Agent.run(user, images=...)` (`kbcode/agent.py:221`) — the `images` key
+into a pending buffer (`kbcode/prompt_input.py:247` `_attach_image`); `repl.py` drains
+it and calls `Agent.run(user, images=...)` (`kbcode/agent.py:223`) — the `images` key
 is only added when non-empty, so non-vision turns are unaffected. Each
 provider's `_to_native` expands an image-bearing message into its own vision
 format (Anthropic image blocks, OpenAI `image_url` parts — see [[providers]]).
@@ -17,7 +17,7 @@ format (Anthropic image blocks, OpenAI `image_url` parts — see [[providers]]).
 `provider._classify()` recognizes the specific error a non-vision model/route
 gives back for an image request and raises `ProviderError("...doesn't support
 image input.")`. `Agent.run` catches exactly that and calls
-`_try_vision_fallback` (`kbcode/agent.py:164`), which asks `vision_fallback
+`_try_vision_fallback` (`kbcode/agent.py:166`), which asks `vision_fallback
 .describe_images()` (`kbcode/vision_fallback.py:131`) for a text description, rewrites
 the pending message in place, and retries — so the image is described once and
 never resent as bytes. `_candidates()` (`kbcode/vision_fallback.py:43`) builds an
@@ -33,9 +33,9 @@ No provider here has a native video content-part (Anthropic Messages API has
 none at all), so `describe_video()` (`kbcode/vision_fallback.py:146`) skips
 `kind=="anthropic"` candidates and always makes a raw OpenAI-compatible call
 with a `video_url` part. `videos.load_video_file()` (`kbcode/videos.py:31`) base64s a
-local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:319` `_describe_videos`) /
-`--video` (one-shot, `kbcode/cli.py:304`) call this synchronously; the description is
-threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:205`) —
+local file (<=30MB). `/video <path>` (chat, `kbcode/cli.py:334` `_describe_videos`) /
+`--video` (one-shot, `_take_video`, `kbcode/cli.py:319`) call this synchronously; the description is
+threaded into the next turn via `repl.py`'s `pending_notes` (`kbcode/repl.py:230`) —
 the main model never sees raw video.
 
 See [[providers]] for the retry/translation layer these routes reuse,

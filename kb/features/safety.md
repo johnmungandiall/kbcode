@@ -21,19 +21,20 @@ source like `MAX_TOKENS=100`); `read_file`/`search_code` redact with
 `KBCODE_REDACT_SECRETS=false` opts out (`_REDACT_ENABLED`, `kbcode/redact.py:20`).
 
 ## Checkpoints (right-sized Hermes port)
-`Checkpoints` (`kbcode/checkpoints.py:56`) auto-snapshots the project into a hidden
-shadow git repo (`.kbcode/checkpoints/`, own `GIT_DIR`/`GIT_WORK_TREE`/
-`GIT_INDEX_FILE` — never touches the real `.git`) right before the first
-mutating tool call of a turn. `ensure_checkpoint()` (`kbcode/checkpoints.py:132`)
-dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:66`, mirroring
+`Checkpoints` (`kbcode/checkpoints.py:58`) auto-snapshots the project into a hidden
+shadow git repo (`~/.kbcode/projects/<slug>/checkpoints/` — the project's
+`Config.state_dir`, outside the working tree — own `GIT_DIR`/`GIT_WORK_TREE`/
+`GIT_INDEX_FILE`, never touches the real `.git`) right before the first
+mutating tool call of a turn. `ensure_checkpoint()` (`kbcode/checkpoints.py:134`)
+dedups to once per turn (reset via `new_turn()`, `kbcode/checkpoints.py:68`, mirroring
 the KB-hook reset in [[context-management]]); no-ops if `git` isn't on PATH or
 nothing changed. `.kbcode/`, `.git/`, `.env*` are excluded via `info/exclude`
-(`_EXCLUDES`, `kbcode/checkpoints.py:31`), same spirit as redaction. `/rollback`
+(`_EXCLUDES`, `kbcode/checkpoints.py:33`), same spirit as redaction. `/rollback`
 (`repl._rollback_menu`, `kbcode/repl.py:37`) opens an arrow-key picker built on
-`prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:200`) is
+`prompt_input.select()`; a restore (`restore()`, `kbcode/checkpoints.py:202`) is
 itself preceded by a safety snapshot. Deliberately **not** a cross-project
 dedup store with size caps/pruning — one project, one store, no auto-
-maintenance; deleting `.kbcode/checkpoints/` is always safe.
+maintenance; deleting the `checkpoints/` folder is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
@@ -51,9 +52,9 @@ so a hook script written for real Claude Code works here unchanged. Config
 comes from a `"hooks"` key in `.kbcode/settings.json`, shaped exactly like
 Claude Code's own: `{"PreToolUse": [{"matcher": "run_command", "hooks":
 [{"type": "command", "command": "..."}]}], "PostToolUse": [...], "Stop":
-[...]}`. `Config.hooks` (`kbcode/config.py:108`) carries it through the same
+[...]}`. `Config.hooks` (`kbcode/config.py:118`) carries it through the same
 settings merge as everything else (`load_config()`,
-`kbcode/config.py:252`) — no new file or precedence rule.
+`kbcode/config.py:364`) — no new file or precedence rule.
 
 `HooksRunner.run()` (`kbcode/hooks.py:51`) looks up `config[event]`, matches
 each entry's `matcher` against the tool name (plain equality, or `"*"`/empty
@@ -77,20 +78,20 @@ for every hook command in that project.
 `ToolsCore.__init__` builds `self.hooks = HooksRunner(config.hooks,
 self.root)` (`kbcode/tools/core.py:31`) right next to `self.checkpoints` —
 no timeout arg passed, so it always picks up the settings-driven value.
-`Agent._dispatch_tool()` (`kbcode/agent.py:195`) wraps one tool call: runs
+`Agent._dispatch_tool()` (`kbcode/agent.py:197`) wraps one tool call: runs
 `PreToolUse` (blocks without calling the tool if `HookOutcome.blocked`),
 then `self.tools.execute()`, then `PostToolUse` (appends
 `HookOutcome.message` to the result content if present). Every call site
 that used to call `self.tools.execute()` directly now goes through
 `_dispatch_tool()` instead — the sequential path in `Agent.run()`
-(`kbcode/agent.py:331`), the parallel-batch `ThreadPoolExecutor.submit` in
-`_run_parallel_batch()` (`kbcode/agent.py:358`), the plain-text-recovered
-path in `_run_promoted()` (`kbcode/agent.py:479`), two sites inside
-`_run_subagent()` (`kbcode/agent.py:664` and `:689`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:388`), used
+(`kbcode/agent.py:338`), the parallel-batch `ThreadPoolExecutor.submit` in
+`_run_parallel_batch()` (`kbcode/agent.py:360`), the plain-text-recovered
+path in `_run_promoted()` (`kbcode/agent.py:468`), two sites inside
+`_run_subagent()` (`kbcode/agent.py:677` and `:719`), and — #4.3 extension,
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:395`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
-`Agent._stop_hook_feedback()` (`kbcode/agent.py:540`) runs the `Stop` event
+`Agent._stop_hook_feedback()` (`kbcode/agent.py:556`) runs the `Stop` event
 once per turn (gated by `self._stop_hook_checked`, reset in `run()` alongside
 `self._kb_drift_checked`) right after the KB-drift check — a configured
 `Stop` hook can veto ending the turn (e.g. to demand a missing test run),

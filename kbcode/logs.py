@@ -6,7 +6,8 @@ something fails in the field the user has an actionable trace to share, not just
 what happened to scroll past. It never prints to the console.
 
 Design:
-  - one rotating file at ``<project>/.kbcode/kbcode.log`` (capped, a few backups);
+  - one rotating file at ``<state dir>/kbcode.log`` (the project's
+    ``~/.kbcode/projects/<slug>/`` state dir — see ``Config.state_dir``);
   - level from ``KBCODE_LOG_LEVEL`` (default ``INFO``; set ``DEBUG`` for full
     tracing, or ``off``/``none``/``0`` to write nothing);
   - configured on the ``kbcode`` logger, so every module just does the standard
@@ -29,7 +30,7 @@ _OFF = {"off", "none", "no", "0", "false", ""}
 _configured = False
 
 
-def setup_logging(kbcode_dir: Path) -> None:
+def setup_logging(state_dir: Path) -> None:
     """Attach the rotating file handler to the ``kbcode`` logger. Idempotent —
     safe to call more than once (later calls are no-ops), so retargeting the
     project via /open doesn't stack handlers."""
@@ -47,9 +48,9 @@ def setup_logging(kbcode_dir: Path) -> None:
 
     level = getattr(logging, level_name.upper(), logging.INFO)
     try:
-        kbcode_dir.mkdir(parents=True, exist_ok=True)
+        state_dir.mkdir(parents=True, exist_ok=True)
         handler = RotatingFileHandler(
-            kbcode_dir / "kbcode.log",
+            state_dir / "kbcode.log",
             maxBytes=1_000_000,
             backupCount=3,
             encoding="utf-8",

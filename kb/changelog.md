@@ -3,6 +3,17 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased / next
+- **2026-07-02: per-project runtime state moved to `~/.kbcode/projects/<slug>/`**
+  (Claude Code's `~/.claude/projects` layout) — memory.db, sessions/, the
+  checkpoints/ shadow repo, input history, and kbcode.log no longer land in the
+  project's `.kbcode/` (they used to show up as ~80 untracked files in the host
+  project's git). New `Config.state_dir` + `project_slug()`; a project carrying
+  a legacy `.kbcode/memory.db` keeps its local dir so nothing is lost. The
+  project `.kbcode/` is now config-only (settings.json, standing-orders.md,
+  agents/, modes/, prompts/, .env) and self-hides via an auto-written `*`
+  .gitignore (`_ensure_self_ignore`). New `KBCODE_HOME` env var overrides
+  `~/.kbcode` (used by the new autouse fixture in `tests/conftest.py`);
+  documented in README + .env.example.
 - **Runaway-loop guards are now tunable** — the per-message step cap (was a
   hardcoded `_MAX_STEPS = 50`) and the per-turn `run_command` cap (was a
   hardcoded 25) moved to `Config.max_steps` / `Config.max_commands_per_turn`,

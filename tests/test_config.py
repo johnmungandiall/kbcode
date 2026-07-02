@@ -6,6 +6,7 @@ from kbcode.config import (
     PRESETS,
     Config,
     load_config,
+    project_slug,
 )
 
 
@@ -54,3 +55,40 @@ def test_use_provider_unknown_raises():
         assert False, "expected ValueError"
     except ValueError:
         pass
+
+
+def test_project_slug_encodes_path_claude_code_style(tmp_path):
+    project = tmp_path / "My App"
+    project.mkdir()
+    slug = project_slug(project)
+    assert slug == "".join(c if c.isalnum() else "-" for c in str(project.resolve()))
+    assert " " not in slug and "\\" not in slug and ":" not in slug
+
+
+def test_state_dir_lives_under_kbcode_home(tmp_path, isolated_kbcode_home):
+    config = Config(project_dir=tmp_path)
+    state = config.state_dir
+    assert state == isolated_kbcode_home / "projects" / project_slug(tmp_path)
+    # every runtime-state path hangs off it, out of the project's working tree
+    for p in (config.memory_db, config.checkpoints_dir, config.sessions_dir, config.history_file):
+        assert state in p.parents
+        assert tmp_path not in p.parents
+
+
+def test_state_dir_legacy_project_keeps_local_kbcode(tmp_path):
+    config = Config(project_dir=tmp_path)
+    config.kbcode_dir.mkdir()
+    (config.kbcode_dir / "memory.db").touch()  # marker: project predates the home-dir move
+    assert config.state_dir == config.kbcode_dir
+    assert config.memory_db == config.kbcode_dir / "memory.db"
+
+
+def test_ensure_dirs_writes_self_ignoring_gitignore(tmp_path):
+    config = Config(project_dir=tmp_path)
+    config.ensure_dirs()
+    gitignore = config.kbcode_dir / ".gitignore"
+    assert gitignore.read_text(encoding="utf-8").strip() == "*"
+    # a customized one is left alone
+    gitignore.write_text("settings.json\n", encoding="utf-8")
+    config.ensure_dirs()
+    assert gitignore.read_text(encoding="utf-8") == "settings.json\n"

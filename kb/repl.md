@@ -1,6 +1,6 @@
 # REPL — the interactive chat loop.
 
-`repl()` at [repl.py](../kbcode/repl.py) `repl:187` — reads lines, dispatches
+`repl()` at [repl.py](../kbcode/repl.py) `repl:212` — reads lines, dispatches
 slash commands, runs agent turns.
 
 ## Model autocomplete

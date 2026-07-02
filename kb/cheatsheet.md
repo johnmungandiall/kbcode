@@ -9,7 +9,9 @@
 - `kbcode model` — setup wizard (provider + key + model); auto-fetches model
   list; persists to global (~/.kbcode) **and** current project's .kbcode/settings.json
   (and updates KBCODE_* pins in an existing project .env so selection applies)
-- `kbcode init` — scaffold project (AGENT.md + kb/ + .kbcode/)
+- `kbcode init` — scaffold project (AGENT.md + kb/ + .kbcode/ — config only,
+  self-gitignored; runtime state — memory db, sessions, checkpoints, history,
+  log — lives in `~/.kbcode/projects/<slug>/`; `KBCODE_HOME` overrides `~/.kbcode`)
 - `kbcode -c` — continue most recent saved session
 - `kbcode --resume` — pick from past sessions
 - `kbcode update` — upgrade from GitHub (`_self_update`, `kbcode/cli.py:48`)
@@ -17,7 +19,7 @@
   (`kbcode/__init__.py:9`) — a release = bump it, then tag `vX.Y.Z` + push
 - For maximum speed (Cursor-like): use a fast model + give narrow tasks.
   kbcode now aggressively batches parallel reads (16 workers + prompt rules).
-- `pytest` — run the test suite (`tests/`, 22 files); `python -m py_compile
+- `pytest` — run the test suite (`tests/`, 30 files + conftest.py); `python -m py_compile
   kbcode/*.py` for a fast syntax-only check
 
 ## Windows / PowerShell (this is the dev environment)

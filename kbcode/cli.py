@@ -396,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
 
     config = load_config(project_dir or Path.cwd())
     config.auto_approve = auto
-    setup_logging(config.kbcode_dir)  # quiet on-disk trace for field debugging (#5)
+    setup_logging(config.state_dir)  # quiet on-disk trace for field debugging (#5)
     logging.getLogger(__name__).info(
         "kbcode %s starting — provider=%s model=%s dir=%s",
         __version__, config.provider, config.model, config.project_dir,

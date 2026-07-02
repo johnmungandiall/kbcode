@@ -1,7 +1,7 @@
 # Providers — normalized messages, translation, resilience, interrupts.
 
 ## Normalized messages + `raw` replay
-`Agent.messages` (`kbcode/agent.py:90`) is provider-agnostic, never a provider's native
+`Agent.messages` (`kbcode/agent.py:92`) is provider-agnostic, never a provider's native
 shape: `{"role":"user","content"}` (+ optional `"images"`), `{"role":"assistant",
 "text","tool_calls","raw"}`, `{"role":"tool_results","results"}`. Each provider's
 `_to_native` (Anthropic `kbcode/provider.py:181`, OpenAI-compatible `kbcode/provider.py:358`)
@@ -44,7 +44,7 @@ backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:58-59`). Hard error
 staged fallback still works.
 
 ## Interrupt mid-request
-`Agent._complete()` (`kbcode/agent.py:124`) runs the blocking `provider.complete`/
+`Agent._complete()` (`kbcode/agent.py:126`) runs the blocking `provider.complete`/
 `stream` call on a daemon worker thread and polls `done.wait(0.05)` on the main
 thread — a blocking socket read swallows `KeyboardInterrupt` until it returns, so
 without the poll, Esc would feel dead while "thinking...". `interrupt_on_escape()`

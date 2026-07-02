@@ -7,13 +7,13 @@ tool call written as plain text — `[read_file]\n{...}` (`_find_bracketed`,
 `kbcode/repair.py:136`), `<name>{...}</name>` (`_find_tagged`, `kbcode/repair.py:148`), or a
 bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.py:160`)
 — only for names the mode actually offers. `Agent._run_promoted()`
-(`kbcode/agent.py:452`) runs them and feeds outputs back as a plain `user` turn (no
+(`kbcode/agent.py:468`) runs them and feeds outputs back as a plain `user` turn (no
 native tool ids to replay) with a nudge to use the real format.
 
 *Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:89`) runs `_repair()`
 (`kbcode/tools/core.py:108`) first — unknown tool name -> closest match via
 `difflib`; missing required args -> names them. Every call site wraps
-`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:195`), which runs
+`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs
 configured PreToolUse/PostToolUse hooks around it — see [[safety]].
 
 ## Path resolution & protected files
@@ -78,15 +78,15 @@ subagent qualifies — `Agent._is_parallel_subagent_call()`
 it includes `recall`/`manage_todos`, which touch Memory's non-thread-safe
 sqlite3 connection / todos state — so only a subagent deliberately authored
 with a narrow, explicit tool list opts in. `Agent.run`'s batching loop
-(`kbcode/agent.py:297-320`) checks this as a second, symmetric branch after the
+(`kbcode/agent.py:304-327`) checks this as a second, symmetric branch after the
 read-only-tool check; a qualifying run goes through
-`_run_subagents_parallel_batch()` (`kbcode/agent.py:391`), which mirrors
+`_run_subagents_parallel_batch()` (`kbcode/agent.py:407`), which mirrors
 `_run_parallel_batch`'s shape: a `ThreadPoolExecutor` (same
-`_PARALLEL_MAX_WORKERS = 8` cap) runs `_quiet_dispatch()` (`kbcode/agent.py:379`)
+`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:60`) runs `_quiet_dispatch()` (`kbcode/agent.py:395`)
 per call, then call/result lines render sequentially afterward in the
 model's original order so `tool_results` stays aligned with tool_call ids.
 `_quiet_dispatch` sets a thread-local flag (`Agent._quiet_subagents`, a
-`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:615`) reads to
+`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:631`) reads to
 suppress its own inline `ui.notice`/`ui.tool_call`/`ui.tool_result`/
 `ui.tool_running()` calls — Rich's Live-backed spinner isn't safe to have two
 open at once. `_quiet_dispatch` still calls through `_dispatch_tool()`, the
@@ -94,7 +94,7 @@ same entry point the sequential path uses, so PreToolUse/PostToolUse hooks
 fire exactly as before (see [[safety]]). Anything else — a single
 `run_subagent` call, mixed eligibility in a run, or a subagent with
 `tools: None` or any write/exec tool — stays fully sequential through the
-normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:570`)
+normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:586`)
 is guarded by `Agent._usage_lock` (a `threading.Lock()` set in `__init__`)
 since it can now be called from multiple subagent pool threads at once — see
 [[modes-subagents]].

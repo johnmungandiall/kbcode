@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -126,19 +127,31 @@ class Config:
         return self.project_dir / "kb"
 
     @property
+    def state_dir(self) -> Path:
+        """Machine-local runtime state for THIS project — memory db, sessions,
+        checkpoints, input history, log. Lives in the user's home
+        (``~/.kbcode/projects/<slug>``, mirroring Claude Code's
+        ``~/.claude/projects``) so launching kbcode never dumps runtime files
+        into the project's working tree. A project that already carries a
+        legacy ``.kbcode/memory.db`` keeps using its local dir."""
+        if (self.kbcode_dir / "memory.db").exists():
+            return self.kbcode_dir
+        return global_dir() / "projects" / project_slug(self.project_dir)
+
+    @property
     def memory_db(self) -> Path:
-        return self.kbcode_dir / "memory.db"
+        return self.state_dir / "memory.db"
 
     @property
     def checkpoints_dir(self) -> Path:
         # Hermes idea: a hidden shadow git store for auto pre-edit snapshots.
-        return self.kbcode_dir / "checkpoints"
+        return self.state_dir / "checkpoints"
 
     @property
     def sessions_dir(self) -> Path:
         # Claude Code / Hermes idea: persisted chat transcripts for --continue,
         # --resume, and cross-session /insights rollups.
-        return self.kbcode_dir / "sessions"
+        return self.state_dir / "sessions"
 
     @property
     def agent_md(self) -> Path:
@@ -157,7 +170,7 @@ class Config:
     def history_file(self) -> Path:
         # prompt_toolkit's on-disk input history, so up-arrow recalls past
         # prompts across sessions (not just within one REPL run).
-        return self.kbcode_dir / "history"
+        return self.state_dir / "history"
 
     @property
     def prompts_dir(self) -> Path:
@@ -168,6 +181,8 @@ class Config:
     def ensure_dirs(self) -> None:
         self.kbcode_dir.mkdir(parents=True, exist_ok=True)
         self.kb_dir.mkdir(parents=True, exist_ok=True)
+        self.state_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_self_ignore(self.kbcode_dir)
 
     def use_provider(
         self, name: str, model: str | None = None, base_url: str | None = None
@@ -188,9 +203,35 @@ class Config:
         self.model = model or preset["model"]
 
 
+def _ensure_self_ignore(kbcode_dir: Path) -> None:
+    """Drop a ``*`` .gitignore inside ``.kbcode/`` so its per-machine state
+    (memory db, logs, sessions, checkpoints) never shows up as untracked in the
+    host project's git — same trick as .pytest_cache/.ruff_cache. Existing
+    file (user may have customized it) is left alone; failures are non-fatal."""
+    gitignore = kbcode_dir / ".gitignore"
+    try:
+        if not gitignore.exists():
+            gitignore.write_text("*\n", encoding="utf-8")
+    except OSError:
+        pass  # read-only mount etc. — worst case git shows the files again
+
+
 def global_dir() -> Path:
-    """User-level kbcode config (``~/.kbcode``) — shared by every project."""
+    """User-level kbcode home (``~/.kbcode``) — shared config, plus each
+    project's runtime state under ``projects/``. ``KBCODE_HOME`` overrides the
+    location (tests use it to stay out of the real home dir)."""
+    override = os.environ.get("KBCODE_HOME")
+    if override:
+        return Path(override)
     return Path.home() / ".kbcode"
+
+
+def project_slug(project_dir: Path) -> str:
+    """Encode an absolute project path as a single folder name, the way Claude
+    Code names ``~/.claude/projects`` entries: every character that isn't a
+    letter or digit becomes a dash (``d:\\AI Agents\\kb`` -> ``d--AI-Agents-kb``)."""
+    resolved = str(Path(project_dir).resolve())
+    return re.sub(r"[^A-Za-z0-9]", "-", resolved)
 
 
 def load_settings(kbcode_dir: Path) -> dict:
@@ -205,6 +246,7 @@ def load_settings(kbcode_dir: Path) -> dict:
 
 def save_settings(kbcode_dir: Path, provider: str, model: str, base_url: str | None) -> None:
     kbcode_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_self_ignore(kbcode_dir)
     data = {"provider": provider, "model": model, "base_url": base_url}
     (kbcode_dir / "settings.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
