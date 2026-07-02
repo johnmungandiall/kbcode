@@ -1,7 +1,7 @@
 # 🤖 kbcode
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.12.0-2ea44f)
+![Version](https://img.shields.io/badge/version-1.12.1-2ea44f)
 ![Platforms](https://img.shields.io/badge/Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-555)
 ![Models](https://img.shields.io/badge/Claude%20%2B%20any%20OpenAI--compatible-8A2BE2)
 [![CI](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml/badge.svg)](https://github.com/johnmungandiall/kbcode/actions/workflows/ci.yml)

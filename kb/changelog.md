@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## Unreleased
+## v1.12.1 (2026-07-02)
 - Scaffold templates (`_TEMPLATES["overview"]` + `AGENT_MD_TEMPLATE`) now warn
   that an unbuilt KB does NOT mean an empty project — check real files
   (repo_map / list) first. Fixes a live MiMo session that declared a real
