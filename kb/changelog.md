@@ -2,7 +2,7 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
-## unreleased (2026-07-02)
+## v1.12.0 (2026-07-02)
 - **New tools:** `fetch_url` (read a web page/API via stdlib urllib, HTML→text,
   no API key, parallel_safe) and `check_task`; `run_command` gained
   `background: true` (returns a `bg-N` task id at once, poll/kill via
