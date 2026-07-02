@@ -38,26 +38,31 @@ _MAX_PROMOTED_RECOVERIES = 3  # give up auto-repairing plain-text tool calls aft
 _EMERGENCY_STOP_MULTIPLIER = 3
 
 # Parallel tool calls (#4.3): only tools that are pure reads (no permission
-# prompt, no file mutation, no checkpoint, no shared SQLite connection) are
-# safe to run off the main thread. write_file/edit_file/run_command/kb_write/
-# remember/recall/save_skill/manage_todos all stay sequential — either
-# because ordering matters (edit then run the tests it affects) or because
-# they touch state (Permissions' interactive prompt, Checkpoints' once-per-
-# turn git snapshot, Memory's sqlite3 connection) that isn't thread-safe to
-# share across a pool. WHICH tools are safe is no longer listed here: each
-# tool declares `parallel_safe` in its schema (tools/schemas.py) and the set
-# is read via self.tools.parallel_safe_tools, so adding a read-only tool
-# can't silently fall back to sequential.
+# prompt, no file mutation, no checkpoint) are safe to run off the main
+# thread. write_file/edit_file/run_command/kb_write/remember/save_skill/
+# manage_todos all stay sequential — either because ordering matters (edit
+# then run the tests it affects) or because they touch state (Permissions'
+# interactive prompt, Checkpoints' once-per-turn git snapshot) that isn't
+# thread-safe to share across a pool. recall IS parallel-safe now that
+# Memory serializes all SQLite access behind its own lock (memory.py).
+# WHICH tools are safe is no longer listed here: each tool declares
+# `parallel_safe` in its schema (tools/schemas.py) and the set is read via
+# self.tools.parallel_safe_tools, so adding a read-only tool can't silently
+# fall back to sequential.
 #
 # run_subagent is a conditional exception: a run of consecutive run_subagent
-# calls runs concurrently too, but ONLY when every targeted subagent's own
-# `tools:` frontmatter is a subset of that same parallel_safe set (see
-# Agent._subagent_parallel_safe / _run_subagents_parallel_batch below) — the
-# default `tools: read` does NOT qualify (it includes recall/manage_todos,
-# which touch Memory's connection / todos state), so a subagent must be
-# authored with an explicit, narrow tool list to opt in. Anything broader
-# (any write/exec tool, or `tools: None` = every tool) stays sequential.
+# calls runs concurrently too, when every targeted subagent's own `tools:`
+# frontmatter is a subset of that parallel_safe set plus
+# _SUBAGENT_PARALLEL_EXTRAS (see Agent._subagent_parallel_safe /
+# _run_subagents_parallel_batch below). The default `tools: read` (the READ
+# group) qualifies since Memory became thread-safe — manage_todos, its one
+# remaining mutating member, is tolerated via the extras set because its
+# whole-list replacement is atomic under the GIL (worst case: concurrent
+# subagents overwrite each other's checklist, never corrupt it). Anything
+# broader (any write/exec tool, or `tools: None` = every tool) stays
+# sequential.
 _PARALLEL_MAX_WORKERS = 16
+_SUBAGENT_PARALLEL_EXTRAS = frozenset({"manage_todos"})
 
 # KB lifecycle hooks (the claude-kb idea): distinct from the general,
 # user-configurable PreToolUse/PostToolUse/Stop hooks in hooks.py — these two
@@ -642,19 +647,19 @@ class Agent:
         }
 
     def _subagent_parallel_safe(self, name: str) -> bool:
-        """A subagent is eligible for concurrent dispatch (#4.3 extension) only
-        if it's authored with an explicit, narrow ``tools:`` list that is a
-        subset of the schema-declared parallel_safe set (tools/schemas.py) —
-        NOT the mode-level READ group, which also includes recall/manage_todos
-        (Memory's sqlite3 connection / todos state aren't thread-safe to
-        share). The default ``tools: read`` frontmatter does NOT qualify; an
-        author must deliberately narrow it (e.g. ``tools: read_file,
-        search_code, kb_read``) to opt in. Unknown subagent name or
-        ``tools: None`` ("every tool") is never eligible."""
+        """A subagent is eligible for concurrent dispatch (#4.3 extension)
+        when every tool in its ``tools:`` frontmatter is either
+        schema-declared ``parallel_safe`` (tools/schemas.py) or in
+        ``_SUBAGENT_PARALLEL_EXTRAS``. The default ``tools: read`` (the READ
+        group) qualifies: ``recall`` is parallel_safe now that Memory locks
+        its SQLite access, and ``manage_todos`` is tolerated as an extra (its
+        whole-list replacement is atomic — see the module comment). Unknown
+        subagent name, ``tools: None`` ("every tool"), or any write/exec
+        tool is never eligible."""
         sub = self.subagents.get(name)
         if sub is None or sub.tools is None:
             return False
-        return sub.tools <= self.tools.parallel_safe_tools
+        return sub.tools <= (self.tools.parallel_safe_tools | _SUBAGENT_PARALLEL_EXTRAS)
 
     def _is_parallel_subagent_call(self, call) -> bool:
         return call.name == "run_subagent" and self._subagent_parallel_safe(
@@ -822,6 +827,11 @@ class Agent:
         exit)."""
         if self.session:
             self.session.record_usage(dict(self.usage))
+        stop_bg = getattr(self.tools, "stop_background_tasks", None)
+        if stop_bg is not None:
+            stopped = stop_bg()
+            if stopped:
+                self.ui.notice(f"stopped {stopped} background task{'s' if stopped != 1 else ''}.")
         mcp = getattr(self.tools, "mcp", None)
         if mcp is not None:
             mcp.stop_all()
@@ -849,8 +859,12 @@ class Agent:
     def compact_now(self, announce: str = "manual") -> bool:
         """Summarize the middle of the conversation. Returns True if it compacted."""
         before = estimate_tokens(self.messages)
-        with self.ui.working("🗜️  summarizing earlier conversation…"):
-            new_messages, summary = compact(self.messages, self.provider)
+        with self.ui.working("🗜️  compacting earlier conversation…"):
+            new_messages, summary = compact(
+                self.messages,
+                self.provider,
+                threshold=self.compact_threshold or None,
+            )
         if summary is None:
             if announce == "manual":
                 self.ui.notice("Not enough conversation to compact yet.")

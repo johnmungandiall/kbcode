@@ -5,7 +5,7 @@
 - An older SDK rejects newer kwargs via `TypeError`, caught and retried with simpler params — don't let `_with_retry` swallow it, it deliberately re-raises `TypeError`
 
 ## Threaded provider calls
-- `kbcode/agent.py:126-164` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
+- `kbcode/agent.py:131-169` — `Agent._complete()` runs the HTTP request on a daemon thread so Esc works mid-request (see [[providers]])
 - Don't assume `KeyboardInterrupt` is only raised between Python statements
 
 ## Session replay requires matching provider
@@ -17,16 +17,16 @@
 - New Anthropic SDK content-block shapes need `model_dump(mode="json")` fallback
 
 ## Tool-call repair is two layers
-- `kbcode/tools/core.py:139` — `_repair()` fixes name typos + missing required args (execute-time)
+- `kbcode/tools/core.py:144` — `_repair()` fixes name typos + missing required args (execute-time)
 - `kbcode/repair.py:48` — `promote()` recovers tool calls written as plain text (parse-time)
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 
 ## Protected files
-- `kbcode/tools/file.py:118-136` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
+- `kbcode/tools/file.py:119-137` — `_protected_reason()` refuses writes to `.git/`, `.ssh/`, `.env`, secrets
 - `.env.example` and `.gitignore` are explicitly allowed — see [[safety]]
 
 ## Compaction token estimate
-- `kbcode/compaction.py:47-64` — `estimate_tokens()` uses ~4 chars/token + flat 1300/image
+- `kbcode/compaction.py:49-66` — `estimate_tokens()` uses ~4 chars/token + flat 1300/image
 - This is rough; don't rely on exact counts — see [[context-management]]
 
 ## `tools.py` no longer exists
@@ -37,25 +37,25 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:254`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:264`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
-  (`kbcode/agent.py:150`). Two threads writing the terminal at once = the spinner's
+  (`kbcode/agent.py:155`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:477`) calls `_active_status.stop()`
-  (`kbcode/ui.py:293`) on the first token, so from then on only the worker thread
+- Fix: `stream_chunk` (`kbcode/ui.py:487`) calls `_active_status.stop()`
+  (`kbcode/ui.py:303`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
-  `stream_tool_hint` (`kbcode/ui.py:502`) follows the same rules — spinner
+  `stream_tool_hint` (`kbcode/ui.py:512`) follows the same rules — spinner
   stopped first, half-printed stream line closed via `_stream_open`.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:473`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:483`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:213`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:226`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -104,7 +104,7 @@
   event objects for the same reason.
 
 ## web_search uses a throwaway thread pool, not a shared one
-- `kbcode/tools/web.py:39` — `_tool_web_search` can't cancel a blocking `ddgs`
+- `kbcode/tools/web.py:112` — `_tool_web_search` can't cancel a blocking `ddgs`
   call on timeout, and `ddgs`'s own per-request timeout doesn't bound its
   internal multi-engine retry loop. A shared pool would let one hung search
   serialize every later search behind it.
@@ -121,10 +121,10 @@
   sandbox). See [[safety]].
 
 ## `_run_subagent`'s inline UI calls must stay quiet-flag-gated
-- `kbcode/agent.py:631` — `_run_subagent()` is used both sequentially (main
+- `kbcode/agent.py:669` — `_run_subagent()` is used both sequentially (main
   thread, normal path) and concurrently, one call per pool worker thread, from
-  `_run_subagents_parallel_batch()` (`kbcode/agent.py:407`) via
-  `_quiet_dispatch()` (`kbcode/agent.py:428`), which sets the per-thread
+  `_run_subagents_parallel_batch()` (`kbcode/agent.py:445`) via
+  `_quiet_dispatch()` (`kbcode/agent.py:433`), which sets the per-thread
   `Agent._quiet_subagents.on` flag. Every inline `ui.notice`/`ui.tool_call`/
   `ui.tool_result`/`ui.tool_running()` call inside `_run_subagent()` checks
   `quiet` first — TerminalUI's Rich `Live`-backed spinner isn't safe to have
@@ -132,7 +132,7 @@
   terminal when multiple subagents run in parallel. If you add a new inline
   UI call inside `_run_subagent()`, gate it on `quiet` too. See
   [[tools-and-repair]], [[modes-subagents]].
-- Related: `Agent._record_usage()` (`kbcode/agent.py:586`) is guarded by
+- Related: `Agent._record_usage()` (`kbcode/agent.py:624`) is guarded by
   `Agent._usage_lock` since #4.3's `run_subagent` extension can call it from
   multiple threads at once — don't reintroduce an unguarded `self.usage[...]`
   mutation elsewhere.
@@ -148,8 +148,8 @@
   available and limit symbols per file.
 
 ## Displaying a path relative to root breaks outside the project
-- `kbcode/tools/file.py:371` — `_tool_search_code` formats each hit through
-  `self._display_path(fp)` (`kbcode/tools/core.py:170`), **not** a raw
+- `kbcode/tools/file.py:372` — `_tool_search_code` formats each hit through
+  `self._display_path(fp)` (`kbcode/tools/core.py:175`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
   [[kbcode-write-anywhere]] intent), so a search/list base can point outside
@@ -163,7 +163,7 @@
   (`test_search_code_outside_project_shows_absolute_path`).
 
 ## Compaction must shrink the *last* exchange too, not just the middle
-- `kbcode/compaction.py:146` — `_compact_within_last_exchange()` is the second
+- `kbcode/compaction.py:194` — `_compact_within_last_exchange()` is the second
   pass of `compact()`. The first pass (`_compact_exchanges`) summarizes whole
   *middle* exchanges and always protects the most recent one — but a turn that
   runs many tool round-trips and hits the step limit (`Agent.max_steps`,
@@ -180,7 +180,7 @@
   `test_runaway_compaction_preserves_alternation_and_tool_pairing`).
 - Note the step limit itself is a flat cap: `actions` can read *above*
   `max_steps` in the "hit the step limit" notice because a parallel batch adds
-  `len(batch)` per loop iteration (`kbcode/agent.py:312`), and the turn-summary
+  `len(batch)` per loop iteration (`kbcode/agent.py:317`), and the turn-summary
   "~N tokens" is *cumulative* usage across the turn's API calls, not the context
   size. See [[context-management]].
 
@@ -196,10 +196,10 @@
   cleanup does exactly this blocking read, so even `timeout=180` sailed past
   3000s in the field. Fixed (2026-07-02) by writing output to temp files +
   `proc.wait(timeout)` + `_kill_process_tree()` — see [[safety]] and
-  `kbcode/tools/file.py:399`.
+  `kbcode/tools/file.py:400`.
 
 ## run_command per-turn limit (runaway guard)
-- `kbcode/tools/file.py:399` — `_tool_run_command` caps calls per turn at
+- `kbcode/tools/file.py:400` — `_tool_run_command` caps calls per turn at
   `Config.max_commands_per_turn` (default `DEFAULT_MAX_COMMANDS = 25`,
   `kbcode/config.py:116`; `KBCODE_MAX_COMMANDS` tunes it). It increments a
   per-turn counter (reset in `ToolsCore.new_turn`, called at start of every
@@ -286,5 +286,13 @@
   `kbcode/__init__.py` `__version__` in the same commit as any user-facing fix**
   so even the OLD update command upgrades. Fixed in v1.9.1 ([[changelog]]).
 - Same family as the v1.6.1 packaging trap — see [[changelog]].
+
+## Background tasks die on /provider and /open, not just at exit
+- `Agent.close()` calls `Tools.stop_background_tasks()` (`kbcode/tools/file.py:560`)
+  so a model-started dev server can't outlive kbcode — but `close()` also runs
+  on the `/provider` and `/open` agent rebuilds (same path that stops MCP
+  servers). Switching provider therefore kills every `run_command
+  background=true` task. Deliberate (no orphan processes) — if a task must
+  survive a rebuild, start it in your own terminal instead.
 
 See [[conventions]] for general rules, [[about-kb]] for how traps get indexed here.

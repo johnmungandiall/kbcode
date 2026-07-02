@@ -62,7 +62,7 @@ carried as `Config.max_steps` / `Config.max_commands_per_turn`
 (`kbcode/config.py:200-201`). `max_steps` caps tool round-trips per user message
 (`Agent.__init__`'s `max_steps` arg, passed from `kbcode/cli.py:165`);
 `max_commands_per_turn` caps `run_command` calls per turn (read in
-`_tool_run_command`, `kbcode/tools/file.py:399`). Hitting either pauses the turn
+`_tool_run_command`, `kbcode/tools/file.py:400`). Hitting either pauses the turn
 safely — "continue" resumes — see [[gotchas]] for why real tasks hit them.
 
 You can also set "compact_tokens" in .kbcode/settings.json (or global

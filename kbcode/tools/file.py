@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from ..config import DEFAULT_MAX_COMMANDS
@@ -418,9 +419,13 @@ class FileToolsMixin:
                 "(e.g. wiping a filesystem root, a fork bomb, formatting a drive). "
                 "Run it yourself in a terminal if you really mean it."
             )
-        if not self.perm.check("run_command", f"$ {command}"):
+        background = bool(inp.get("background"))
+        prompt = f"$ {command}" + ("  (background — keeps running)" if background else "")
+        if not self.perm.check("run_command", prompt):
             raise PermissionError("User denied permission to run the command.")
         self.checkpoints.ensure_checkpoint("before run_command")
+        if background:
+            return self._start_background_command(command)
         # Output goes to temp FILES, not pipes: a grandchild that outlives the
         # command (`taskkill && start explorer.exe`, a spawned dev server, ...)
         # inherits pipe handles and keeps them open, so a pipe read blocks on
@@ -462,6 +467,107 @@ class FileToolsMixin:
         )
         result = f"{status}\n--- stdout ---\n{out}\n--- stderr ---\n{err}"
         return self._note_redactions(result, n1 + n2)
+
+    # --- background commands (run_command background=true + check_task) -----
+    def _start_background_command(self, command: str) -> str:
+        """Start a command detached from the agent loop and return a task id.
+
+        Output goes to named temp files (same rationale as the foreground
+        path: file reads can't block on a live pipe). The parent's handles are
+        closed right after spawn — the child keeps its own — and check_task
+        re-opens the files by path to read the latest output."""
+        out_f = tempfile.NamedTemporaryFile(prefix="kbcode-bg-", suffix=".out", delete=False)
+        err_f = tempfile.NamedTemporaryFile(prefix="kbcode-bg-", suffix=".err", delete=False)
+        try:
+            proc = subprocess.Popen(
+                command,
+                shell=True,
+                cwd=str(self.root),
+                stdin=subprocess.DEVNULL,
+                stdout=out_f,
+                stderr=err_f,
+                start_new_session=(os.name != "nt"),
+            )
+        except OSError as exc:
+            out_f.close()
+            err_f.close()
+            return f"Failed to start command: {exc}"
+        finally:
+            # The child inherited its own copies of these handles.
+            out_f.close()
+            err_f.close()
+        self._bg_seq += 1
+        task_id = f"bg-{self._bg_seq}"
+        self.bg_tasks[task_id] = {
+            "proc": proc,
+            "command": command,
+            "out_path": out_f.name,
+            "err_path": err_f.name,
+            "started": time.time(),
+        }
+        return (
+            f"Started background task {task_id} (pid {proc.pid}): $ {command}\n"
+            f"It keeps running while you work. Use check_task(task_id='{task_id}') "
+            "for status and output, or check_task(..., kill=true) to stop it."
+        )
+
+    @staticmethod
+    def _tail_file(path: str, limit: int) -> str:
+        """Last ``limit`` bytes of a file, decoded — never blocks, never loads
+        a huge log wholesale."""
+        try:
+            with open(path, "rb") as f:
+                f.seek(0, os.SEEK_END)
+                size = f.tell()
+                f.seek(max(0, size - limit))
+                return f.read().decode(_OUTPUT_ENCODING, errors="replace")
+        except OSError as exc:
+            return f"(could not read output file: {exc})"
+
+    def _tool_check_task(self, inp: dict) -> str:
+        """Report a background task's status + latest output; optionally kill it."""
+        task_id = str(inp["task_id"]).strip()
+        task = self.bg_tasks.get(task_id)
+        if task is None:
+            known = ", ".join(self.bg_tasks) or "(none running this session)"
+            raise ValueError(f"Unknown task '{task_id}'. Known background tasks: {known}")
+        proc = task["proc"]
+        returncode = proc.poll()
+        killed = False
+        if inp.get("kill") and returncode is None:
+            _kill_process_tree(proc)
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
+            returncode = proc.poll()
+            killed = True
+        elapsed = int(time.time() - task["started"])
+        if killed:
+            status = f"killed (was running {elapsed}s)"
+        elif returncode is None:
+            status = f"running (pid {proc.pid}, {elapsed}s so far)"
+        else:
+            status = f"finished with exit code {returncode} after {elapsed}s"
+        out, n1 = redact_terminal_output_with_count(self._tail_file(task["out_path"], 8000), task["command"])
+        err, n2 = redact_terminal_output_with_count(self._tail_file(task["err_path"], 4000), task["command"])
+        result = (
+            f"Task {task_id}: $ {task['command']}\n"
+            f"status: {status}\n--- stdout (tail) ---\n{out}\n--- stderr (tail) ---\n{err}"
+        )
+        return self._note_redactions(result, n1 + n2)
+
+    def stop_background_tasks(self) -> int:
+        """Kill any still-running background tasks (called at process exit via
+        Agent.close, so a dev server the model started can't outlive kbcode
+        silently). Returns how many were stopped."""
+        stopped = 0
+        for task in self.bg_tasks.values():
+            proc = task["proc"]
+            if proc.poll() is None:
+                _kill_process_tree(proc)
+                stopped += 1
+        return stopped
 
     def _tool_repo_map(self, inp: dict) -> str:
         """Return a concise structural map of key symbols (classes, functions, etc.)

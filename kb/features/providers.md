@@ -1,7 +1,7 @@
 # Providers — normalized messages, translation, resilience, interrupts.
 
 ## Normalized messages + `raw` replay
-`Agent.messages` (`kbcode/agent.py:92`) is provider-agnostic, never a provider's native
+`Agent.messages` (`kbcode/agent.py:97`) is provider-agnostic, never a provider's native
 shape: `{"role":"user","content"}` (+ optional `"images"`), `{"role":"assistant",
 "text","tool_calls","raw"}`, `{"role":"tool_results","results"}`. Each provider's
 `_to_native` (Anthropic `kbcode/provider.py:187`, OpenAI-compatible `kbcode/provider.py:430`)
@@ -57,7 +57,7 @@ path iterates the SDK's event stream (synthetic `"text"` events for deltas,
 `content_block_start` with a `tool_use` block for names) instead of the old
 `text_stream`; the OpenAI path fires on the first name fragment per tool-call
 index. `Agent._complete()` forwards `on_tool` and `Agent.run` passes
-`ui.stream_tool_hint` (`kbcode/ui.py:497`), which prints one dim `⏺ name …`
+`ui.stream_tool_hint` (`kbcode/ui.py:507`), which prints one dim `⏺ name …`
 line — after stopping any live spinner and closing a half-printed streamed
 line (`TerminalUI._stream_open`), same thread rules as `stream_chunk` (see
 [[gotchas]]). The real described `tool_call()` line still follows when the
@@ -87,7 +87,7 @@ backoff (`_MAX_RETRIES`/`_BACKOFF_BASE`, `kbcode/provider.py:58-59`). Hard error
 staged fallback still works.
 
 ## Interrupt mid-request
-`Agent._complete()` (`kbcode/agent.py:126`) runs the blocking `provider.complete`/
+`Agent._complete()` (`kbcode/agent.py:131`) runs the blocking `provider.complete`/
 `stream` call on a daemon worker thread and polls `done.wait(0.05)` on the main
 thread — a blocking socket read swallows `KeyboardInterrupt` until it returns, so
 without the poll, Esc would feel dead while "thinking...". `interrupt_on_escape()`

@@ -11,7 +11,7 @@ JSON-RPC 2.0 over stdin/stdout. Only `initialize`, `tools/list`, `tools/call`.
 - `MCPClient` (`kbcode/tools/mcp.py:104`) — subprocess lifecycle, per-client lock, reader thread
 - `MCPManager` (`kbcode/tools/mcp.py:265`) — owns all clients, namespaces tools as `mcp__server__tool`
 - `MCPServerConfig` (`kbcode/tools/mcp.py:43`) — parsed from `mcpServers` block in settings.json
-- Dispatch: `ToolsCore.execute()` (`kbcode/tools/core.py:104`) forks on `mcp__` prefix → `_execute_mcp()`
+- Dispatch: `ToolsCore.execute()` (`kbcode/tools/core.py:109`) forks on `mcp__` prefix → `_execute_mcp()`
 - Config merge: `load_mcp_servers()` (`kbcode/config.py:325`) — per-server union home→launch→project
 
 ## Tool namespacing
@@ -19,7 +19,7 @@ JSON-RPC 2.0 over stdin/stdout. Only `initialize`, `tools/list`, `tools/call`.
 `mcp__<server>__<tool>` — the Claude Code convention. Cannot collide with built-ins and
 far from them in edit-distance for `_repair()`'s fuzzy match.
 
-## Safety rails (`kbcode/tools/core.py:116`)
+## Safety rails (`kbcode/tools/core.py:121`)
 
 | Condition | Permission prompt | Checkpoint | Redaction |
 |---|---|---|---|

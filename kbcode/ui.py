@@ -192,6 +192,14 @@ def _describe_repo_map(a, g, full):
     return "Map", g("path") or "project"
 
 
+def _describe_fetch_url(a, g, full):
+    return "Fetch", g("url")
+
+
+def _describe_check_task(a, g, full):
+    return ("Kill task" if a.get("kill") else "Check task"), g("task_id")
+
+
 _TOOL_DESCRIBERS = {
     "read_file": _describe_read_file,
     "write_file": _describe_write_file,
@@ -210,6 +218,8 @@ _TOOL_DESCRIBERS = {
     "manage_todos": _describe_manage_todos,
     "run_subagent": _describe_run_subagent,
     "web_search": _describe_web_search,
+    "fetch_url": _describe_fetch_url,
+    "check_task": _describe_check_task,
 }
 
 

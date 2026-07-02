@@ -40,6 +40,11 @@ class ToolsCore:
         # attaches the manager here; None = no MCP configured.
         self.mcp: MCPManager | None = None
         self._run_command_count = 0  # per-turn safety rail, reset by new_turn()
+        # Background commands (run_command background=true): task id -> record
+        # with the Popen handle + output file paths. Lives across turns; the
+        # processes are killed at exit via stop_background_tasks() (file.py).
+        self.bg_tasks: dict[str, dict] = {}
+        self._bg_seq = 0  # monotonically increasing suffix for task ids
         # Set per-turn by Agent as context fills up (#4.2); None = fixed default.
         self.context_budget_chars: int | None = None
         self._rg_available: bool | None = None  # cached shutil.which("rg") check

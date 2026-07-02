@@ -156,3 +156,64 @@ def test_summarize_failure_does_not_raise():
 
     summary = compaction._summarize(_BrokenProvider(), "some transcript")
     assert "summary failed" in summary
+
+
+# --- pass 0: trim old tool outputs (no LLM call) ---------------------------
+
+
+def _exchanges_with_bulky_tool_output(n_exchanges: int, bulk_chars: int = 5000) -> list[dict]:
+    messages: list[dict] = []
+    for i in range(n_exchanges):
+        messages.append(_user(f"task {i}"))
+        messages.append({"role": "assistant", "text": "", "tool_calls": [_FakeToolCall(f"c{i}")], "raw": {}})
+        messages.append(
+            {"role": "tool_results", "results": [{"id": f"c{i}", "content": "x" * bulk_chars, "is_error": False}]}
+        )
+        messages.append(_assistant(f"done {i}"))
+    return messages
+
+
+def test_trim_shrinks_old_tool_results_but_protects_the_tail():
+    messages = _exchanges_with_bulky_tool_output(4)
+    new_messages, trimmed = compaction._trim_old_tool_results(messages, keep_tail=2)
+
+    assert trimmed == 2  # the two old exchanges' bulky results
+    # old results are trimmed with the marker...
+    assert "kbcode trimmed" in new_messages[2]["results"][0]["content"]
+    assert len(new_messages[2]["results"][0]["content"]) < 1000
+    # ...the protected tail is byte-identical
+    assert new_messages[-6:] == messages[-6:]
+    # the input list was not mutated (session transcripts keep the originals)
+    assert len(messages[2]["results"][0]["content"]) == 5000
+    # nothing added/removed/reordered → pairing + alternation trivially intact
+    assert [m["role"] for m in new_messages] == [m["role"] for m in messages]
+
+
+def test_trim_alone_satisfying_threshold_skips_the_llm_summary():
+    messages = _exchanges_with_bulky_tool_output(4)
+    provider = _FakeProvider()
+    threshold = compaction.estimate_tokens(messages)  # trimming will land well under
+
+    new_messages, summary = compaction.compact(messages, provider, threshold=threshold)
+
+    assert provider.calls == 0  # pass 0 was enough — no model round-trip
+    assert "trimmed 2 old tool outputs" in summary
+    assert compaction.estimate_tokens(new_messages) < threshold
+
+
+def test_trim_feeds_into_summary_passes_when_still_over_threshold():
+    messages = _exchanges_with_bulky_tool_output(6)
+    provider = _FakeProvider(summary="recap")
+
+    new_messages, summary = compaction.compact(messages, provider, threshold=1)
+
+    assert provider.calls >= 1  # still over the (absurdly low) threshold → summarized
+    assert "trimmed" in summary and "recap" in summary
+    assert compaction.estimate_tokens(new_messages) < compaction.estimate_tokens(messages)
+
+
+def test_trim_ignores_small_results_and_empty_history():
+    small = [_user("t"), {"role": "tool_results", "results": [{"id": "c", "content": "tiny", "is_error": False}]}]
+    unchanged, trimmed = compaction._trim_old_tool_results(small, keep_tail=0)
+    assert trimmed == 0 and unchanged == small
+    assert compaction._trim_old_tool_results([], keep_tail=2) == ([], 0)

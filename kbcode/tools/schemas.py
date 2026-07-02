@@ -175,12 +175,62 @@ BASE_SCHEMAS: list[dict] = [
         },
     },
     {
-        "name": "run_command",
-        "description": "Run a shell command in the project root. Use for tests, builds, git, installs. Needs user approval.",
+        "name": "fetch_url",
+        "parallel_safe": True,
+        "description": (
+            "Fetch a web page or API endpoint (http/https) and return its readable "
+            "text (HTML is converted to plain text; JSON/text returned as-is). "
+            "Use after web_search to read a promising result, or to pull docs, "
+            "READMEs, changelogs, or raw files."
+        ),
         "input_schema": {
             "type": "object",
-            "properties": {"command": {"type": "string"}},
+            "properties": {
+                "url": {"type": "string", "description": "The http(s) URL to fetch."},
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "run_command",
+        "description": (
+            "Run a shell command in the project root. Use for tests, builds, git, "
+            "installs. Needs user approval. Set background=true for long-running "
+            "commands (dev servers, watchers) — it returns a task id immediately; "
+            "poll it with check_task."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string"},
+                "background": {
+                    "type": "boolean",
+                    "description": (
+                        "Run without waiting: start the command, return a task id at once. "
+                        "For servers/watchers/long builds. Defaults to false."
+                    ),
+                },
+            },
             "required": ["command"],
+        },
+    },
+    {
+        "name": "check_task",
+        "description": (
+            "Check on a background command started with run_command(background=true): "
+            "returns its status (running/finished) and latest output. Pass kill=true "
+            "to stop it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "The id run_command returned, e.g. 'bg-1'."},
+                "kill": {
+                    "type": "boolean",
+                    "description": "Stop the task (and its process tree). Defaults to false.",
+                },
+            },
+            "required": ["task_id"],
         },
     },
     {
@@ -233,6 +283,9 @@ BASE_SCHEMAS: list[dict] = [
     },
     {
         "name": "recall",
+        # Memory serializes all SQLite access behind an internal lock (memory.py),
+        # so this pure read is safe to run concurrently with other reads.
+        "parallel_safe": True,
         "description": "Search long-term memory for relevant past facts before starting a task.",
         "input_schema": {
             "type": "object",

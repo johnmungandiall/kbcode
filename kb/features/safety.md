@@ -5,20 +5,25 @@ Two per-turn caps stop a looping model from burning tokens forever: the agent
 loop's step cap (`Agent.max_steps`, from `Config.max_steps` /
 `KBCODE_MAX_STEPS`, default 50) and the `run_command` cap
 (`Config.max_commands_per_turn` / `KBCODE_MAX_COMMANDS`, default 25, enforced
-in `_tool_run_command`, `kbcode/tools/file.py:399`). Both end the turn safely —
+in `_tool_run_command`, `kbcode/tools/file.py:400`). Both end the turn safely —
 the user says "continue" to resume. Details and history: [[gotchas]], [[config]].
 
 ## run_command hang-proofing
-`_tool_run_command` (`kbcode/tools/file.py:399`) runs via `Popen` writing to
+`_tool_run_command` (`kbcode/tools/file.py:400`) runs via `Popen` writing to
 temp FILES with `stdin=DEVNULL` — never `subprocess.run(capture_output=True)`.
 Pipes hang: a grandchild that outlives the shell (`taskkill && start
 explorer.exe`, a spawned dev server) inherits the pipe handles, so the pipe
 read blocks on EOF forever, sailing straight past the timeout (the real-world
 "running… 3142s" bug). Timeout is `_COMMAND_TIMEOUT` (180s,
-`kbcode/tools/file.py:21`); on expiry `_kill_process_tree()`
-(`kbcode/tools/file.py:66`) kills the whole tree (`taskkill /F /T` on Windows,
+`kbcode/tools/file.py:22`); on expiry `_kill_process_tree()`
+(`kbcode/tools/file.py:67`) kills the whole tree (`taskkill /F /T` on Windows,
 `os.killpg` + `start_new_session` on POSIX) and the tool still returns the
 partial output captured so far. Trap stub: [[gotchas]].
+`background: true` runs share the same rate-limit / dangerous-command /
+permission gates (the prompt is flagged "(background — keeps running)"), have
+no timeout by design, and are tree-killed at exit by `stop_background_tasks()`
+— which also fires on `/provider`/`/open` rebuilds ([[tools-and-repair]],
+[[gotchas]]).
 
 ## Secret redaction (Hermes idea)
 `redact.py` masks live credentials — API key prefixes (`sk-`, `ghp_`, `AKIA`,
@@ -50,9 +55,9 @@ maintenance; deleting the `checkpoints/` folder is always safe.
 
 ## Permissions
 `Permissions` (`kbcode/permissions.py:10`) hold an `always_allow` set and call
-`ui.permission(tool, detail)` (`kbcode/ui.py:396`), which renders a context panel then
+`ui.permission(tool, detail)` (`kbcode/ui.py:406`), which renders a context panel then
 offers a selectable Yes/Always/No menu via `prompt_input.select()`, falling
-back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:422`) when no menu
+back to a typed `y/N/a` prompt (`_permission_typed`, `kbcode/ui.py:432`) when no menu
 is available. `Permissions(ui=None)` keeps an ASCII-only `_plain()` path
 (`kbcode/permissions.py:26`) for headless use.
 
@@ -90,31 +95,31 @@ for every hook command in that project.
 `ToolsCore.__init__` builds `self.hooks = HooksRunner(config.hooks,
 self.root)` (`kbcode/tools/core.py:31`) right next to `self.checkpoints` —
 no timeout arg passed, so it always picks up the settings-driven value.
-`Agent._dispatch_tool()` (`kbcode/agent.py:197`) wraps one tool call: runs
+`Agent._dispatch_tool()` (`kbcode/agent.py:202`) wraps one tool call: runs
 `PreToolUse` (blocks without calling the tool if `HookOutcome.blocked`),
 then `self.tools.execute()`, then `PostToolUse` (appends
 `HookOutcome.message` to the result content if present). Every call site
 that used to call `self.tools.execute()` directly now goes through
 `_dispatch_tool()` instead — the sequential path in `Agent.run()`
-(`kbcode/agent.py:338`), the parallel-batch `ThreadPoolExecutor.submit` in
-`_run_parallel_batch()` (`kbcode/agent.py:360`), the plain-text-recovered
-path in `_run_promoted()` (`kbcode/agent.py:468`), two sites inside
-`_run_subagent()` (`kbcode/agent.py:677` and `:719`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:428`), used
+(`kbcode/agent.py:343`), the parallel-batch `ThreadPoolExecutor.submit` in
+`_run_parallel_batch()` (`kbcode/agent.py:398`), the plain-text-recovered
+path in `_run_promoted()` (`kbcode/agent.py:506`), two sites inside
+`_run_subagent()` (`kbcode/agent.py:682` and `:719`), and — #4.3 extension,
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:433`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
-`Agent._stop_hook_feedback()` (`kbcode/agent.py:556`) runs the `Stop` event
+`Agent._stop_hook_feedback()` (`kbcode/agent.py:561`) runs the `Stop` event
 once per turn (gated by `self._stop_hook_checked`, reset in `run()` alongside
 `self._kb_drift_checked`) right after the KB-drift check — a configured
 `Stop` hook can veto ending the turn (e.g. to demand a missing test run),
 and the agent feeds `HookOutcome.message` back as a nudge to continue. This
 general, user-scriptable hooks system is distinct from the baked-in
-KB-lifecycle pseudo-hooks (`_KB_WRITE_TOOLS`, `kbcode/agent.py:67`) that
+KB-lifecycle pseudo-hooks (`_KB_WRITE_TOOLS`, `kbcode/agent.py:72`) that
 mirror claude-kb's PostToolUse/Stop behavior but aren't configurable.
 
 ## MCP calls ride the same rails
 Every `mcp__server__tool` call goes through `ToolsCore._execute_mcp()`
-(`kbcode/tools/core.py:116`): permission prompt by default (side-effects are
+(`kbcode/tools/core.py:121`): permission prompt by default (side-effects are
 opaque, like `run_command`), `ensure_checkpoint("before MCP tool: ...")`
 before anything that may mutate, and the result through
 `redact_terminal_output_with_count` + `_note_redactions` — MCP servers can

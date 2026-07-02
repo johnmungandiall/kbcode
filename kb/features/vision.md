@@ -6,18 +6,18 @@ builds them: `grab_clipboard_image()` (`kbcode/images.py:43`, via Pillow) or
 `load_image_file(path)` (`kbcode/images.py:68`), downscaled to <=1568px PNG
 (`_MAX_DIM`, `kbcode/images.py:27`). Chat input binds **Alt+V** to grab the clipboard
 into a pending buffer (`kbcode/prompt_input.py:247` `_attach_image`); `repl.py` drains
-it and calls `Agent.run(user, images=...)` (`kbcode/agent.py:223`) — the `images` key
+it and calls `Agent.run(user, images=...)` (`kbcode/agent.py:228`) — the `images` key
 is only added when non-empty, so non-vision turns are unaffected. Each
 provider's `_to_native` expands an image-bearing message into its own vision
 format (Anthropic image blocks, OpenAI `image_url` parts — see [[providers]]).
-`compaction.estimate_tokens()` (`kbcode/compaction.py:47`) counts each image as a flat
+`compaction.estimate_tokens()` (`kbcode/compaction.py:49`) counts each image as a flat
 ~1300 tokens instead of its base64 length.
 
 ## Auxiliary vision fallback
 `provider._classify()` recognizes the specific error a non-vision model/route
 gives back for an image request and raises `ProviderError("...doesn't support
 image input.")`. `Agent.run` catches exactly that and calls
-`_try_vision_fallback` (`kbcode/agent.py:166`), which asks `vision_fallback
+`_try_vision_fallback` (`kbcode/agent.py:171`), which asks `vision_fallback
 .describe_images()` (`kbcode/vision_fallback.py:131`) for a text description, rewrites
 the pending message in place, and retries — so the image is described once and
 never resent as bytes. `_candidates()` (`kbcode/vision_fallback.py:43`) builds an

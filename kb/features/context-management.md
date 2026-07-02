@@ -5,14 +5,22 @@ built-in knowledge-base feature (`knowledge_base.py`) for its end users — the
 same mechanism this repo's own `kb/` tree (what you're reading now) dogfoods.
 
 ## Compaction
-When `estimate_tokens(messages)` (`kbcode/compaction.py:47`) crosses
-`compact_threshold`, `compact()` (`kbcode/compaction.py:193`) runs **two passes**
-and returns `(messages, None)` only if neither reduced anything:
-1. `_compact_exchanges()` (`kbcode/compaction.py:108`) — the original strategy:
+When `estimate_tokens(messages)` (`kbcode/compaction.py:49`) crosses
+`compact_threshold`, `compact()` (`kbcode/compaction.py:241`) runs **three
+passes** and returns `(messages, None)` only if none reduced anything:
+0. `_trim_old_tool_results()` (`kbcode/compaction.py:82`) — free, no LLM call:
+   truncate tool_results over ~800 chars to their first `_TRIM_KEEP_CHARS`
+   (600) + a "[... kbcode trimmed N chars ...]" marker, everywhere EXCEPT the
+   last `keep_tail` exchanges. Never mutates the input list (transcripts keep
+   the originals). `compact()` takes a `threshold` kwarg (passed by
+   `compact_now`, = `compact_threshold`); if trimming alone lands the estimate
+   under `threshold * 0.8`, the summarize passes are skipped entirely — no
+   model round-trip.
+1. `_compact_exchanges()` (`kbcode/compaction.py:156`) — the original strategy:
    summarize the *middle exchanges* into one recap (`_summarize`,
-   `kbcode/compaction.py:98`, `_render`, `kbcode/compaction.py:77`) spliced onto the
+   `kbcode/compaction.py:146`, `_render`, `kbcode/compaction.py:125`) spliced onto the
    first kept tail turn, protecting the first + last exchanges.
-2. `_compact_within_last_exchange()` (`kbcode/compaction.py:146`) — shrink a single
+2. `_compact_within_last_exchange()` (`kbcode/compaction.py:194`) — shrink a single
    runaway exchange from the inside (one user turn + many assistant/tool_results
    pairs, e.g. a turn that hit the step limit). Pass 1 *can't* touch this — it
    always protects the most recent exchange, which is the bloated one — so
@@ -22,10 +30,11 @@ and returns `(messages, None)` only if neither reduced anything:
    only whole (assistant, tool_results) pairs, preserving tool-id pairing +
    alternation (see [[providers]], [[gotchas]]).
 
-Both passes preserve the alternation invariant. Auto-triggered in
-`Agent._maybe_compact()` (`kbcode/agent.py:790`) and mid-turn by
-`_compact_mid_turn_or_stop()` (`kbcode/agent.py:446`); manual via `/compact` ->
-`Agent.compact_now()` (`kbcode/agent.py:849`).
+All passes preserve the alternation invariant (pass 0 trivially — nothing is
+added, removed, or reordered). Auto-triggered in
+`Agent._maybe_compact()` (`kbcode/agent.py:839`) and mid-turn by
+`_compact_mid_turn_or_stop()` (`kbcode/agent.py:484`); manual via `/compact` ->
+`Agent.compact_now()` (`kbcode/agent.py:859`).
 
 ## Knowledge base (product feature)
 `KnowledgeBase` (`kbcode/knowledge_base.py:153`) holds `kb/` notes loaded into the
@@ -40,15 +49,15 @@ definition line, then a unique call, then a unique mention).
 
 ## KB lifecycle hooks (agent.py — baked-in default, no `.claude/settings.json`
 equivalent inside kbcode itself)
-`Agent._with_kb_reminder()` (`kbcode/agent.py:502`) is the PostToolUse equivalent —
+`Agent._with_kb_reminder()` (`kbcode/agent.py:540`) is the PostToolUse equivalent —
 after a successful `write_file`/`edit_file` outside `kb/`/`.kbcode/`/`.git/`/
 `node_modules/` and the top-level docs, it appends a once-per-session reminder
-(`_kb_reminder_done`, set `kbcode/agent.py:109`) nudging the model to update the
-matching note. `Agent._kb_drift_feedback()` (`kbcode/agent.py:529`) is the Stop
+(`_kb_reminder_done`, set `kbcode/agent.py:114`) nudging the model to update the
+matching note. `Agent._kb_drift_feedback()` (`kbcode/agent.py:567`) is the Stop
 equivalent — when the model tries to end a turn that touched files
-(`_kb_touched_this_run`, `kbcode/agent.py:110`), it runs `check_pointers()` and, on
+(`_kb_touched_this_run`, `kbcode/agent.py:115`), it runs `check_pointers()` and, on
 drift, feeds the broken pointers back as one more `user` turn instead of
-returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:111`) so it nudges at most
+returning; guarded by `_kb_drift_checked` (`kbcode/agent.py:116`) so it nudges at most
 once per turn.
 
 See [[sessions]] for how compaction interacts with session replay,

@@ -80,3 +80,49 @@ def test_web_search_reports_missing_package(tmp_path, monkeypatch):
     monkeypatch.setitem(sys.modules, "ddgs", None)  # forces `import ddgs` to raise ImportError
     out = tools._tool_web_search({"query": "q"})
     assert "pip install ddgs" in out
+
+
+# --- fetch_url --------------------------------------------------------------
+
+
+def test_fetch_url_converts_html_to_text(tmp_path, monkeypatch):
+    tools = _make_tools(tmp_path)
+    page = (
+        "<!doctype html><html><head><title>t</title><style>p{}</style></head>"
+        "<body><script>var x=1;</script><h1>Docs</h1><p>First &amp; second.</p>"
+        "<li>item one</li></body></html>"
+    )
+    monkeypatch.setattr(web_mod, "_fetch", lambda url: ("text/html; charset=utf-8", page))
+
+    out = tools._tool_fetch_url({"url": "https://example.com/docs"})
+
+    assert "Docs" in out and "First & second." in out and "item one" in out
+    assert "<p>" not in out and "var x=1" not in out  # tags + scripts stripped
+
+
+def test_fetch_url_returns_non_html_as_is_and_truncates(tmp_path, monkeypatch):
+    tools = _make_tools(tmp_path)
+    body = '{"key": "value"}' + "x" * (web_mod._FETCH_MAX_CHARS + 100)
+    monkeypatch.setattr(web_mod, "_fetch", lambda url: ("application/json", body))
+
+    out = tools._tool_fetch_url({"url": "https://api.example.com/data"})
+
+    assert '{"key": "value"}' in out
+    assert "truncated" in out
+
+
+def test_fetch_url_rejects_non_http_schemes(tmp_path):
+    tools = _make_tools(tmp_path)
+    out = tools._tool_fetch_url({"url": "file:///etc/passwd"})
+    assert "only supports http" in out
+
+
+def test_fetch_url_reports_fetch_failure(tmp_path, monkeypatch):
+    tools = _make_tools(tmp_path)
+
+    def boom(url):
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(web_mod, "_fetch", boom)
+    out = tools._tool_fetch_url({"url": "https://down.example.com"})
+    assert "Error" in out and "connection refused" in out

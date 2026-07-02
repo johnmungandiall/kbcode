@@ -11,15 +11,15 @@ model unchanged (see [[providers]]).
 - `wizard.py` — `model_wizard()`, the `kbcode model` provider/key/model setup flow
 - `agent.py` — the agent loop (`Agent.run`), subagent delegation, `/insights`
 - `provider.py` — `AnthropicProvider` + `OpenAICompatibleProvider` behind `LLMProvider` ABC ([[providers]])
-- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search`, [[gotchas]]), `mcp.py` (stdio MCP client + `MCPManager`, [[mcp]]), `schemas.py` ([[tools-and-repair]])
+- `tools/` — package (was `tools.py` pre-v1.6.0): `core.py` (`Tools`, `_repair`, `_resolve`), `file.py` (read/write/edit/list/search/run + background tasks `check_task`/`stop_background_tasks` + `_protected_reason`), `kb.py`, `memory.py`, `planning.py`, `subagent.py`, `web.py` (`web_search` + `fetch_url`, [[gotchas]]), `mcp.py` (stdio MCP client + `MCPManager`, [[mcp]]), `schemas.py` ([[tools-and-repair]])
 - `config.py` — `Config` dataclass, `load_config()`, provider presets, `~/.kbcode` settings; per-project runtime state lives in `Config.state_dir` = `~/.kbcode/projects/<slug>/`, project `.kbcode/` is config-only + self-gitignored ([[config]])
 - `modes.py` — `Mode` dataclass + 4 builtins + custom mode loader from `.kbcode/modes/` ([[modes-subagents]])
 - `subagents.py` — `Subagent` loader from `.kbcode/agents/*.md` ([[modes-subagents]])
 - `knowledge_base.py` — `KnowledgeBase` class, scaffold templates, `check_pointers()` + `fix_pointers()` ([[context-management]])
-- `memory.py` — `Memory` class (SQLite), `remember`/`recall`/`save_skill`
+- `memory.py` — `Memory` class (SQLite, thread-safe: RLock + `check_same_thread=False` so parallel batches/subagents can `recall`), `remember`/`recall`/`save_skill`
 - `prompts.py` — `build_system_prompt()` assembles system message from base + current date/time + standing orders + AGENT.md + kb + skills + memories
 - `sessions.py` — `SessionRecorder` (JSONL per chat), `list_sessions`, `load_session`, `lifetime_stats` ([[sessions]])
-- `compaction.py` — `compact()` summarizes old turns to stay within context window ([[context-management]])
+- `compaction.py` — `compact()`: free trim of old tool outputs (pass 0), then summarizes old turns to stay within context window ([[context-management]])
 - `repair.py` — `promote()` recovers tool calls written as plain text ([[tools-and-repair]])
 - `pricing.py` — per-model USD cost tables for `/insights`
 - `permissions.py` — approval gating (Yes/Always/No menu) ([[safety]])
@@ -34,8 +34,8 @@ model unchanged (see [[providers]]).
 
 ## Data / control flow
 1. `main()` (`kbcode/cli.py:373`) → `load_config()` → `_build_agent()` → `repl()` (`kbcode/repl.py:222`)
-2. User types a message → `Agent.run()` (`kbcode/agent.py:223`) → `Agent._complete()` (`kbcode/agent.py:126`) calls provider
-3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:97`) — built-ins via `_tool_<name>` methods, `mcp__*` names via the MCP fork ([[mcp]]) — see [[safety]]
+2. User types a message → `Agent.run()` (`kbcode/agent.py:228`) → `Agent._complete()` (`kbcode/agent.py:131`) calls provider
+3. Provider returns text + tool_calls → agent loop dispatches through `Agent._dispatch_tool()` (`kbcode/agent.py:202`), which runs `PreToolUse`/`PostToolUse` hooks around `Tools.execute()` (`kbcode/tools/core.py:102`) — built-ins via `_tool_<name>` methods, `mcp__*` names via the MCP fork ([[mcp]]) — see [[safety]]
 4. Tool results appended → loop repeats until no more tool_calls
 5. Session recorded via `SessionRecorder`, auto-compacted when context grows
 

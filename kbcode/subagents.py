@@ -18,17 +18,16 @@ Define them as markdown files in ``.kbcode/agents/*.md``::
 The agent's name is the filename (``code-explorer.md`` -> ``code-explorer``).
 
 If the model asks for several ``run_subagent`` calls in one turn, they run
-concurrently (#4.3 extension) instead of one-at-a-time — but ONLY when every
-targeted subagent's ``tools:`` list is an explicit, narrow subset of the
-schema-declared parallel-safe tools (``read_file``, ``list_dir``,
-``search_code``, ``kb_read``, ``kb_search``, ``web_search`` — see
-``tools/schemas.py``). The default ``tools: read`` shown above does NOT
-qualify, since it also includes ``recall``/``manage_todos``, which touch
-state that isn't thread-safe to share. Narrow a subagent's ``tools:`` to
-just the read-only tools it needs (e.g. ``tools: read_file, list_dir, search_code``)
-to make it eligible for concurrent dispatch *and* for fast internal batching of
-reads inside its own loop (see `_run_subagent_parallel_batch` in agent.py).
-See :meth:`Agent._subagent_parallel_safe`.
+concurrently (#4.3 extension) instead of one-at-a-time — when every targeted
+subagent's ``tools:`` list stays within the schema-declared parallel-safe
+tools (``read_file``, ``list_dir``, ``search_code``, ``repo_map``,
+``kb_read``, ``kb_search``, ``web_search``, ``fetch_url``, ``recall`` — see
+``tools/schemas.py``) plus the tolerated ``manage_todos``. The default
+``tools: read`` shown above therefore QUALIFIES: Memory serializes its
+SQLite access behind a lock (so ``recall`` is parallel-safe), and
+``manage_todos``'s whole-list replacement is atomic. Any write/exec tool, or
+``tools:`` omitted entirely via ``None`` ("every tool"), keeps a subagent
+sequential. See :meth:`Agent._subagent_parallel_safe`.
 """
 
 from __future__ import annotations

@@ -24,5 +24,9 @@ class PlanningToolsMixin:
             if status not in _TODO_MARKS:
                 status = "pending"
             cleaned.append({"task": task, "status": status})
+        # A single attribute assignment — atomic under the GIL, so concurrent
+        # subagents (#4.3 extension) can only overwrite each other's list,
+        # never corrupt it. That's why _SUBAGENT_PARALLEL_EXTRAS (agent.py)
+        # tolerates this tool without it being schema-parallel_safe.
         self.todos = cleaned
         return "Updated checklist:\n" + format_todos(cleaned)

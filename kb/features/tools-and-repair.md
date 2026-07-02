@@ -7,48 +7,65 @@ tool call written as plain text — `[read_file]\n{...}` (`_find_bracketed`,
 `kbcode/repair.py:136`), `<name>{...}</name>` (`_find_tagged`, `kbcode/repair.py:148`), or a
 bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.py:160`)
 — only for names the mode actually offers. `Agent._run_promoted()`
-(`kbcode/agent.py:468`) runs them and feeds outputs back as a plain `user` turn (no
+(`kbcode/agent.py:506`) runs them and feeds outputs back as a plain `user` turn (no
 native tool ids to replay) with a nudge to use the real format.
 
-*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:97`) runs `_repair()`
-(`kbcode/tools/core.py:139`) first — unknown tool name -> closest match via
+*Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:102`) runs `_repair()`
+(`kbcode/tools/core.py:144`) first — unknown tool name -> closest match via
 `difflib`; missing required args -> names them. Every call site wraps
-`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:197`), which runs
+`execute()` in `Agent._dispatch_tool()` (`kbcode/agent.py:202`), which runs
 configured PreToolUse/PostToolUse hooks around it — see [[safety]].
 
 ## MCP tools (external servers, namespaced `mcp__server__tool`)
 When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
 an `MCPManager` to `Tools.mcp` (`kbcode/tools/core.py:41`); `ToolsCore.schemas`
-appends the live server schemas (`kbcode/tools/core.py:57`) so `_repair()` and
+appends the live server schemas (`kbcode/tools/core.py:62`) so `_repair()` and
 `parallel_safe_tools` cover them for free, and `execute()` forks on the
-`mcp__` prefix (`kbcode/tools/core.py:104`) into `_execute_mcp()`
-(`kbcode/tools/core.py:116`) — permission gate, checkpoint, redaction, then
+`mcp__` prefix (`kbcode/tools/core.py:109`) into `_execute_mcp()`
+(`kbcode/tools/core.py:121`) — permission gate, checkpoint, redaction, then
 the JSON-RPC call. The prefix keeps MCP names far from built-ins in
 edit-distance, so difflib never "corrects" across the namespace boundary.
 Deep dive: [[mcp]].
 
 ## Path resolution & protected files
-`_resolve()` (`kbcode/tools/core.py:128`) anchors a relative path to the
+`_resolve()` (`kbcode/tools/core.py:133`) anchors a relative path to the
 project root but honors an absolute path exactly as given, even outside the
 project — kbcode is not sandboxed to the project folder. `_protected_reason()`
-(`kbcode/tools/file.py:115`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
-(`_PROTECTED_DIRS`, `kbcode/tools/file.py:30`), `.env`/secrets/private keys
-(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:31-32`), and
-kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:33`) — checked
+(`kbcode/tools/file.py:116`) refuses `write_file`/`edit_file` to `.git/`/`.ssh/`
+(`_PROTECTED_DIRS`, `kbcode/tools/file.py:31`), `.env`/secrets/private keys
+(`_PROTECTED_NAMES`/`_PROTECTED_SUFFIXES`, `kbcode/tools/file.py:32-33`), and
+kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:34`) — checked
 against the full resolved path, not just relative to the project root — while
 allowing templates (`.env.example`, `_ENV_TEMPLATE_TAILS`,
-`kbcode/tools/file.py:34`), `.gitignore`, and user-authored `.kbcode/agents`/
-`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:136`) drives
+`kbcode/tools/file.py:35`), `.gitignore`, and user-authored `.kbcode/agents`/
+`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:141`) drives
 the `-- OUTSIDE the project folder` flag on the permission prompt.
-`_display_path()` (`kbcode/tools/core.py:139`) formats a resolved path for tool
+`_display_path()` (`kbcode/tools/core.py:144`) formats a resolved path for tool
 output — relative to the root when inside the project, absolute otherwise —
 because those same out-of-project paths make a bare `Path.relative_to(root)`
 raise `ValueError`, which would abort the tool (search hits used to do this; see
 [[gotchas]]). New tools that print a resolved path must go through it.
 
 ## The roster & UI
-Tools: `read/write/edit/edit_files/list/search/run` + `kb_read/kb_write` +
-`remember/recall/save_skill` + `manage_todos` + `web_search` + `repo_map`
+Tools: `read/write/edit/edit_files/list/search/run` + `check_task` + `kb_read/kb_write` +
+`remember/recall/save_skill` + `manage_todos` + `web_search` + `fetch_url` + `repo_map`
+
+`run_command` accepts optional `background: true`: after the same rate-limit /
+dangerous-command / permission gates (prompt shows "(background — keeps
+running)"), `_start_background_command()` (`kbcode/tools/file.py:472`) starts
+the Popen detached (output to named temp files) and returns a task id like
+`bg-1`; the registry is `ToolsCore.bg_tasks` + `_bg_seq` (`kbcode/tools/core.py:46`).
+`check_task` (`_tool_check_task`, `kbcode/tools/file.py:527`) polls it —
+status running/finished/killed + redacted stdout/stderr tails via `_tail_file`
+— and `kill: true` stops it with `_kill_process_tree`. Survivors are killed at
+exit by `stop_background_tasks()` (`kbcode/tools/file.py:560`), called from
+`Agent.close()` — note that also fires on `/provider`/`/open` agent rebuilds
+(see [[gotchas]]).
+
+`fetch_url` (`_tool_fetch_url`, `kbcode/tools/web.py:82`) fetches an http(s)
+URL via stdlib urllib in a worker thread (hang-proof, 20s cap, 2 MB / 20k-char
+limits); HTML is converted to plain text by `_html_to_text`, JSON/plain text
+returned as-is. No API key; `parallel_safe`.
 
 `read_file` supports optional `offset` (1-based) + `limit` (lines) for reading slices of large files without shell chunking or full loads. When a range is given it streams lines (no full file load in memory).
 
@@ -58,21 +75,21 @@ New tools `repo_map` (structural overview) and `edit_files` (multi-file edits) w
 in a single step (with one permission dialog showing diffs), similar to how
 advanced AI-native editors like Zed let their agents perform multi-file refactors
 and feature implementations cleanly.
-(`_tool_web_search`, `kbcode/tools/web.py:39`) + the conditional
+(`_tool_web_search`, `kbcode/tools/web.py:112`) + the conditional
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:213`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:192`). Every describer
+directly; `_describe_tool()` (`kbcode/ui.py:226`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:203`). Every describer
 entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
 a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 
 ## Parallel-safe tools (#4.3)
 Consecutive **read-only** tool calls run concurrently (`Agent._run_parallel_batch`,
-`kbcode/agent.py:360`); mutating tools stay sequential. Which tools are safe is
+`kbcode/agent.py:398`); mutating tools stay sequential. Which tools are safe is
 declared per-tool by a `"parallel_safe": True` key on the schema
 (`kbcode/tools/schemas.py`) — the single source of truth. `Agent.run` reads the
-set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:81`, a comprehension
+set via `ToolsCore.parallel_safe_tools` (`kbcode/tools/core.py:86`, a comprehension
 over `schemas`), never a hardcoded list, so a new read-only tool opts in just by
 carrying the flag and can't silently fall back to sequential. `parallel_safe` is
 kbcode-only metadata: the OpenAI path rebuilds tool payloads (`_tools`), and the
@@ -82,22 +99,27 @@ the schema reaches the model API.
 **`run_subagent` conditional extension.** A run of 2+ consecutive `run_subagent`
 calls is also eligible for concurrent dispatch, but only when *every* targeted
 subagent qualifies — `Agent._is_parallel_subagent_call()`
-(`kbcode/agent.py:626`) checks `Agent._subagent_parallel_safe(name)`
-(`kbcode/agent.py:611`), which requires the subagent's own `tools:` frontmatter
+(`kbcode/agent.py:664`) checks `Agent._subagent_parallel_safe(name)`
+(`kbcode/agent.py:649`), which requires the subagent's own `tools:` frontmatter
 (a `frozenset[str]`, never `None`) to be a subset of the same
-`parallel_safe_tools` set above. The default `tools: read` does NOT qualify —
-it includes `recall`/`manage_todos`, which touch Memory's non-thread-safe
-sqlite3 connection / todos state — so only a subagent deliberately authored
-with a narrow, explicit tool list opts in. `Agent.run`'s batching loop
-(`kbcode/agent.py:304-327`) checks this as a second, symmetric branch after the
+`parallel_safe_tools` set above plus `_SUBAGENT_PARALLEL_EXTRAS`
+(`frozenset({"manage_todos"})`, `kbcode/agent.py:65`). The default `tools: read`
+(the READ group) now QUALIFIES: `recall` is schema-`parallel_safe` since
+Memory serializes all SQLite access behind an RLock
+(`check_same_thread=False`, `kbcode/memory.py:21`), and `manage_todos` is
+tolerated because its whole-list replacement is atomic under the GIL (worst
+case concurrent subagents overwrite each other's checklist, never corrupt
+it — `kbcode/tools/planning.py:31`). Any write/exec tool or `tools: None`
+keeps a subagent sequential. `Agent.run`'s batching loop
+(`kbcode/agent.py:309-332`) checks this as a second, symmetric branch after the
 read-only-tool check; a qualifying run goes through
-`_run_subagents_parallel_batch()` (`kbcode/agent.py:407`), which mirrors
+`_run_subagents_parallel_batch()` (`kbcode/agent.py:445`), which mirrors
 `_run_parallel_batch`'s shape: a `ThreadPoolExecutor` (same
-`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:60`) runs `_quiet_dispatch()` (`kbcode/agent.py:428`)
+`_PARALLEL_MAX_WORKERS = 16` cap, `kbcode/agent.py:64`) runs `_quiet_dispatch()` (`kbcode/agent.py:433`)
 per call, then call/result lines render sequentially afterward in the
 model's original order so `tool_results` stays aligned with tool_call ids.
 `_quiet_dispatch` sets a thread-local flag (`Agent._quiet_subagents`, a
-`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:631`) reads to
+`threading.local()`) that `_run_subagent()` (`kbcode/agent.py:669`) reads to
 suppress its own inline `ui.notice`/`ui.tool_call`/`ui.tool_result`/
 `ui.tool_running()` calls — Rich's Live-backed spinner isn't safe to have two
 open at once. `_quiet_dispatch` still calls through `_dispatch_tool()`, the
@@ -105,7 +127,7 @@ same entry point the sequential path uses, so PreToolUse/PostToolUse hooks
 fire exactly as before (see [[safety]]). Anything else — a single
 `run_subagent` call, mixed eligibility in a run, or a subagent with
 `tools: None` or any write/exec tool — stays fully sequential through the
-normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:586`)
+normal `_run_subagent()` path. `Agent._record_usage()` (`kbcode/agent.py:624`)
 is guarded by `Agent._usage_lock` (a `threading.Lock()` set in `__init__`)
 since it can now be called from multiple subagent pool threads at once — see
 [[modes-subagents]].

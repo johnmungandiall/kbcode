@@ -33,7 +33,7 @@ is non-empty, attaches the `MCPManager` (`kbcode/tools/mcp.py:265`) to
 `Tools.mcp`, registers `atexit` stop as a crash backstop, and prints
 "MCP: git (7 tools), ...". A server that fails to start warns and is
 skipped — never fatal (`start_all`). Normal shutdown is `Agent.close()`
-(`kbcode/agent.py:784`) → `stop_all()` (idempotent) — `/exit`, `/provider`
+(`kbcode/agent.py:789`) → `stop_all()` (idempotent) — `/exit`, `/provider`
 and `/open` all pass through it, so rebuilt agents don't leak old server
 subprocesses. `tools/list` runs once at startup and is cached. **Startup only
 starts what settings.json held at launch** — `/mcp reload`
@@ -47,9 +47,9 @@ Tools are namespaced `mcp__<server>__<tool>` (`MCP_PREFIX`,
 `kbcode/tools/mcp.py:35`) — collision-proof against built-ins and far in
 edit-distance so `_repair()`'s difflib match never "corrects" across the
 namespace boundary; repair works on MCP names for free once schemas are in.
-`ToolsCore.schemas` appends `mcp.schemas()` (`kbcode/tools/core.py:57`);
-`execute()` forks on the prefix (`kbcode/tools/core.py:104`) into
-`_execute_mcp()` (`kbcode/tools/core.py:116`). Requests are serialized by a
+`ToolsCore.schemas` appends `mcp.schemas()` (`kbcode/tools/core.py:62`);
+`execute()` forks on the prefix (`kbcode/tools/core.py:109`) into
+`_execute_mcp()` (`kbcode/tools/core.py:121`). Requests are serialized by a
 per-client lock — parallel-safe dispatch threads would otherwise interleave
 writes on one stdin pipe.
 
@@ -70,7 +70,7 @@ only if the frontmatter lists explicit `mcp__server__tool` names
 `tools: read` subagents never see them. `/mcp` lists servers+tools,
 `/mcp reload` reconnects (`kbcode/repl.py:297`); `/status` appends an MCP
 line; activity lines fall back to a generic `MCP server:tool` describer
-(`kbcode/ui.py:244`). Tests: `tests/test_mcp.py` end-to-end against
+(`kbcode/ui.py:254`). Tests: `tests/test_mcp.py` end-to-end against
 `tests/fake_mcp_server.py`, a real stdio subprocess.
 
 See [[tools-and-repair]] for the dispatch seam, [[gotchas]] for the traps

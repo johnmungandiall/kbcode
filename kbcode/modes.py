@@ -21,12 +21,12 @@ from pathlib import Path
 # manage_todos is planning-only (no file/command side effects), so it lives in
 # READ — the baseline every mode allows, including read-only ask/architect.
 READ = {
-    "read_file", "list_dir", "search_code", "kb_read", "kb_search", "recall",
-    "manage_todos", "web_search",
+    "read_file", "list_dir", "search_code", "repo_map", "kb_read", "kb_search",
+    "recall", "manage_todos", "web_search", "fetch_url",
 }
 NOTES = {"kb_write", "remember", "save_skill"}  # knowledge/memory writes — no code or commands
 EDIT = {"write_file", "edit_file", "edit_files"}
-EXEC = {"run_command"}
+EXEC = {"run_command", "check_task"}  # check_task inspects/kills what run_command started
 
 
 @dataclass(frozen=True)

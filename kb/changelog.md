@@ -2,6 +2,21 @@
 
 The ONLY place release history lives (don't duplicate it in other notes).
 
+## unreleased (2026-07-02)
+- **New tools:** `fetch_url` (read a web page/API via stdlib urllib, HTML→text,
+  no API key, parallel_safe) and `check_task`; `run_command` gained
+  `background: true` (returns a `bg-N` task id at once, poll/kill via
+  `check_task`, survivors killed at exit). See [[tools-and-repair]].
+- **Parallel subagents by default:** `Memory` is now thread-safe (RLock +
+  `check_same_thread=False`), `recall` is `parallel_safe`, and the default
+  `tools: read` subagent set qualifies for concurrent `run_subagent` dispatch
+  (`_SUBAGENT_PARALLEL_EXTRAS` tolerates `manage_todos`). See [[modes-subagents]].
+- **Compaction pass 0:** `_trim_old_tool_results()` shrinks bulky old tool
+  outputs for free (no LLM call) before any summarizing; if that alone lands
+  under `threshold * 0.8` the summary passes are skipped. See [[context-management]].
+- `repo_map` added to the READ tool group (was missing — ask/architect modes
+  couldn't use it); `EXEC` now = `run_command` + `check_task`.
+
 ## v1.11.1 (2026-07-02)
 - **run_command can no longer hang forever.** Output now goes to temp files
   instead of pipes (a grandchild like a relaunched `explorer.exe` inheriting

@@ -482,7 +482,7 @@ def test_parallel_safe_tools_derived_from_schema_flag(tmp_path):
     _agent, tools = _make_agent(tmp_path, provider)
     assert tools.parallel_safe_tools == {
         "read_file", "list_dir", "search_code", "kb_read", "kb_search", "web_search",
-        "repo_map",
+        "repo_map", "fetch_url", "recall",
     }
     flagged = {s["name"] for s in tools.schemas if s.get("parallel_safe")}
     assert tools.parallel_safe_tools == flagged
@@ -576,7 +576,10 @@ def test_subagent_parallel_safe_edge_cases(tmp_path):
     agent.subagents["default_read"] = Subagent(
         name="default_read", description="", instructions="x", tools=frozenset(READ)
     )
-    assert agent._subagent_parallel_safe("default_read") is False  # includes recall/manage_todos
+    # The default READ group now qualifies: recall is parallel_safe (Memory
+    # locks its SQLite access) and manage_todos is tolerated via
+    # _SUBAGENT_PARALLEL_EXTRAS (atomic whole-list replacement).
+    assert agent._subagent_parallel_safe("default_read") is True
 
     agent.subagents["narrow"] = Subagent(
         name="narrow", description="", instructions="x", tools=frozenset({"read_file", "search_code"})
