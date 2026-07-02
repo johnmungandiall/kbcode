@@ -144,11 +144,14 @@ class LLMProvider:
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
         raise NotImplementedError
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
         """Token-by-token variant of complete() (#3.1/#7.1). Default falls back
         to complete() and delivers the whole text as one chunk, so a provider
         that hasn't implemented true streaming still works — just without the
-        incremental display. Subclasses override for real streaming."""
+        incremental display. ``on_tool``, if given, is called with each tool
+        name the moment it appears in the stream (a long tool-call-heavy
+        response otherwise looks frozen); the fallback has nothing incremental
+        to report, so it ignores it. Subclasses override for real streaming."""
         resp = self.complete(system, messages, tools)
         if on_text and resp.text:
             on_text(resp.text)
@@ -226,8 +229,69 @@ class AnthropicProvider(LLMProvider):
             for t in tools
         ]
 
+    # Anthropic allows at most 4 cache_control breakpoints per request; one is
+    # spent on the system prompt (which, being last in the tools -> system ->
+    # messages render order, also covers the tool definitions).
+    _MESSAGE_CACHE_BREAKPOINTS = 3
+
+    @classmethod
+    def _add_cache_breakpoints(cls, native: list[dict]) -> list[dict]:
+        """Mark the newest user-role messages as prompt-cache breakpoints.
+
+        Caching is a prefix match, so the system breakpoint alone still left
+        the whole conversation re-processed at full price on every tool
+        round-trip — the dominant cost of a long agentic turn. Marking the
+        last content block of the newest few user messages lets each request
+        read the previous request's prefix from cache (~0.1x price).
+
+        Several breakpoints, not one, because a cache lookup only walks back
+        20 content blocks for a prior entry — a parallel tool batch can add
+        more than that in a single round-trip, and the extra anchors keep an
+        older entry reachable.
+
+        Only user-role messages are touched: _to_native builds those dicts
+        fresh on every call, so markers never accumulate into Agent.messages
+        (>4 breakpoints in one request is an API error). Assistant messages
+        replay stored ``raw`` SDK blocks and must not be mutated.
+        """
+        marked = 0
+        for msg in reversed(native):
+            if marked >= cls._MESSAGE_CACHE_BREAKPOINTS:
+                break
+            if msg["role"] != "user":
+                continue
+            content = msg["content"]
+            if isinstance(content, str):
+                if not content.strip():
+                    continue  # the API rejects empty text blocks
+                msg["content"] = [
+                    {"type": "text", "text": content, "cache_control": {"type": "ephemeral"}}
+                ]
+            elif content:  # list of tool_result / text / image blocks
+                content[-1]["cache_control"] = {"type": "ephemeral"}
+            else:
+                continue
+            marked += 1
+        return native
+
+    @staticmethod
+    def _usage(u) -> dict | None:
+        """Normalize a response's usage. Cached tokens are reported separately
+        by the API (input_tokens is the *uncached remainder only*), so fold
+        them back in — total prompt size = input + cache writes + cache reads —
+        to keep /cost and the turn summary comparable to pre-caching numbers.
+        (Slightly overstates cost: cache reads bill at ~0.1x. Conservative.)"""
+        if not u:
+            return None
+        return {
+            "input_tokens": (getattr(u, "input_tokens", 0) or 0)
+            + (getattr(u, "cache_creation_input_tokens", 0) or 0)
+            + (getattr(u, "cache_read_input_tokens", 0) or 0),
+            "output_tokens": getattr(u, "output_tokens", 0) or 0,
+        }
+
     def complete(self, system: str, messages: list[dict], tools: list[dict]) -> LLMResponse:
-        native = self._to_native(messages)
+        native = self._add_cache_breakpoints(self._to_native(messages))
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         base = dict(
             model=self.config.model,
@@ -263,15 +327,11 @@ class AnthropicProvider(LLMProvider):
             for b in resp.content
             if getattr(b, "type", None) == "tool_use"
         ]
-        u = getattr(resp, "usage", None)
-        usage = {
-            "input_tokens": getattr(u, "input_tokens", 0) or 0,
-            "output_tokens": getattr(u, "output_tokens", 0) or 0,
-        } if u else None
+        usage = self._usage(getattr(resp, "usage", None))
         return LLMResponse(text=text, tool_calls=tool_calls, raw=resp.content, usage=usage)
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
-        native = self._to_native(messages)
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
+        native = self._add_cache_breakpoints(self._to_native(messages))
         system_blocks = [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
         base = dict(
             model=self.config.model,
@@ -287,10 +347,23 @@ class AnthropicProvider(LLMProvider):
         ]
 
         def do_stream(kwargs):
+            # Iterate the event stream (not just text_stream): the SDK's
+            # synthetic "text" events carry the text deltas, and
+            # content_block_start events reveal a tool call's name the moment
+            # the model starts composing it — surfaced via on_tool so a long
+            # tool-heavy response doesn't look frozen.
             with self.client.messages.stream(**kwargs) as stream_ctx:
-                for chunk in stream_ctx.text_stream:
-                    if on_text and chunk:
-                        on_text(chunk)
+                for event in stream_ctx:
+                    etype = getattr(event, "type", "")
+                    if etype == "text":
+                        chunk = getattr(event, "text", "")
+                        if on_text and chunk:
+                            on_text(chunk)
+                    elif etype == "content_block_start":
+                        block = getattr(event, "content_block", None)
+                        name = getattr(block, "name", "")
+                        if getattr(block, "type", "") == "tool_use" and name and on_tool:
+                            on_tool(name)
                 return stream_ctx.get_final_message()
 
         last_exc: Exception | None = None
@@ -310,11 +383,7 @@ class AnthropicProvider(LLMProvider):
             for b in final.content
             if getattr(b, "type", None) == "tool_use"
         ]
-        u = getattr(final, "usage", None)
-        usage = {
-            "input_tokens": getattr(u, "input_tokens", 0) or 0,
-            "output_tokens": getattr(u, "output_tokens", 0) or 0,
-        } if u else None
+        usage = self._usage(getattr(final, "usage", None))
         return LLMResponse(text=text, tool_calls=tool_calls, raw=final.content, usage=usage)
 
     def list_models(self) -> list[str]:
@@ -421,7 +490,7 @@ class OpenAICompatibleProvider(LLMProvider):
         } if u else None
         return LLMResponse(text=text, tool_calls=tool_calls, raw=raw, usage=usage)
 
-    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None) -> LLMResponse:
+    def stream(self, system: str, messages: list[dict], tools: list[dict], on_text=None, on_tool=None) -> LLMResponse:
         native = self._to_native(system, messages)
 
         def do_stream():
@@ -452,6 +521,11 @@ class OpenAICompatibleProvider(LLMProvider):
                         acc["id"] = tc.id
                     if tc.function:
                         if tc.function.name:
+                            if not acc["name"] and on_tool:
+                                # First name fragment for this call — surface it
+                                # so the user sees progress while the (often
+                                # long) arguments JSON is still streaming in.
+                                on_tool(tc.function.name)
                             acc["name"] += tc.function.name
                         if tc.function.arguments:
                             acc["arguments"] += tc.function.arguments

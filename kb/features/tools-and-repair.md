@@ -51,8 +51,8 @@ and feature implementations cleanly.
 `run_subagent` (see [[modes-subagents]]). `write_file`/`edit_file`/
 `run_command` gate through `Permissions` (see [[safety]]). All terminal output
 goes through `TerminalUI` (`ui.py`) — the loop never calls `console.print`
-directly; `_describe_tool()` (`kbcode/ui.py:211`) renders a human verb+target line,
-looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:190`). Every describer
+directly; `_describe_tool()` (`kbcode/ui.py:212`) renders a human verb+target line,
+looked up per tool name in `_TOOL_DESCRIBERS` (`kbcode/ui.py:191`). Every describer
 entry must be a callable `(a, g, full) -> (verb, target)`; a bare string degrades to
 a static label instead of crashing (`'str' object is not callable` — see [[gotchas]]).
 

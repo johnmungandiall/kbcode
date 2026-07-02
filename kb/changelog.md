@@ -3,6 +3,21 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased / next
+- **2026-07-02: Anthropic prompt caching now covers the conversation, not just
+  system+tools** — `_add_cache_breakpoints()` marks the newest 3 user-role
+  native messages with `cache_control`, so each tool round-trip re-reads the
+  prior history from cache (~0.1x input price) instead of full price; this was
+  the dominant cost of long agentic turns. `_usage()` folds the API's separate
+  cache-token counts back into `input_tokens` so /cost stays comparable.
+  Anthropic provider only. Tests: `tests/test_provider_caching.py`.
+- **2026-07-02: streaming now shows tool names as they're composed** — new
+  `on_tool` callback on `provider.stream()` (both providers) feeds
+  `ui.stream_tool_hint()`, printing a dim `⏺ <name> …` line the moment a tool
+  call starts streaming, so long tool-heavy responses no longer look frozen.
+  The Anthropic stream switched from `text_stream` to event iteration for this.
+- **2026-07-02: new `/diff [n]` command** — show the working tree vs a
+  checkpoint (no `n` = newest) without leaving the REPL; same shadow-git
+  plumbing as `/rollback diff`, now one obvious command.
 - **2026-07-02: per-project runtime state moved to `~/.kbcode/projects/<slug>/`**
   (Claude Code's `~/.claude/projects` layout) — memory.db, sessions/, the
   checkpoints/ shadow repo, input history, and kbcode.log no longer land in the

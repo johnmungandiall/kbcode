@@ -237,6 +237,7 @@ Session:
 - `/cost` — one-line cost summary — `model · tokens · $` (see `/insights` for detail)
 - `/compact` — summarize earlier chat to free up context
 - `/rollback` — undo AI edits from an auto-saved checkpoint
+- `/diff [n]` — show what the AI changed since a checkpoint (no `n` = newest)
 - `/sessions [query]` — list past chat sessions, or full-text search them for a query
 - `/export [id]` — export a session (current, or by id) as a markdown file
 - `/resume [id]` — resume a past session (no id = pick from a list)

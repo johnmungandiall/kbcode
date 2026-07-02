@@ -52,6 +52,7 @@ COMMANDS = [
     ("/kb-check [--fix]", "check (or auto-fix) kb/ path:line pointers"),
     ("/compact", "summarize earlier chat to free up context"),
     ("/rollback", "undo AI edits — pick a checkpoint from a menu (auto-saved before every edit)"),
+    ("/diff [n]", "show what the AI changed since a checkpoint (no n = newest; list them with /rollback)"),
     ("/sessions [query]", "list past chat sessions for this project, or full-text search them"),
     ("/export [id]", "export a session (current, or by id) as a markdown file"),
     ("/resume [id]", "resume a past session (no id = pick from a list)"),
@@ -328,6 +329,9 @@ class TerminalUI:
         # moment real text starts arriving so the spinner's background redraw
         # can't race the streamed prints (see _TickingStatus.stop).
         self._active_status: _TickingStatus | None = None
+        # True while a streamed reply line is half-printed (no trailing
+        # newline yet) — stream_tool_hint() must close it before printing.
+        self._stream_open = False
 
     def turn_started(self) -> None:
         """Mark the start of a new agent turn (call once per user turn)."""
@@ -374,7 +378,7 @@ class TerminalUI:
     def help(self) -> None:
         desc = dict(COMMANDS)
         groups = [
-            ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
+            ("session", ["/help", "/version", "/status", "/ping", "/open <folder>", "/insights", "/cost", "/compact", "/rollback", "/diff [n]", "/sessions [query]", "/export [id]", "/resume [id]", "/reset", "/exit"]),
             ("knowledge & memory", ["/kb", "/kb-check [--fix]", "/memory", "/memory-prune [days]", "/skills", "/learn [topic]"]),
             ("planning & agents", ["/todo", "/agents", "/image [path]", "/video <path> [question]"]),
             ("models & modes", ["/mode [name]", "/provider [name] [model]", "/model [id]"]),
@@ -482,11 +486,29 @@ class TerminalUI:
             return
         if self._active_status is not None:
             self._active_status.stop()
+        self._stream_open = not text.endswith("\n")
         self.console.print(text, end="", markup=False, highlight=False)
 
     def stream_newline(self) -> None:
         """End a streamed response — chunks have no trailing newline of their own."""
+        self._stream_open = False
         self.console.print()
+
+    def stream_tool_hint(self, name: str) -> None:
+        """One dim line the moment the model starts composing a call to *name*,
+        while the response is still streaming — a long tool-call-heavy response
+        otherwise looks frozen (the arguments JSON can take a while to
+        generate). The real tool_call() line, with described args, follows once
+        the response resolves. Same thread rules as stream_chunk: this runs on
+        the provider worker thread, so any live spinner is stopped first."""
+        if not name:
+            return
+        if self._active_status is not None:
+            self._active_status.stop()
+        if self._stream_open:
+            self.console.print()  # close the half-printed streamed line first
+            self._stream_open = False
+        self.console.print(f"{_TOOL_ICON} {name} …", style="dim", markup=False, highlight=False)
 
     def tool_call(self, name: str, args: dict) -> None:
         # Subagent inner calls arrive as "agent-name:tool" — nest them visually.

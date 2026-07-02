@@ -120,12 +120,27 @@ def test_openai_stream_malformed_arguments_json_falls_back_to_empty_dict():
     assert resp.tool_calls[0].input == {}
 
 
+def test_openai_stream_reports_tool_names_via_on_tool_once_per_call():
+    chunks = [
+        _chunk(tool_call_deltas=[_tc_delta(0, id="call_1", name="read_file", arguments="")]),
+        _chunk(tool_call_deltas=[_tc_delta(0, arguments='{"path": "a.py"}')]),
+        _chunk(tool_call_deltas=[_tc_delta(1, id="call_2", name="list_dir", arguments="{}")]),
+    ]
+    provider = _openai_provider(chunks)
+    hints = []
+    provider.stream("sys", [{"role": "user", "content": "hi"}], [], on_tool=hints.append)
+    assert hints == ["read_file", "list_dir"]
+
+
 # --- AnthropicProvider.stream() --------------------------------------------
 
 
 class _FakeAnthropicStreamCtx:
-    def __init__(self, text_chunks, final_message):
-        self.text_stream = iter(text_chunks)
+    """Yields SDK-style stream events: synthetic "text" events for deltas plus
+    raw events like content_block_start (how the provider spots tool names)."""
+
+    def __init__(self, events, final_message):
+        self._events = events
         self._final = final_message
 
     def __enter__(self):
@@ -134,17 +149,31 @@ class _FakeAnthropicStreamCtx:
     def __exit__(self, *exc):
         return False
 
+    def __iter__(self):
+        return iter(self._events)
+
     def get_final_message(self):
         return self._final
 
 
 class _FakeAnthropicClient:
-    def __init__(self, text_chunks, final_message):
-        self._ctx = _FakeAnthropicStreamCtx(text_chunks, final_message)
+    def __init__(self, events, final_message):
+        self._ctx = _FakeAnthropicStreamCtx(events, final_message)
         self.messages = types.SimpleNamespace(stream=self._stream)
 
     def _stream(self, **kwargs):
         return self._ctx
+
+
+def _text_event(text):
+    return types.SimpleNamespace(type="text", text=text)
+
+
+def _tool_start_event(name):
+    return types.SimpleNamespace(
+        type="content_block_start",
+        content_block=types.SimpleNamespace(type="tool_use", name=name),
+    )
 
 
 def _content_block(type_, **kw):
@@ -157,7 +186,7 @@ def test_anthropic_stream_delivers_text_and_final_message():
         usage=types.SimpleNamespace(input_tokens=10, output_tokens=5),
     )
     provider = AnthropicProvider(_config())
-    provider._client = _FakeAnthropicClient(["Hello ", "world"], final)
+    provider._client = _FakeAnthropicClient([_text_event("Hello "), _text_event("world")], final)
 
     seen = []
     resp = provider.stream("sys", [{"role": "user", "content": "hi"}], [], on_text=seen.append)
@@ -184,6 +213,39 @@ def test_anthropic_stream_extracts_tool_use_blocks():
     assert resp.tool_calls[0].name == "read_file"
     assert resp.tool_calls[0].input == {"path": "a.py"}
     assert resp.usage is None
+
+
+def test_anthropic_stream_reports_tool_names_via_on_tool():
+    final = types.SimpleNamespace(
+        content=[_content_block("tool_use", id="tu_1", name="read_file", input={})],
+        usage=None,
+    )
+    provider = AnthropicProvider(_config())
+    provider._client = _FakeAnthropicClient(
+        [_text_event("Let me look. "), _tool_start_event("read_file")], final
+    )
+
+    hints = []
+    provider.stream("sys", [{"role": "user", "content": "hi"}], [], on_tool=hints.append)
+    assert hints == ["read_file"]
+
+
+def test_anthropic_stream_folds_cache_tokens_into_input_usage():
+    # With prompt caching on, the API reports cached tokens separately and
+    # input_tokens holds only the uncached remainder — _usage() folds them
+    # back together so /cost and turn summaries stay meaningful.
+    final = types.SimpleNamespace(
+        content=[_content_block("text", text="hi")],
+        usage=types.SimpleNamespace(
+            input_tokens=100, output_tokens=5,
+            cache_creation_input_tokens=200, cache_read_input_tokens=3000,
+        ),
+    )
+    provider = AnthropicProvider(_config())
+    provider._client = _FakeAnthropicClient([_text_event("hi")], final)
+
+    resp = provider.stream("sys", [{"role": "user", "content": "hi"}], [])
+    assert resp.usage == {"input_tokens": 3300, "output_tokens": 5}
 
 
 def test_anthropic_api_tools_strips_non_api_keys():

@@ -40,6 +40,7 @@
 - `/insights` — token/cost usage
 - `/compact` — summarize old turns
 - `/rollback` — undo edits from checkpoint
+- `/diff [n]` — working tree vs checkpoint (no n = newest)
 - `/sessions` / `/resume` — session history
 - `/image [path]` or Alt+V — attach image
 - `/video <path>` — describe video via vision fallback

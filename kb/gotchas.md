@@ -37,23 +37,25 @@
 
 ## Streamed text must stop the thinking spinner first
 - The thinking()/working() spinner is a Rich `Live` region redrawn every 100ms by a
-  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:279`). Streamed
+  background ticker thread (`_TickingStatus._tick`, `kbcode/ui.py:280`). Streamed
   reply text arrives via `on_text` on the *provider worker thread*
   (`kbcode/agent.py:150`). Two threads writing the terminal at once = the spinner's
   redraw stomps the half-printed line, shredding any multi-line reply into trailing
   fragments (was true for tables AND plain prose).
-- Fix: `stream_chunk` (`kbcode/ui.py:468`) calls `_active_status.stop()`
-  (`kbcode/ui.py:292`) on the first token, so from then on only the worker thread
+- Fix: `stream_chunk` (`kbcode/ui.py:472`) calls `_active_status.stop()`
+  (`kbcode/ui.py:293`) on the first token, so from then on only the worker thread
   prints. Don't re-introduce a spinner that stays live during streaming.
+  `stream_tool_hint` (`kbcode/ui.py:497`) follows the same rules — spinner
+  stopped first, half-printed stream line closed via `_stream_open`.
 - `stop()` is called from BOTH the worker thread (via `stream_chunk`) and the main
   thread (the `with thinking()` exit), so its check-and-tear-down is guarded by
   `self._stop_lock` — without it both callers can pass the `_stopped` check and
   tear the Rich `Live` down twice at once, corrupting the terminal. Keep it locked.
 - Replies are still streamed raw, not markdown-rendered — `assistant_text`'s
-  `Markdown()` (`kbcode/ui.py:464`) is not used on the streaming path.
+  `Markdown()` (`kbcode/ui.py:468`) is not used on the streaming path.
 
 ## Every `_TOOL_DESCRIBERS` entry must be a CALLABLE, not a label string
-- `_describe_tool` (`kbcode/ui.py:211`) does `describer(a, g, full)`. Registering a
+- `_describe_tool` (`kbcode/ui.py:212`) does `describer(a, g, full)`. Registering a
   bare string (e.g. `"repo_map": "get codebase structure map"`) makes that call
   raise **`'str' object is not callable`** the moment the agent uses that tool —
   it crashes the whole tool-call render, not just the label. This bit `edit_files`
@@ -78,6 +80,28 @@
   which keeps only name/description/`input_schema`.
 - Add a new schema-level metadata key → confirm it's dropped for Anthropic
   (extend `_api_tools`), or Claude requests 400. See [[providers]], [[tools-and-repair]].
+
+## Cache breakpoints must never leak into stored messages
+- `AnthropicProvider._add_cache_breakpoints` (`kbcode/provider.py:238`) mutates
+  the **native** message list, which is safe only because `_to_native` builds
+  user-role dicts fresh on every call. Two ways to break it:
+  1. Mark an **assistant** message — its `content` is the stored `raw` SDK
+     blocks, so the marker would persist and replay on every later request.
+  2. Make `_to_native` start *reusing* stored dicts for user/tool_results
+     messages — markers would then accumulate in `Agent.messages`, and the API
+     rejects a request carrying **more than 4** `cache_control` breakpoints.
+- Also: the system prompt already spends 1 of the 4 breakpoints, so
+  `_MESSAGE_CACHE_BREAKPOINTS` must stay ≤ 3. Regression tests:
+  `tests/test_provider_caching.py` (accumulation + assistant-raw cases).
+  See [[providers]].
+
+## Anthropic stream iterates EVENTS, not text_stream
+- `AnthropicProvider.stream`'s `do_stream` (`kbcode/provider.py:333`) iterates
+  the SDK stream context itself — synthetic `"text"` events carry deltas,
+  `content_block_start` events carry tool names for `on_tool` hints. Don't
+  "simplify" it back to `stream_ctx.text_stream`: that silently drops the
+  tool-name hints. The fakes in `tests/test_provider_streaming.py` yield
+  event objects for the same reason.
 
 ## web_search uses a throwaway thread pool, not a shared one
 - `kbcode/tools/web.py:39` — `_tool_web_search` can't cancel a blocking `ddgs`

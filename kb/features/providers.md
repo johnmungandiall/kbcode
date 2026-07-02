@@ -4,7 +4,7 @@
 `Agent.messages` (`kbcode/agent.py:92`) is provider-agnostic, never a provider's native
 shape: `{"role":"user","content"}` (+ optional `"images"`), `{"role":"assistant",
 "text","tool_calls","raw"}`, `{"role":"tool_results","results"}`. Each provider's
-`_to_native` (Anthropic `kbcode/provider.py:181`, OpenAI-compatible `kbcode/provider.py:358`)
+`_to_native` (Anthropic `kbcode/provider.py:187`, OpenAI-compatible `kbcode/provider.py:430`)
 translates to/from its own API and stores the model's own assistant payload back
 in `raw` so the next request replays it losslessly (Claude thinking blocks vs
 OpenAI `tool_calls` differ structurally). **Invariant:** normalized<->native must
@@ -13,12 +13,48 @@ surgery (see [[context-management]] on compaction). A session uses exactly one
 provider, so `raw` is always that provider's shape — session replay requires a
 matching provider (see [[sessions]]).
 
-`get_provider()` (`kbcode/provider.py:489`) dispatches on `config.kind`. Every
+`get_provider()` (`kbcode/provider.py:566`) dispatches on `config.kind`. Every
 non-Claude provider (OpenAI, Gemini, DeepSeek, OpenRouter, MiMo, custom) is the
-*same* `OpenAICompatibleProvider` (`kbcode/provider.py:324`) with a different
-`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:226`) tries a staged
+*same* `OpenAICompatibleProvider` (`kbcode/provider.py:396`) with a different
+`base_url`. `AnthropicProvider.complete` (`kbcode/provider.py:293`) tries a staged
 kwargs fallback (`thinking`+`output_config` -> `thinking` -> plain), catching
 `TypeError` per attempt for older SDKs.
+
+## Prompt caching (Anthropic only)
+Anthropic prompt caching is a **prefix match** over the rendered request
+(order: tools -> system -> messages), max 4 `cache_control` breakpoints. kbcode
+spends one on the system prompt (`complete`/`stream` build `system_blocks`
+with `cache_control`) — being last in the render order it covers the tool
+definitions too. The other three go on the conversation:
+`_add_cache_breakpoints()` (`kbcode/provider.py:238`) marks the last content
+block of the newest `_MESSAGE_CACHE_BREAKPOINTS = 3` (`kbcode/provider.py:235`)
+user-role native messages, so every tool round-trip re-reads the previous
+request's history from cache (~0.1x input price) instead of paying full price —
+the dominant cost of a long agentic turn. Several anchors (not one) because a
+cache lookup only walks back 20 content blocks and a parallel batch can add
+more than that per round-trip. **Only user-role messages are marked** — they
+are built fresh by `_to_native` per request, so markers never accumulate into
+`Agent.messages`; assistant `raw` blocks are never mutated (see [[gotchas]]).
+Compaction rewrites history, so the first request after a compact is a cache
+miss — expected, one-time. `_usage()` (`kbcode/provider.py:278`) folds
+`cache_creation_input_tokens` + `cache_read_input_tokens` back into
+`input_tokens` (the API reports only the uncached remainder there) so /cost
+and turn summaries stay comparable; the estimate is conservative (cache reads
+actually bill at ~0.1x). Tests: `tests/test_provider_caching.py`.
+
+## Streaming tool-name hints
+`stream(..., on_tool=)` (base signature `kbcode/provider.py:147`) reports each
+tool call's *name* the moment it appears mid-stream, so a long tool-call-heavy
+response doesn't look frozen while the arguments JSON generates. The Anthropic
+path iterates the SDK's event stream (synthetic `"text"` events for deltas,
+`content_block_start` with a `tool_use` block for names) instead of the old
+`text_stream`; the OpenAI path fires on the first name fragment per tool-call
+index. `Agent._complete()` forwards `on_tool` and `Agent.run` passes
+`ui.stream_tool_hint` (`kbcode/ui.py:497`), which prints one dim `⏺ name …`
+line — after stopping any live spinner and closing a half-printed streamed
+line (`TerminalUI._stream_open`), same thread rules as `stream_chunk` (see
+[[gotchas]]). The real described `tool_call()` line still follows when the
+response resolves.
 
 Tool schemas carry kbcode-only metadata (e.g. `parallel_safe`, see
 [[tools-and-repair]]) that the model APIs reject as unknown keys. The OpenAI path

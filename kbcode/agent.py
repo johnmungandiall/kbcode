@@ -123,7 +123,7 @@ class Agent:
         self.mode = mode
         return True
 
-    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None) -> LLMResponse:
+    def _complete(self, system: str, messages: list[dict], schemas: list[dict], on_text=None, on_tool=None) -> LLMResponse:
         """Call the provider off the main thread so Esc / Ctrl-C stay responsive.
 
         A blocking HTTP request holds the socket deep in C, so a pending
@@ -148,7 +148,7 @@ class Agent:
         def work() -> None:
             try:
                 if on_text is not None:
-                    box["resp"] = self.provider.stream(system, messages, schemas, on_text=on_text)
+                    box["resp"] = self.provider.stream(system, messages, schemas, on_text=on_text, on_tool=on_tool)
                 else:
                     box["resp"] = self.provider.complete(system, messages, schemas)
             except BaseException as exc:  # carried over and re-raised on the main thread
@@ -249,7 +249,7 @@ class Agent:
                     with self.ui.thinking():
                         resp = self._complete(
                             self._system_for_mode(), self.messages, self._mode_schemas(),
-                            on_text=self.ui.stream_chunk,
+                            on_text=self.ui.stream_chunk, on_tool=self.ui.stream_tool_hint,
                         )
                 except ProviderError as exc:
                     if self._try_vision_fallback(exc):

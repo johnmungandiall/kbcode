@@ -41,10 +41,11 @@ class FakeProvider:
             raise AssertionError("FakeProvider ran out of scripted responses")
         return self.responses.pop(0)
 
-    def stream(self, system, messages, tools, on_text=None):
+    def stream(self, system, messages, tools, on_text=None, on_tool=None):
         # Mirrors LLMProvider's default stream() fallback: deliver the whole
         # text as one chunk, so the real agent-loop streaming call site still
-        # exercises normally against this fake.
+        # exercises normally against this fake. on_tool is accepted (the agent
+        # now always passes it) but, like the real fallback, never called.
         self.stream_call_count += 1
         resp = self.complete(system, messages, tools)
         if on_text and resp.text:
@@ -78,7 +79,7 @@ class _KeyedProvider:
                 return resp
         return self.main_replies.pop(0)
 
-    def stream(self, system, messages, tools, on_text=None):
+    def stream(self, system, messages, tools, on_text=None, on_tool=None):
         resp = self.complete(system, messages, tools)
         if on_text and resp.text:
             on_text(resp.text)

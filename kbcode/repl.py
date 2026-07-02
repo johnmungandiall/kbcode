@@ -364,6 +364,26 @@ def repl(config: Config, kb: KnowledgeBase, memory: Memory, agent: Agent | None 
         if user == "/compact":
             agent.compact_now()
             continue
+        if user.split() and user.split()[0] == "/diff":
+            # Review what the agent changed without leaving the REPL — the
+            # shadow-git checkpoint store already tracks every edit (#4 of the
+            # suggestions round; same plumbing as `/rollback diff <n>`).
+            cps = agent.tools.checkpoints
+            parts = user.split()
+            rows = cps.list_checkpoints()
+            if not rows:
+                ui.notice("No checkpoints yet — they're taken automatically before file edits.", style="yellow")
+                continue
+            if len(parts) == 1:
+                row = rows[0]  # newest checkpoint = what changed this turn
+            elif parts[1].isdigit() and 1 <= int(parts[1]) <= len(rows):
+                row = rows[int(parts[1]) - 1]
+            else:
+                ui.error(f"usage: /diff [n]  (1-{len(rows)}, 1 = newest; list them with /rollback)")
+                continue
+            ui.notice(f"working tree vs checkpoint {row['short']} — {row['reason']}")
+            ui.print(cps.diff(row["hash"]))
+            continue
         if user.split() and user.split()[0] == "/rollback":
             cps = agent.tools.checkpoints
             parts = user.split()
