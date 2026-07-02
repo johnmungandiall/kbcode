@@ -208,7 +208,30 @@ def test_repair_explains_cut_off_write_calls_and_coaches_splitting(tmp_path):
     msg, is_error = tools.execute("write_file", {"_malformed_args": '{"path": "x', "_args_cut_off": True})
     assert is_error
     assert "cut off" in msg
-    assert "comfortably small" in msg  # the split-the-write coaching
+    # budget-aware coaching: default max_tokens 16000 → 16000·3//2 = 24,000
+    assert f"{tools.config.max_tokens:,}" in msg  # names the actual token limit
+    assert "under ~24,000 characters" in msg
     msg2, is_error2 = tools.execute("write_file", {})
     assert is_error2
     assert "missing required argument" in msg2
+
+
+def test_split_write_hint_tracks_the_live_max_tokens(tmp_path):
+    # "okko model okkola untadhi" — the coaching must follow the CURRENT
+    # model's budget: /maxtokens (or a model switch) mutates config live.
+    agent, tools = _make_agent(tmp_path, FakeProvider([]))
+    tools.config.max_tokens = 8192
+    assert "under ~12,288 characters" in tools._split_write_hint()
+    tools.config.max_tokens = 0  # unknown budget → generic wording, no crash
+    assert "comfortably small" in tools._split_write_hint()
+
+
+def test_system_prompt_carries_the_output_budget_note(tmp_path):
+    agent, tools = _make_agent(tmp_path, FakeProvider([]))
+    tools.config.max_tokens = 16000
+    system = agent._system_for_mode()
+    assert "## Output budget" in system
+    assert "16,000 output tokens" in system
+    assert "under ~24,000 characters" in system
+    tools.config.max_tokens = 0  # no budget known → note omitted entirely
+    assert "## Output budget" not in agent._system_for_mode()

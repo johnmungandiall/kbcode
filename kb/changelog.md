@@ -3,6 +3,14 @@
 The ONLY place release history lives (don't duplicate it in other notes).
 
 ## Unreleased
+- **Output-budget-aware writes** ("okko model okkola untadhi"): the system
+  prompt now tells the model its per-response output budget up front
+  (`Agent._output_budget_note`, from the live model-aware
+  `config.max_tokens`) so large files are written in pieces proactively, and
+  the truncation repair coaching names concrete numbers ("limit 16,000
+  tokens… keep each call under ~24,000 characters" —
+  `_split_write_hint`/`_write_call_char_budget`) instead of "comfortably
+  small". See [[tools-and-repair]].
 - **Broken tool-call JSON no longer 400s the follow-up request** (live MiMo:
   a cut-off 70k-char write_file replayed verbatim → HTTP 400 "unexpected end
   of data", killing the repair round): `_replayable_args` stores the marker

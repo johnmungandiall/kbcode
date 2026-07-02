@@ -11,12 +11,19 @@ bare `{"name"/"tool", "arguments"}` object (`_find_keyed_json`, `kbcode/repair.p
 native tool ids to replay) with a nudge to use the real format.
 
 *Execute layer*: `Tools.execute()` (`kbcode/tools/core.py:102`) runs `_repair()`
-(`kbcode/tools/core.py:151`) first — unknown tool name -> closest match via
+(`kbcode/tools/core.py:167`) first — unknown tool name -> closest match via
 `difflib`; missing required args -> names them; the reserved
 `_malformed_args`/`_args_cut_off` markers (set by `provider._parse_tool_args`
 when the arguments JSON was invalid or cut off by max_tokens — [[providers]])
--> explains the real cause and, for write_file/edit_file/edit_files, coaches
-splitting the write (`_SPLIT_WRITE_HINT`, `kbcode/tools/core.py:144`). Every
+-> explains the real cause (naming the actual token limit) and, for
+write_file/edit_file/edit_files, coaches splitting the write with a
+BUDGET-AWARE size: `_split_write_hint()` (`kbcode/tools/core.py:157`) derives
+"keep each call under ~N chars" from the live `config.max_tokens`
+(`_write_call_char_budget`, `kbcode/tools/core.py:149` — max_tokens·3/2; every
+model's limit differs and /maxtokens changes it live). The system prompt also
+tells the model its budget UP FRONT so big writes are split proactively:
+`Agent._output_budget_note()` (`kbcode/agent.py:276`), appended per request by
+`_system_for_mode()`. Every
 call site wraps `execute()` in `Agent._dispatch_tool()`
 (`kbcode/agent.py:237`), which runs configured PreToolUse/PostToolUse hooks
 around it — see [[safety]].
@@ -24,7 +31,7 @@ around it — see [[safety]].
 ## MCP tools (external servers, namespaced `mcp__server__tool`)
 When `.kbcode/settings.json` has an `mcpServers` block, `_build_agent` attaches
 an `MCPManager` to `Tools.mcp` (`kbcode/tools/core.py:41`); `ToolsCore.schemas`
-appends the live server schemas (`kbcode/tools/core.py:144`) so `_repair()` and
+appends the live server schemas (`kbcode/tools/core.py:59`) so `_repair()` and
 `parallel_safe_tools` cover them for free, and `execute()` forks on the
 `mcp__` prefix (`kbcode/tools/core.py:121`) into `_execute_mcp()`
 (`kbcode/tools/core.py:121`) — permission gate, checkpoint, redaction, then
@@ -43,9 +50,9 @@ kbcode's own state (`_KBCODE_STATE`, `kbcode/tools/file.py:34`) — checked
 against the full resolved path, not just relative to the project root — while
 allowing templates (`.env.example`, `_ENV_TEMPLATE_TAILS`,
 `kbcode/tools/file.py:35`), `.gitignore`, and user-authored `.kbcode/agents`/
-`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:172`) drives
+`modes` markdown. `_is_outside_project()` (`kbcode/tools/core.py:216`) drives
 the `-- OUTSIDE the project folder` flag on the permission prompt.
-`_display_path()` (`kbcode/tools/core.py:175`) formats a resolved path for tool
+`_display_path()` (`kbcode/tools/core.py:219`) formats a resolved path for tool
 output — relative to the root when inside the project, absolute otherwise —
 because those same out-of-project paths make a bare `Path.relative_to(root)`
 raise `ValueError`, which would abort the tool (search hits used to do this; see

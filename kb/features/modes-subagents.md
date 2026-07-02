@@ -5,7 +5,7 @@
 `READ`/`NOTES`/`EDIT`/`EXEC` groups (`kbcode/modes.py:23-29` — `manage_todos`,
 `web_search`, `fetch_url`, and `repo_map` live in `READ` so they work even
 read-only; `EXEC` = `run_command` + `check_task`). `Agent.run` rebuilds
-`_system_for_mode()` (`kbcode/agent.py:242`) and `_mode_schemas()` (`kbcode/agent.py:245`) on
+`_system_for_mode()` (`kbcode/agent.py:296`) and `_mode_schemas()` (`kbcode/agent.py:303`) on
 **every** model call. Enforcement is two-layer: disallowed tools are never shown
 to the model, and `run()` guards again at execute time. Builtins
 (`_BUILTINS`, `kbcode/modes.py:43`): `code`/`debug` (all tools), `architect` (read +

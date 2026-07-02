@@ -76,9 +76,10 @@ JSON on both OpenAI paths. Malformed JSON no longer silently degrades to `{}`
 (which surfaced as a bare red "missing required argument(s): path, content"
 on every truncated `write_file`): it becomes `{"_malformed_args": <raw≤500>}`,
 plus `"_args_cut_off": True` when the response's finish_reason was `length`
-(max_tokens hit mid-call). `ToolsCore._repair` (`kbcode/tools/core.py:151`)
-turns the markers into precise guidance — including the split-the-write
-coaching (`_SPLIT_WRITE_HINT`, `kbcode/tools/core.py:144`) for
+(max_tokens hit mid-call). `ToolsCore._repair` (`kbcode/tools/core.py:167`)
+turns the markers into precise guidance — including the budget-aware
+split-the-write coaching (`_split_write_hint()`, `kbcode/tools/core.py:157`,
+sized from the live `config.max_tokens` — see [[tools-and-repair]]) for
 write_file/edit_file/edit_files — and `ui.tool_call`/`tool_result` render
 these as a yellow "call arrived incomplete… ↻ asked the model to resend"
 instead of a scary error. Tests: `tests/test_auto_mode.py`.

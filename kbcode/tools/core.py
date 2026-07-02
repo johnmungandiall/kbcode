@@ -141,12 +141,28 @@ class ToolsCore:
     def _schema_for(self, name: str) -> dict | None:
         return next((s for s in self.schemas if s["name"] == name), None)
 
-    _SPLIT_WRITE_HINT = (
-        " If you are writing a lot of content, do NOT send it all in one call: "
-        "write_file the first portion, then extend the file with edit_file "
-        "(replace the current ending with ending + next portion), keeping each "
-        "call comfortably small."
-    )
+    # ~3 chars per output token is a safe planning number for code/markup;
+    # aiming a single call at half the response budget leaves room for the
+    # JSON envelope, the surrounding text, and the estimate being off.
+    _CHARS_PER_TOKEN = 3
+
+    def _write_call_char_budget(self) -> int:
+        """How many characters one write-ish tool call can safely carry,
+        derived from the CURRENT model's max output tokens (config.max_tokens
+        is model-aware — get_default_max_tokens — and /maxtokens mutates it
+        live, so this stays correct across model switches)."""
+        max_tokens = getattr(self.config, "max_tokens", 0) or 0
+        return max_tokens * self._CHARS_PER_TOKEN // 2
+
+    def _split_write_hint(self) -> str:
+        budget = self._write_call_char_budget()
+        size = f"under ~{budget:,} characters" if budget else "comfortably small"
+        return (
+            " If you are writing a lot of content, do NOT send it all in one call: "
+            "write_file the first portion, then extend the file with edit_file "
+            "(replace the current ending with ending + next portion), keeping each "
+            f"call {size}."
+        )
 
     def _repair(self, name: str, inp: dict) -> str | None:
         """Return a correction message if the call is unusable, else None."""
@@ -157,14 +173,17 @@ class ToolsCore:
             hint = f" Did you mean '{close[0]}'?" if close else ""
             return f"Unknown tool '{name}'.{hint} Available tools: {', '.join(names)}."
 
-        write_hint = self._SPLIT_WRITE_HINT if name in ("write_file", "edit_file", "edit_files") else ""
+        write_hint = self._split_write_hint() if name in ("write_file", "edit_file", "edit_files") else ""
 
         # Markers set by provider._parse_tool_args: the arguments JSON never
         # made it here intact (malformed, or cut off by the max_tokens limit).
         # Explain the real cause instead of a bare "missing arguments" error.
         if "_malformed_args" in inp or "_args_cut_off" in inp:
+            max_tokens = getattr(self.config, "max_tokens", 0) or 0
+            limit = f"{max_tokens:,} tokens" if max_tokens else "the max_tokens limit"
             reason = (
-                "your response hit the output-token limit mid-call, so the arguments JSON was cut off"
+                f"your response hit the output-token limit ({limit}) "
+                "mid-call, so the arguments JSON was cut off"
                 if inp.get("_args_cut_off")
                 else "the arguments were not valid JSON"
             )

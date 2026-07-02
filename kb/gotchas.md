@@ -17,7 +17,7 @@
 - New Anthropic SDK content-block shapes need `model_dump(mode="json")` fallback
 
 ## Tool-call repair is two layers (+ provider markers)
-- `kbcode/tools/core.py:151` — `_repair()` fixes name typos + missing required args (execute-time), and turns the `_malformed_args`/`_args_cut_off` markers from `provider._parse_tool_args` (`kbcode/provider.py:46`) into precise guidance (truncated write_file coaching — see [[providers]])
+- `kbcode/tools/core.py:167` — `_repair()` fixes name typos + missing required args (execute-time), and turns the `_malformed_args`/`_args_cut_off` markers from `provider._parse_tool_args` (`kbcode/provider.py:46`) into precise guidance (budget-aware truncated-write coaching — see [[providers]])
 - `kbcode/repair.py:48` — `promote()` recovers tool calls written as plain text (parse-time)
 - Both layers only work for names the mode/subagent actually offers — see [[tools-and-repair]], [[modes-subagents]]
 - The `_malformed_args`/`_args_cut_off` keys are RESERVED marker names: `_repair` intercepts them before any `_tool_*` method runs, and `ui.tool_call`/`tool_result` render them as a yellow retry note instead of a red error. Don't name a real tool argument with a leading underscore.
@@ -176,7 +176,7 @@
 
 ## Displaying a path relative to root breaks outside the project
 - `kbcode/tools/file.py:372` — `_tool_search_code` formats each hit through
-  `self._display_path(fp)` (`kbcode/tools/core.py:175`), **not** a raw
+  `self._display_path(fp)` (`kbcode/tools/core.py:219`), **not** a raw
   `fp.relative_to(self.root)`. kbcode isn't sandboxed to the project folder
   (`_resolve` honors absolute paths, see [[tools-and-repair]] and
   [[kbcode-write-anywhere]] intent), so a search/list base can point outside

@@ -143,14 +143,14 @@ then `self.tools.execute()`, then `PostToolUse` (appends
 `HookOutcome.message` to the result content if present). Every call site
 that used to call `self.tools.execute()` directly now goes through
 `_dispatch_tool()` instead — the sequential path in `Agent.run()`
-(`kbcode/agent.py:371`), the parallel-batch `ThreadPoolExecutor.submit` in
-`_run_parallel_batch()` (`kbcode/agent.py:422`), the plain-text-recovered
-path in `_run_promoted()` (`kbcode/agent.py:530`), two sites inside
-`_run_subagent()` (`kbcode/agent.py:739` and `:781`), and — #4.3 extension,
-see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:457`), used
+(`kbcode/agent.py:445`), the parallel-batch `ThreadPoolExecutor.submit` in
+`_run_parallel_batch()` (`kbcode/agent.py:497`), the plain-text-recovered
+path in `_run_promoted()` (`kbcode/agent.py:605`), two sites inside
+`_run_subagent()` (`kbcode/agent.py:920` and `:962`), and — #4.3 extension,
+see [[tools-and-repair]] — `_quiet_dispatch()` (`kbcode/agent.py:532`), used
 by concurrent `run_subagent` batches — so a configured hook sees every tool
 call, including ones made by a delegated subagent, sequential or parallel.
-`Agent._stop_hook_feedback()` (`kbcode/agent.py:618`) runs the `Stop` event
+`Agent._stop_hook_feedback()` (`kbcode/agent.py:693`) runs the `Stop` event
 once per turn (gated by `self._stop_hook_checked`, reset in `run()` alongside
 `self._kb_drift_checked`) right after the KB-drift check — a configured
 `Stop` hook can veto ending the turn (e.g. to demand a missing test run),

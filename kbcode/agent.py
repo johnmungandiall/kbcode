@@ -273,8 +273,29 @@ class Agent:
         if self.session:
             self.session.append(message)
 
+    def _output_budget_note(self) -> str:
+        """Tell the model its per-response output budget so it plans large
+        writes to FIT instead of getting cut off at max_tokens and needing a
+        repair round. Computed per request: config.max_tokens is model-aware
+        (get_default_max_tokens) and /maxtokens or a model switch changes it
+        live. Every model is different — this keeps the guidance honest for
+        whichever one is connected."""
+        max_tokens = getattr(self.tools.config, "max_tokens", 0) or 0
+        if not max_tokens:
+            return ""
+        per_call = self.tools._write_call_char_budget()
+        return (
+            f"\n\n## Output budget\n"
+            f"Each of your responses is capped at {max_tokens:,} output tokens "
+            f"(≈{max_tokens * 3:,} characters). A tool call cut off at that limit fails and "
+            f"must be resent, so plan ahead: create a large file in pieces — write_file the "
+            f"first part, then extend it with edit_file — keeping each single tool call "
+            f"under ~{per_call:,} characters."
+        )
+
     def _system_for_mode(self) -> str:
         base = f"{self.system}\n\n## Current mode: {self.mode.name}\n{self.mode.instructions}"
+        base += self._output_budget_note()
         if getattr(self.tools.perm, "auto_approve", False):
             base += f"\n\n{_AUTO_MODE_NOTE}"
         return base
